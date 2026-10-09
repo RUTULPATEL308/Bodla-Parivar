@@ -1,0 +1,260 @@
+-- ==============================================================================
+-- SQLDelight Schema: AppDatabase.sq
+-- Project: બોદલા પરિવાર (Bodla Parivar)
+-- Description: Offline-first cache and synchronization queue
+-- ==============================================================================
+
+-- 1. Village Info Cache
+CREATE TABLE CachedVillageInfo (
+    id TEXT PRIMARY KEY NOT NULL,
+    villageNameGu TEXT NOT NULL,
+    villageNameEn TEXT NOT NULL,
+    district TEXT NOT NULL,
+    state TEXT NOT NULL,
+    country TEXT NOT NULL,
+    descriptionGu TEXT,
+    descriptionEn TEXT,
+    contactPhone TEXT,
+    contactEmail TEXT,
+    latitude REAL,
+    longitude REAL,
+    updatedAt TEXT NOT NULL
+);
+
+getVillageInfo:
+SELECT * FROM CachedVillageInfo LIMIT 1;
+
+insertOrUpdateVillageInfo:
+INSERT OR REPLACE INTO CachedVillageInfo(
+    id, villageNameGu, villageNameEn, district, state, country,
+    descriptionGu, descriptionEn, contactPhone, contactEmail, latitude, longitude, updatedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- 2. Cached Notices
+CREATE TABLE CachedNotice (
+    id TEXT PRIMARY KEY NOT NULL,
+    titleGu TEXT NOT NULL,
+    titleEn TEXT NOT NULL,
+    descriptionGu TEXT,
+    descriptionEn TEXT,
+    categoryNameGu TEXT,
+    categoryNameEn TEXT,
+    imageUrl TEXT,
+    attachmentUrl TEXT,
+    isPinned INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    publishAt TEXT,
+    createdAt TEXT NOT NULL
+);
+
+selectAllNotices:
+SELECT * FROM CachedNotice ORDER BY isPinned DESC, createdAt DESC;
+
+selectPinnedNotices:
+SELECT * FROM CachedNotice WHERE isPinned = 1 ORDER BY createdAt DESC LIMIT 1;
+
+selectNoticeById:
+SELECT * FROM CachedNotice WHERE id = ?;
+
+insertOrReplaceNotice:
+INSERT OR REPLACE INTO CachedNotice(
+    id, titleGu, titleEn, descriptionGu, descriptionEn,
+    categoryNameGu, categoryNameEn, imageUrl, attachmentUrl, isPinned, status, publishAt, createdAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteNotice:
+DELETE FROM CachedNotice WHERE id = ?;
+
+clearNotices:
+DELETE FROM CachedNotice;
+
+-- 3. Cached Events
+CREATE TABLE CachedEvent (
+    id TEXT PRIMARY KEY NOT NULL,
+    titleGu TEXT NOT NULL,
+    titleEn TEXT NOT NULL,
+    descriptionGu TEXT,
+    descriptionEn TEXT,
+    categoryNameGu TEXT,
+    categoryNameEn TEXT,
+    startAt TEXT NOT NULL,
+    endAt TEXT,
+    locationGu TEXT,
+    locationEn TEXT,
+    imageUrl TEXT,
+    status TEXT NOT NULL
+);
+
+selectAllEvents:
+SELECT * FROM CachedEvent ORDER BY startAt ASC;
+
+selectUpcomingEvents:
+SELECT * FROM CachedEvent ORDER BY startAt ASC LIMIT 3;
+
+selectEventById:
+SELECT * FROM CachedEvent WHERE id = ?;
+
+insertOrReplaceEvent:
+INSERT OR REPLACE INTO CachedEvent(
+    id, titleGu, titleEn, descriptionGu, descriptionEn,
+    categoryNameGu, categoryNameEn, startAt, endAt, locationGu, locationEn, imageUrl, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+clearEvents:
+DELETE FROM CachedEvent;
+
+-- 4. Cached Businesses
+CREATE TABLE CachedBusiness (
+    id TEXT PRIMARY KEY NOT NULL,
+    nameGu TEXT NOT NULL,
+    nameEn TEXT NOT NULL,
+    descriptionGu TEXT,
+    descriptionEn TEXT,
+    categoryNameGu TEXT,
+    categoryNameEn TEXT,
+    phone TEXT,
+    whatsapp TEXT,
+    email TEXT,
+    addressGu TEXT,
+    addressEn TEXT,
+    latitude REAL,
+    longitude REAL,
+    logoUrl TEXT,
+    isVerified INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL
+);
+
+selectAllBusinesses:
+SELECT * FROM CachedBusiness WHERE status = 'APPROVED' ORDER BY nameGu ASC;
+
+selectBusinessById:
+SELECT * FROM CachedBusiness WHERE id = ?;
+
+insertOrReplaceBusiness:
+INSERT OR REPLACE INTO CachedBusiness(
+    id, nameGu, nameEn, descriptionGu, descriptionEn,
+    categoryNameGu, categoryNameEn, phone, whatsapp, email,
+    addressGu, addressEn, latitude, longitude, logoUrl, isVerified, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+clearBusinesses:
+DELETE FROM CachedBusiness;
+
+-- 5. Cached Offerings (ચઢાવો) - NOT AN AUCTION
+CREATE TABLE CachedOffering (
+    id TEXT PRIMARY KEY NOT NULL,
+    titleGu TEXT NOT NULL,
+    titleEn TEXT NOT NULL,
+    descriptionGu TEXT,
+    descriptionEn TEXT,
+    categoryNameGu TEXT,
+    categoryNameEn TEXT,
+    amount REAL,
+    locationGu TEXT,
+    locationEn TEXT,
+    imageUrl TEXT,
+    status TEXT NOT NULL,
+    startAt TEXT,
+    endAt TEXT,
+    bidCallCount INTEGER NOT NULL DEFAULT 0,
+    winningBidderName TEXT,
+    winningBidAmount REAL
+);
+
+selectAllOfferings:
+SELECT * FROM CachedOffering ORDER BY startAt DESC;
+
+selectOfferingById:
+SELECT * FROM CachedOffering WHERE id = ?;
+
+insertOrReplaceOffering:
+INSERT OR REPLACE INTO CachedOffering(
+    id, titleGu, titleEn, descriptionGu, descriptionEn,
+    categoryNameGu, categoryNameEn, amount, locationGu, locationEn,
+    imageUrl, status, startAt, endAt, bidCallCount, winningBidderName, winningBidAmount
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+clearOfferings:
+DELETE FROM CachedOffering;
+
+-- 6. Cached Emergency Contacts
+CREATE TABLE CachedEmergencyContact (
+    id TEXT PRIMARY KEY NOT NULL,
+    nameGu TEXT NOT NULL,
+    nameEn TEXT NOT NULL,
+    organization TEXT,
+    phone TEXT NOT NULL,
+    alternatePhone TEXT,
+    category TEXT NOT NULL,
+    displayOrder INTEGER NOT NULL DEFAULT 0
+);
+
+selectAllEmergencyContacts:
+SELECT * FROM CachedEmergencyContact ORDER BY displayOrder ASC;
+
+insertOrReplaceEmergencyContact:
+INSERT OR REPLACE INTO CachedEmergencyContact(
+    id, nameGu, nameEn, organization, phone, alternatePhone, category, displayOrder
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+clearEmergencyContacts:
+DELETE FROM CachedEmergencyContact;
+
+-- 7. Cached Places
+CREATE TABLE CachedPlace (
+    id TEXT PRIMARY KEY NOT NULL,
+    nameGu TEXT NOT NULL,
+    nameEn TEXT NOT NULL,
+    descriptionGu TEXT,
+    descriptionEn TEXT,
+    categoryNameGu TEXT,
+    categoryNameEn TEXT,
+    addressGu TEXT,
+    addressEn TEXT,
+    phone TEXT,
+    latitude REAL,
+    longitude REAL,
+    imageUrl TEXT
+);
+
+selectAllPlaces:
+SELECT * FROM CachedPlace ORDER BY nameGu ASC;
+
+insertOrReplacePlace:
+INSERT OR REPLACE INTO CachedPlace(
+    id, nameGu, nameEn, descriptionGu, descriptionEn,
+    categoryNameGu, categoryNameEn, addressGu, addressEn, phone,
+    latitude, longitude, imageUrl
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+clearPlaces:
+DELETE FROM CachedPlace;
+
+-- 8. Offline Synchronization Queue
+CREATE TABLE SyncQueue (
+    id TEXT PRIMARY KEY NOT NULL,
+    entityType TEXT NOT NULL,
+    action TEXT NOT NULL,
+    payloadJson TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING_UPLOAD',
+    retryCount INTEGER NOT NULL DEFAULT 0,
+    errorMessage TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+);
+
+selectPendingSyncItems:
+SELECT * FROM SyncQueue WHERE status = 'PENDING_UPLOAD' ORDER BY createdAt ASC;
+
+countSyncQueueItemsById:
+SELECT COUNT(*) FROM SyncQueue WHERE id = ?;
+
+insertSyncItem:
+INSERT INTO SyncQueue(id, entityType, action, payloadJson, status, retryCount, createdAt, updatedAt)
+VALUES (?, ?, ?, ?, ?, 0, ?, ?);
+
+updateSyncStatus:
+UPDATE SyncQueue SET status = ?, retryCount = retryCount + 1, errorMessage = ?, updatedAt = ? WHERE id = ?;
+
+deleteSyncItem:
+DELETE FROM SyncQueue WHERE id = ?;

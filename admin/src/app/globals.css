@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #FFF8E7;
+    color: #292524;
+  }
+}
+
+/* Custom scrollbars matching warm aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FFF8E7;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E7E5E4;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D97706;
+}

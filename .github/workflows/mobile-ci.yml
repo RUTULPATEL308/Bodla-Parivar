@@ -1,0 +1,37 @@
+name: Mobile CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    name: Build & Test Kotlin Multiplatform App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run Common Unit Tests
+        run: ./gradlew allTests --no-daemon
+
+      - name: Assemble Android Release Bundle (AAB)
+        run: ./gradlew :composeApp:bundleRelease --no-daemon
+
+      - name: Upload Android Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bodla-parivar-release-bundle
+          path: composeApp/build/outputs/bundle/release/*.aab

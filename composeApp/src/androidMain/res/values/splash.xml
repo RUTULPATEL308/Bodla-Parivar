@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ SplashScreen API theme -->
+    <style name="Theme.BodlaParivar.Splash" parent="Theme.SplashScreen">
+        <!-- The icon background (circle behind icon on Android 12) -->
+        <item name="windowSplashScreenBackground">#FFF8E8</item>
+        <!-- The centered splash icon: must be 288dp × 288dp to fill the 108dp masked area -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <!-- Duration to show the splash before the app takes over -->
+        <item name="windowSplashScreenAnimationDuration">500</item>
+        <!-- Theme applied after splash transitions away -->
+        <item name="postSplashScreenTheme">@android:style/Theme.Material.Light.NoActionBar</item>
+    </style>
+</resources>

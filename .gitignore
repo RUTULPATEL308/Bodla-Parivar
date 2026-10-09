@@ -1,0 +1,56 @@
+# Environments and secrets
+.env
+.env.local
+.env.production
+*.env
+!.env.example
+*.keystore
+*.jks
+*.key
+google-services.json
+GoogleService-Info.plist
+
+# Gradle & Kotlin
+.gradle/
+build/
+**/build/
+!src/**/build/
+.kotlin/
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+.idea/
+*.iml
+.cxx/
+
+# iOS & Xcode
+iosApp/.DS_Store
+iosApp/Pods/
+iosApp/Podfile.lock
+iosApp/*.xcworkspace/
+iosApp/*.xcodeproj/*
+!iosApp/*.xcodeproj/project.pbxproj
+DerivedData/
+
+# Node & Next.js Admin
+node_modules/
+admin/.next/
+admin/out/
+admin/build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# SQLDelight
+*.db
+*.sqlite
+
+# OS generated
+.DS_Store
+Thumbs.db
+ehthumbs.db

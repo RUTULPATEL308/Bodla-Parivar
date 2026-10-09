@@ -1,0 +1,3 @@
+ALTER TABLE CachedOffering ADD COLUMN bidCallCount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE CachedOffering ADD COLUMN winningBidderName TEXT;
+ALTER TABLE CachedOffering ADD COLUMN winningBidAmount REAL;
