@@ -16,11 +16,11 @@
 - **Required For**: All persistent operations, user profile sync, image uploads, and admin controls.
 - **Where to Obtain**: [supabase.com](https://supabase.com) -> Select Project -> Project Settings -> API.
 - **Where to Configure**:
-  - Web Admin: `admin/.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+  - Web Admin: `admin/.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and server-only `SUPABASE_SERVICE_ROLE_KEY` for protected user administration APIs)
   - Serverless Edge Functions: Supabase Secrets Vault (`SUPABASE_SERVICE_ROLE_KEY`)
   - Mobile App: Injected during CI/CD build via Gradle `BuildConfig` / Gradle properties.
 - **Cost / Tier**: Free tier available (Generous storage and database limits).
-- **Security Considerations**: The `anon` key is safe for client applications because data access is strictly governed by PostgreSQL Row Level Security (RLS). The `service_role` key bypasses RLS and must strictly be restricted to secure backend environments.
+- **Security Considerations**: The `anon` key is safe for client applications because data access is strictly governed by PostgreSQL Row Level Security (RLS). The `service_role` key bypasses RLS and must strictly be restricted to secure backend environments. Never prefix it with `NEXT_PUBLIC_` or expose it to browser/mobile code.
 - **Fallback Behavior**: When unconfigured, the mobile app loads cached SQLite records, while the admin console renders demonstrative UI states with safe banners.
 
 ---

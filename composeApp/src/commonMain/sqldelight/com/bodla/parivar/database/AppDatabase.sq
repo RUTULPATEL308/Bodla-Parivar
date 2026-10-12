@@ -158,7 +158,10 @@ CREATE TABLE CachedOffering (
     endAt TEXT,
     bidCallCount INTEGER NOT NULL DEFAULT 0,
     winningBidderName TEXT,
-    winningBidAmount REAL
+    winningBidAmount REAL,
+    winnerNameStatus TEXT NOT NULL DEFAULT 'NOT_STARTED',
+    winnerDisplayName TEXT,
+    winnerNameDeadlineAt TEXT
 );
 
 selectAllOfferings:
@@ -171,8 +174,15 @@ insertOrReplaceOffering:
 INSERT OR REPLACE INTO CachedOffering(
     id, titleGu, titleEn, descriptionGu, descriptionEn,
     categoryNameGu, categoryNameEn, amount, locationGu, locationEn,
-    imageUrl, status, startAt, endAt, bidCallCount, winningBidderName, winningBidAmount
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    imageUrl, status, startAt, endAt, bidCallCount, winningBidderName, winningBidAmount,
+    winnerNameStatus, winnerDisplayName, winnerNameDeadlineAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteOfferingById:
+DELETE FROM CachedOffering WHERE id = ?;
+
+selectAllOfferingIds:
+SELECT id FROM CachedOffering;
 
 clearOfferings:
 DELETE FROM CachedOffering;

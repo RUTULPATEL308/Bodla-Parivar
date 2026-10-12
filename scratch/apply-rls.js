@@ -1,5 +1,16 @@
-const secretKey = 'sb_secret_z3S-VZzBlrTs_NLNAwjdPw_U1tb57oE';
-const baseUrl = 'https://kjoykvxrnyykdnzektoj.supabase.co';
+const secretKey = process.env.SUPABASE_SECRET_KEY;
+const baseUrl = process.env.SUPABASE_URL;
+const anonKey = process.env.SUPABASE_ANON_KEY;
+
+if (!secretKey || !baseUrl || !anonKey) {
+  console.error(
+    'Missing required environment variables. Please set:\n' +
+    '  SUPABASE_URL          - Your Supabase project URL\n' +
+    '  SUPABASE_SECRET_KEY   - Your Supabase service-role / secret key\n' +
+    '  SUPABASE_ANON_KEY     - Your Supabase anon / publishable key'
+  );
+  process.exit(1);
+}
 
 const statements = [
   // Realtime
@@ -100,7 +111,6 @@ async function runAll() {
 
   // Now verify
   console.log('\n--- Verification ---');
-  const anonKey = 'sb_publishable_PNb4_Epkaqv-J1KdC0x7dQ_-vxdAt-d';
 
   const readResp = await fetch(baseUrl + '/rest/v1/offerings?select=id,title_en,status', {
     headers: { 'apikey': anonKey, 'Authorization': 'Bearer ' + anonKey }

@@ -5,6 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import Image from 'next/image';
 import { LogIn, LogOut } from 'lucide-react';
 import Header from '@/components/Header';
+import { AdminLanguageProvider } from '@/components/AdminLanguageContext';
 import MemberPortal from '@/components/MemberPortal';
 import Sidebar from '@/components/Sidebar';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -311,12 +312,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="flex min-h-screen flex-1">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header email={signedInEmail} onSignOut={handleSignOut} />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
+    <AdminLanguageProvider>
+      <div className="flex min-h-screen flex-1">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Header email={signedInEmail} onSignOut={handleSignOut} />
+          <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
+        </div>
       </div>
-    </div>
+    </AdminLanguageProvider>
   );
 }

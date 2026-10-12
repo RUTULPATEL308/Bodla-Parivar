@@ -57,4 +57,26 @@ class OfferingLifecycleTest {
         // Verify clean offering domain semantics
         assertTrue(offering.status in listOf("PENDING_APPROVAL", "APPROVED", "ACTIVE", "COMPLETED", "REJECTED"))
     }
+
+    @Test
+    fun testBidAcceptanceDependsOnOfferingStatusAndCallCount() {
+        val openOffering = Offering(
+            id = "test_offering_4",
+            titleGu = "તેલ ગૌશાળા ચઢાવો",
+            titleEn = "Gaushala Offering",
+            status = "ACTIVE",
+            bidCallCount = 2
+        )
+
+        val closedOffering = Offering(
+            id = "test_offering_5",
+            titleGu = "બંધ ચઢાવો",
+            titleEn = "Closed Offering",
+            status = "COMPLETED",
+            bidCallCount = 3
+        )
+
+        assertTrue(openOffering.isBidOpen)
+        assertFalse(closedOffering.isBidOpen)
+    }
 }

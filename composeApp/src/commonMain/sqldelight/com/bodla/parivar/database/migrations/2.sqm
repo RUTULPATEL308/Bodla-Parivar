@@ -1,0 +1,3 @@
+ALTER TABLE CachedOffering ADD COLUMN winnerNameStatus TEXT NOT NULL DEFAULT 'NOT_STARTED';
+ALTER TABLE CachedOffering ADD COLUMN winnerDisplayName TEXT;
+ALTER TABLE CachedOffering ADD COLUMN winnerNameDeadlineAt TEXT;

@@ -78,6 +78,9 @@ data class OfferingDto(
     @SerialName("bid_call_count") val bidCallCount: Int = 0,
     @SerialName("winning_bidder_name") val winningBidderName: String? = null,
     @SerialName("winning_bid_amount") val winningBidAmount: Double? = null,
+    @SerialName("winner_name_status") val winnerNameStatus: String = "NOT_STARTED",
+    @SerialName("winner_display_name") val winnerDisplayName: String? = null,
+    @SerialName("winner_name_deadline_at") val winnerNameDeadlineAt: String? = null,
     val category: CategoryDto? = null
 )
 

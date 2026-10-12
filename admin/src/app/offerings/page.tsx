@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Offering, OfferingBid } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { useAdminLanguage } from '@/components/AdminLanguageContext';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,6 +51,34 @@ function BidStatusBadge({ status }: { status: OfferingBid['status'] }) {
 // Main Page
 // ---------------------------------------------------------------------------
 export default function AdminOfferingsPage() {
+  const { lang } = useAdminLanguage();
+  const winnerLabels = lang === 'gu'
+    ? {
+        enteredName: 'વિજેતાએ દાખલ કરેલું નામ:',
+        profileName: 'નોંધાયેલ પ્રોફાઇલનું નામ:',
+        winningAmount: 'વિજેતી બોલીની રકમ:',
+        notSubmitted: 'વિજેતાએ હજી નામ આપ્યું નથી',
+        profileNameUnavailable: 'પ્રોફાઇલનું નામ ઉપલબ્ધ નથી',
+        adminPromptTitle: 'વિજેતા માટે દર્શાવવાનું નામ દાખલ કરો',
+        adminNameLabel: 'જાહેર દર્શાવવાનું નામ',
+        adminNamePlaceholder: 'વિજેતાનું નામ દાખલ કરો',
+        adminSaveName: 'નામ સાચવો',
+        adminSavingName: 'સાચવી રહ્યા છીએ...',
+        adminNameLengthError: 'નામ ૨ થી ૬૦ અક્ષરનું હોવું જોઈએ.',
+      }
+    : {
+        enteredName: 'Winner-entered name:',
+        profileName: 'Registered profile name:',
+        winningAmount: 'Winning amount:',
+        notSubmitted: 'Winner has not submitted a name yet',
+        profileNameUnavailable: 'Profile name not available',
+        adminPromptTitle: 'Enter a display name for the winner',
+        adminNameLabel: 'Public display name',
+        adminNamePlaceholder: 'Enter the winner name',
+        adminSaveName: 'Save name',
+        adminSavingName: 'Saving...',
+        adminNameLengthError: 'Name must be between 2 and 60 characters.',
+      };
   const [offerings, setOfferings]     = useState<Offering[]>([]);
   const [bids, setBids]               = useState<Record<string, OfferingBid[]>>({});
   const [search, setSearch]           = useState('');
@@ -68,6 +97,10 @@ export default function AdminOfferingsPage() {
   const [manualBidderName, setManualBidderName] = useState('');
   const [manualBidAmount, setManualBidAmount] = useState('');
   const [isSavingManualBid, setIsSavingManualBid] = useState(false);
+  const [adminWinnerName, setAdminWinnerName] = useState('');
+  const [adminWinnerNameError, setAdminWinnerNameError] = useState<string | null>(null);
+  const [isSavingAdminWinnerName, setIsSavingAdminWinnerName] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   // New Offering Form
   const [formData, setFormData] = useState({
@@ -109,20 +142,39 @@ export default function AdminOfferingsPage() {
 
     async function refreshSnapshot() {
       const eventVersionAtStart = realtimeEventVersionRef.current;
-      const [offeringsResult, bidsResult] = await Promise.all([
+      const [offeringsResult, bidsResult, winnerResult] = await Promise.all([
         supabase.from('offerings').select('*').order('created_at', { ascending: false }),
-        supabase.from('offering_bids').select('*').order('created_at', { ascending: false })
+        supabase.from('offering_bids').select('*').order('created_at', { ascending: false }),
+        supabase.from('offering_winner_private').select('offering_id, bidder_name, profile_full_name, winner_profile_id').order('created_at', { ascending: false })
       ]);
       if (eventVersionAtStart !== realtimeEventVersionRef.current) return;
 
       if (offeringsResult.error) console.error('Failed to refresh offerings:', offeringsResult.error);
       if (bidsResult.error) console.error('Failed to refresh bids:', bidsResult.error);
-      const snapshotErrors = [offeringsResult.error?.message, bidsResult.error?.message].filter(Boolean);
+      if (winnerResult.error) console.error('Failed to refresh winner names:', winnerResult.error);
+      const snapshotErrors = [offeringsResult.error?.message, bidsResult.error?.message, winnerResult.error?.message].filter(Boolean);
       setRealtimeError(snapshotErrors.length ? snapshotErrors.join(' · ') : null);
 
-      const offeringsData = offeringsResult.data as Offering[] | null;
-      const bidsData = bidsResult.data as OfferingBid[] | null;
-      if (offeringsData) setOfferings(offeringsData);
+      const offeringsData = (offeringsResult.data ?? []) as Offering[];
+      const bidsData = (bidsResult.data ?? []) as OfferingBid[];
+      const winnerRows = ((winnerResult.data ?? []) as Array<{ offering_id: string; bidder_name: string | null; profile_full_name: string | null }>) ?? [];
+      const winnerMap = new Map<string, { winner_profile_name: string | null }>();
+      winnerRows.forEach(row => {
+        winnerMap.set(row.offering_id, {
+          winner_profile_name: row.profile_full_name ?? null
+        });
+      });
+
+      const enrichedOfferings = offeringsData.map(offering => {
+        const winnerEntry = winnerMap.get(offering.id);
+        return {
+          ...offering,
+          winner_profile_name: winnerEntry?.winner_profile_name ?? offering.winner_profile_name ?? null,
+          winner_display_name: offering.winner_display_name ?? null,
+        };
+      });
+
+      if (offeringsData) setOfferings(enrichedOfferings);
       if (bidsData) {
         const grouped: Record<string, OfferingBid[]> = {};
         bidsData.forEach(bid => {
@@ -132,10 +184,10 @@ export default function AdminOfferingsPage() {
         setBids(grouped);
         setRecentLiveBids(bidsData.slice(0, 5).map(bid => ({
           ...bid,
-          offeringTitle: offeringsData?.find(offering => offering.id === bid.offering_id)?.title_en
+          offeringTitle: enrichedOfferings.find(offering => offering.id === bid.offering_id)?.title_en
         })));
       }
-      if (!offeringsResult.error && !bidsResult.error) setLastSnapshotAt(new Date().toLocaleTimeString());
+      if (!offeringsResult.error && !bidsResult.error && !winnerResult.error) setLastSnapshotAt(new Date().toLocaleTimeString());
     }
     refreshSnapshotRef.current = refreshSnapshot;
 
@@ -528,6 +580,59 @@ export default function AdminOfferingsPage() {
   const currentSelectedOffering = selectedOffering
     ? offerings.find(item => item.id === selectedOffering.id) || selectedOffering
     : null;
+  const winnerNameDeadline = currentSelectedOffering?.winner_name_deadline_at
+    ? Date.parse(currentSelectedOffering.winner_name_deadline_at)
+    : Number.NaN;
+  const canAdminSetWinnerName = currentSelectedOffering?.winner_name_status === 'AWAITING_ADMIN'
+    || (currentSelectedOffering?.winner_name_status === 'AWAITING_WINNER'
+      && Number.isFinite(winnerNameDeadline)
+      && clockNow >= winnerNameDeadline);
+
+  useEffect(() => {
+    setAdminWinnerName('');
+    setAdminWinnerNameError(null);
+  }, [selectedOffering?.id]);
+
+  useEffect(() => {
+    if (currentSelectedOffering?.winner_name_status !== 'AWAITING_WINNER' || !Number.isFinite(winnerNameDeadline)) return;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [currentSelectedOffering?.id, currentSelectedOffering?.winner_name_status, winnerNameDeadline]);
+
+  const handleAdminSetWinnerName = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!currentSelectedOffering || !canAdminSetWinnerName || isSavingAdminWinnerName) return;
+
+    const cleanedName = adminWinnerName.trim();
+    if (cleanedName.length < 2 || cleanedName.length > 60) {
+      setAdminWinnerNameError(winnerLabels.adminNameLengthError);
+      return;
+    }
+
+    setIsSavingAdminWinnerName(true);
+    setAdminWinnerNameError(null);
+    const { error } = await supabase.rpc('admin_set_winner_display_name', {
+      p_offering_id: currentSelectedOffering.id,
+      p_name: cleanedName,
+    });
+    setIsSavingAdminWinnerName(false);
+
+    if (error) {
+      setAdminWinnerNameError(error.message);
+      return;
+    }
+
+    setOfferings(prev => prev.map(offering => offering.id === currentSelectedOffering.id
+      ? { ...offering, winner_name_status: 'CONFIRMED', winner_display_name: cleanedName }
+      : offering
+    ));
+    setSelectedOffering(prev => prev?.id === currentSelectedOffering.id
+      ? { ...prev, winner_name_status: 'CONFIRMED', winner_display_name: cleanedName }
+      : prev
+    );
+    setAdminWinnerName('');
+    void refreshSnapshotRef.current?.();
+  };
 
   // -------------------------------------------------------------------------
   // Render
@@ -951,11 +1056,52 @@ export default function AdminOfferingsPage() {
                     </div>
                   </>
                 )}
-                {currentSelectedOffering.status === 'COMPLETED' && currentSelectedOffering.winning_bidder_name && (
-                  <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
-                    વિજેતા: <strong>{currentSelectedOffering.winning_bidder_name}</strong>
-                    {currentSelectedOffering.winning_bid_amount !== null && ` · ₹${currentSelectedOffering.winning_bid_amount.toLocaleString('en-IN')}`}
-                  </div>
+                {currentSelectedOffering.status === 'COMPLETED' && (
+                  <>
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800 space-y-2">
+                      <div>
+                        <span className="font-semibold text-brand-text">{winnerLabels.enteredName}</span>{' '}
+                        <strong>{currentSelectedOffering.winner_display_name ?? winnerLabels.notSubmitted}</strong>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-brand-text">{winnerLabels.profileName}</span>{' '}
+                        <strong>{currentSelectedOffering.winner_profile_name ?? winnerLabels.profileNameUnavailable}</strong>
+                      </div>
+                      {currentSelectedOffering.winning_bid_amount !== null && (
+                        <div>
+                          <span className="font-semibold text-brand-text">{winnerLabels.winningAmount}</span>{' '}
+                          <strong>₹{currentSelectedOffering.winning_bid_amount.toLocaleString('en-IN')}</strong>
+                        </div>
+                      )}
+                    </div>
+                    {canAdminSetWinnerName && (
+                      <form onSubmit={handleAdminSetWinnerName} className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <label className="block text-xs font-semibold text-brand-text">
+                          {winnerLabels.adminPromptTitle}
+                          <input
+                            required
+                            minLength={2}
+                            maxLength={60}
+                            value={adminWinnerName}
+                            onChange={event => {
+                              setAdminWinnerName(event.target.value);
+                              setAdminWinnerNameError(null);
+                            }}
+                            placeholder={winnerLabels.adminNamePlaceholder}
+                            className="mt-1 w-full rounded-lg border border-brand-border bg-white px-3 py-2 text-sm font-normal text-brand-text"
+                          />
+                        </label>
+                        {adminWinnerNameError && <p role="alert" className="text-xs text-rose-700">{adminWinnerNameError}</p>}
+                        <button
+                          type="submit"
+                          disabled={isSavingAdminWinnerName}
+                          className="rounded-lg bg-saffron px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {isSavingAdminWinnerName ? winnerLabels.adminSavingName : winnerLabels.adminSaveName}
+                        </button>
+                      </form>
+                    )}
+                  </>
                 )}
               </div>
             )}

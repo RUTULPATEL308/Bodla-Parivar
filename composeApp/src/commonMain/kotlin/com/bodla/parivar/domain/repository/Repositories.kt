@@ -38,8 +38,27 @@ interface OfferingRepository {
     suspend fun refreshOfferings(): Result<Unit>
     suspend fun getOfferingById(id: String): Offering?
     suspend fun submitOffering(offering: Offering): Result<Unit>
+    suspend fun updateOfferingStatus(offeringId: String, status: String): Result<Unit>
+    suspend fun deleteOffering(offeringId: String): Result<Unit>
     suspend fun submitOfferingBid(offeringId: String, bidderName: String, amount: Double, bidderPhone: String? = null): Result<Unit>
     suspend fun getOfferingBids(offeringId: String): Result<List<OfferingBid>>
+    suspend fun getAllOfferingBids(): Result<List<OfferingBid>>
+    suspend fun updateOfferingBidStatus(offeringId: String, bid: OfferingBid, status: String): Result<Unit>
+    suspend fun deleteOfferingBid(offeringId: String, bidId: String): Result<Unit>
+    suspend fun addStaffOfferingBid(offeringId: String, bidderName: String, amount: Double): Result<Unit>
+    suspend fun callOfferingBid(offeringId: String, winnerName: String? = null): Result<Int>
+    suspend fun adminSetWinnerDisplayName(offeringId: String, name: String): Result<Unit>
+    suspend fun isCurrentUserWinner(offeringId: String): Result<Boolean>
+    suspend fun submitWinnerDisplayName(offeringId: String, name: String): Result<Unit>
+    suspend fun getServerTimeOffsetMillis(): Result<Long>
+}
+
+sealed class WinnerFlowException(message: String) : Exception(message) {
+    object NotWinner : WinnerFlowException("You are not the winning bidder for this offering.")
+    object DeadlineExpired : WinnerFlowException("The submission window has closed.")
+    object InvalidName : WinnerFlowException("Please enter a valid name (2 to 60 characters).")
+    class Network(cause: Throwable? = null) : WinnerFlowException("Network error. Please check your connection.")
+    class Unknown(message: String) : WinnerFlowException(message)
 }
 
 interface ComplaintRepository {

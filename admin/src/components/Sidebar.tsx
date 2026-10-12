@@ -20,6 +20,7 @@ import {
   Send,
   Flag,
   History,
+  BookOpen,
   Settings
 } from 'lucide-react';
 
@@ -33,6 +34,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: 'Dashboard', nameGu: 'ડેશબોર્ડ', href: '/', icon: LayoutDashboard },
   { name: 'Users', nameGu: 'વપરાશકર્તાઓ', href: '/users', icon: Users },
+  { name: 'Village History', nameGu: 'બોદલા ગામનો ઇતિહાસ', href: '/history', icon: BookOpen },
   { name: 'Roles & Permissions', nameGu: 'ભૂમિકાઓ અને પરવાનગી', href: '/roles', icon: Shield },
   { name: 'Notices', nameGu: 'સૂચનાઓ', href: '/notices', icon: Bell },
   { name: 'Events', nameGu: 'કાર્યક્રમો', href: '/events', icon: Calendar },

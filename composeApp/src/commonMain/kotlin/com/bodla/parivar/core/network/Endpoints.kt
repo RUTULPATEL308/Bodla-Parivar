@@ -52,6 +52,9 @@ object Endpoints {
     val OFFERINGS: String
         get() = "$REST_BASE_URL/offerings?select=*,category:offering_categories(name_gu,name_en)&status=in.(APPROVED,ACTIVE,COMPLETED)&order=created_at.desc"
 
+    val OFFERINGS_BASE: String
+        get() = "$REST_BASE_URL/offerings"
+
     val EMERGENCY_CONTACTS: String
         get() = "$REST_BASE_URL/emergency_contacts?is_active=eq.true&order=display_order.asc"
 
@@ -67,8 +70,29 @@ object Endpoints {
     val OFFERING_BIDS_BASE: String
         get() = "$REST_BASE_URL/offering_bids"
 
+    val OFFERING_BIDS: String
+        get() = "$OFFERING_BIDS_BASE?select=*&order=created_at.desc"
+
     fun offeringBidsForOffering(offeringId: String): String =
         "$OFFERING_BIDS_BASE?offering_id=eq.$offeringId&order=created_at.desc"
+
+    fun offeringBidById(bidId: String): String =
+        "$OFFERING_BIDS_BASE?id=eq.$bidId"
+
+    val RPC_CALL_OFFERING_BID: String
+        get() = "$REST_BASE_URL/rpc/call_offering_bid"
+
+    val RPC_ADMIN_SET_WINNER_DISPLAY_NAME: String
+        get() = "$REST_BASE_URL/rpc/admin_set_winner_display_name"
+
+    val RPC_SUBMIT_WINNER_DISPLAY_NAME: String
+        get() = "$REST_BASE_URL/rpc/submit_winner_display_name"
+
+    val RPC_GET_SERVER_TIME: String
+        get() = "$REST_BASE_URL/rpc/get_server_time"
+
+    val RPC_IS_CURRENT_USER_OFFERING_WINNER: String
+        get() = "$REST_BASE_URL/rpc/is_current_user_offering_winner"
 
     // Latest notifications (for in-app toasts)
     val NOTIFICATIONS_LATEST: String

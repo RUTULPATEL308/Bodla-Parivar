@@ -15,13 +15,14 @@
 4. Upload to Google Play Console under Internal Testing track.
 
 ### iOS (Apple App Store)
-1. Open `iosApp/iosApp.xcodeproj` in Xcode on macOS.
-2. Select your Apple Developer Signing Team.
-3. In terminal or Xcode, create archive:
+1. Open `iosApp/iosApp.xcodeproj` in Xcode on macOS. The Kotlin framework is built by the Xcode Run Script phase using Gradle.
+2. Select your Apple Developer Signing Team under Signing & Capabilities. A free Apple ID can be used for local device testing; TestFlight distribution requires Apple Developer Program membership.
+3. To install directly, connect an iPhone to the Mac, select it as the run destination, and click Run. For cloud Macs without USB device access, use TestFlight.
+4. To create an archive in terminal or Xcode:
    ```bash
-   xcodebuild -scheme iosApp -archivePath build/iosApp.xcarchive archive
+   xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -destination 'generic/platform=iOS' -archivePath build/iosApp.xcarchive archive
    ```
-4. Export and upload to TestFlight via Xcode Organizer.
+5. Export and upload to TestFlight via Xcode Organizer.
 
 ---
 

@@ -34,6 +34,9 @@ iosApp/Podfile.lock
 iosApp/*.xcworkspace/
 iosApp/*.xcodeproj/*
 !iosApp/*.xcodeproj/project.pbxproj
+!iosApp/*.xcodeproj/xcshareddata/
+!iosApp/*.xcodeproj/xcshareddata/xcschemes/
+!iosApp/*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
 DerivedData/
 
 # Node & Next.js Admin

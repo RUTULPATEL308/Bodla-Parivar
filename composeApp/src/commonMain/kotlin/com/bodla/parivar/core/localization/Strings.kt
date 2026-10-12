@@ -26,6 +26,7 @@ object Strings {
         if (lang == AppLanguage.GUJARATI) "નમસ્કાર, $name" else "Namaskar, $name"
     fun welcomeMessage(lang: AppLanguage) = 
         if (lang == AppLanguage.GUJARATI) "બોદલા પરિવારમાં આપનું સ્વાગત છે" else "Welcome to Bodla Parivar"
+    fun villageHistory(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "બોદલા ગામનો ઇતિહાસ" else "History of Bodla Village"
     fun searchPlaceholder(lang: AppLanguage) = 
         if (lang == AppLanguage.GUJARATI) "🔍 શોધો બોદલા..." else "🔍 Search Bodla..."
     fun importantNotice(lang: AppLanguage) = 
@@ -60,6 +61,24 @@ object Strings {
     fun offeringQuantity(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "જથ્થો" else "Quantity"
     fun offeringLocation(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "સ્થળ" else "Location"
     fun submitOffering(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "ચઢાવો નોંધાવો" else "Submit Offering"
+
+    // Winner Announcement Flow
+    fun winnerPromptTitle(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "તમે ચઢાવાના વિજેતા બન્યા છો!" else "You won the offering!"
+    fun winnerPromptSubtitle(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "ચઢાવાની જાહેરાતમાં દર્શાવવા માટે તમારું નામ દાખલ કરો." else "Enter the name you would like displayed publicly."
+    fun winnerNameInputLabel(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "પ્રદર્શિત નામ (૨ થી ૬૦ અક્ષરો)" else "Display Name (2 to 60 characters)"
+    fun winnerConfirmButton(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "નામ કન્ફર્મ કરો" else "Confirm Name"
+    fun winnerSubmitting(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "સબમિટ થઈ રહ્યું છે..." else "Submitting..."
+    fun winnerTimeRemaining(seconds: Long, lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "બાકી સમય: $seconds સેકન્ડ" else "Time remaining: ${seconds}s"
+    fun winnerErrorNameTooShort(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "નામ ઓછામાં ઓછા ૨ અક્ષરનું હોવું જોઈએ." else "Name must be at least 2 characters."
+    fun winnerErrorNameTooLong(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "નામ ૬૦ અક્ષરથી વધુ ન હોવું જોઈએ." else "Name must be 60 characters or fewer."
+    fun winnerDeadlineExpired(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "સમય મર્યાદા પૂરી થઈ ગઈ છે. વહીવટકર્તા ટૂંક સમયમાં નામ દાખલ કરશે." else "Submission window closed. The administrator will enter the display name."
+    fun winnerPendingConfirmation(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "વિજેતાનું નામ કન્ફર્મ થઈ રહ્યું છે..." else "Winner is being confirmed..."
+    fun winnerCardTitle(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "સંપન્ન સેવા વિજેતા" else "Offering Completed"
+    fun winnerErrorInvalidLength(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "નામ ૨ થી ૬૦ અક્ષરનું હોવું જોઈએ." else "Name must be between 2 and 60 characters."
+    fun winnerErrorNotWinner(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "તમે આ ચઢાવાના વિજેતા નથી." else "You are not the winning bidder for this offering."
+    fun winnerErrorDeadlinePassed(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "સમય મર્યાદા સમાપ્ત થઈ ગઈ છે." else "The submission deadline has passed."
+    fun winnerErrorNetwork(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "નેટવર્ક સમસ્યા. કૃપા કરીને તમારું ઇન્ટરનેટ કનેક્શન તપાસો." else "Network error. Please check your connection."
+    fun winnerErrorGeneric(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "નામ સબમિટ કરવામાં ભૂલ આવી. કૃપા કરીને ફરી પ્રયાસ કરો." else "Failed to submit name. Please try again."
 
     // Complaints
     fun complaintsTitle(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "ફરિયાદ નિવારણ" else "Complaints"

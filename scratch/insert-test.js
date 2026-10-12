@@ -1,7 +1,16 @@
 const { Client } = require('pg');
 
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.error(
+    'Missing required environment variable. Please set:\n' +
+    '  DATABASE_URL - Your PostgreSQL connection string'
+  );
+  process.exit(1);
+}
+
 async function main() {
-  const connectionString = 'postgresql://postgres:Rutul%409824470026@db.kjoykvxrnyykdnzektoj.supabase.co:5432/postgres';
   const client = new Client({ connectionString });
   
   try {

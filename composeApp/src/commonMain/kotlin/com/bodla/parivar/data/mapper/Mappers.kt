@@ -129,7 +129,10 @@ fun OfferingDto.toDomain(): Offering = Offering(
     endAt = endAt,
     bidCallCount = bidCallCount,
     winningBidderName = winningBidderName,
-    winningBidAmount = winningBidAmount
+    winningBidAmount = winningBidAmount,
+    winnerNameStatus = winnerNameStatus,
+    winnerDisplayName = winnerDisplayName,
+    winnerNameDeadlineAt = winnerNameDeadlineAt
 )
 
 fun CachedOffering.toDomain(): Offering = Offering(
@@ -149,7 +152,10 @@ fun CachedOffering.toDomain(): Offering = Offering(
     endAt = endAt,
     bidCallCount = bidCallCount.toInt(),
     winningBidderName = winningBidderName,
-    winningBidAmount = winningBidAmount
+    winningBidAmount = winningBidAmount,
+    winnerNameStatus = winnerNameStatus,
+    winnerDisplayName = winnerDisplayName,
+    winnerNameDeadlineAt = winnerNameDeadlineAt
 )
 
 // --- Emergency Contact Mappers ---

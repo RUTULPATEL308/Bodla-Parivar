@@ -127,7 +127,7 @@ Access at `http://localhost:3000`.
 
 ### 3. Running Mobile Client
 - **Android**: Open project in Android Studio Iguana+, select `composeApp`, and run on emulator or physical device.
-- **iOS**: Open `iosApp/iosApp.xcodeproj` in Xcode on macOS and run on iOS Simulator.
+- **iOS**: Open `iosApp/iosApp.xcodeproj` in Xcode on macOS. Select an iPhone Simulator to test without signing, or select a physical iPhone and configure an Apple Development team in Signing & Capabilities. Windows cannot build or install iOS apps; use a Mac or cloud Mac for iOS builds.
 
 ---
 

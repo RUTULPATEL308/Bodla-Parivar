@@ -22,6 +22,7 @@
 | `offerings` | Read (Approved/Active) | Read + Submit Own | Read + Moderate | Full Access |
 | `complaints` | No Access | Read/Create Own | Read + Assign + Update Status | Full Access |
 | `emergency_contacts` | Read Active | Read Active | Read Active | Full Access |
+| `offering_winner_private` | No Access | Read Own (Winner Profile Only) | Full Access | Full Access |
 | `audit_logs` | No Access | No Access | No Access | Read Only |
 
 ---

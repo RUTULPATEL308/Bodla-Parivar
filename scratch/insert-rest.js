@@ -1,5 +1,16 @@
-const url = 'https://kjoykvxrnyykdnzektoj.supabase.co/rest/v1/offerings';
-const anonKey = 'sb_publishable_PNb4_Epkaqv-J1KdC0x7dQ_-vxdAt-d';
+const baseUrl = process.env.SUPABASE_URL;
+const anonKey = process.env.SUPABASE_ANON_KEY;
+
+if (!baseUrl || !anonKey) {
+  console.error(
+    'Missing required environment variables. Please set:\n' +
+    '  SUPABASE_URL      - Your Supabase project URL\n' +
+    '  SUPABASE_ANON_KEY - Your Supabase anon / publishable key'
+  );
+  process.exit(1);
+}
+
+const url = baseUrl + '/rest/v1/offerings';
 
 async function insertTestLabel() {
   try {

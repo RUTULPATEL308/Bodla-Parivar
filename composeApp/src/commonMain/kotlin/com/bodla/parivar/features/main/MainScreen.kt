@@ -2,12 +2,19 @@ package com.bodla.parivar.features.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bodla.parivar.core.di.AppContainer
@@ -31,9 +38,12 @@ import com.bodla.parivar.features.directory.DirectoryScreen
 import com.bodla.parivar.features.emergency.EmergencyScreen
 import com.bodla.parivar.features.events.EventDetailScreen
 import com.bodla.parivar.features.events.EventListScreen
+import com.bodla.parivar.features.history.VillageHistoryScreen
 import com.bodla.parivar.features.home.HomeScreen
 import com.bodla.parivar.features.main.AdminHomeScreen
 import com.bodla.parivar.features.main.RegisteredUsersScreen
+import com.bodla.parivar.features.notifications.AppNotification
+import com.bodla.parivar.features.notifications.NotificationCenterScreen
 import com.bodla.parivar.features.notices.NoticeDetailScreen
 import com.bodla.parivar.features.notices.NoticeListScreen
 import com.bodla.parivar.features.offerings.AddOfferingScreen
@@ -48,19 +58,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
-
-@Serializable
-private data class NotificationDto(
-    val id: String,
-    @SerialName("title_gu") val titleGu: String? = null,
-    @SerialName("title_en") val titleEn: String? = null,
-    @SerialName("body_gu") val bodyGu: String? = null,
-    @SerialName("body_en") val bodyEn: String? = null,
-    @SerialName("created_at") val createdAt: String? = null
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -71,13 +68,16 @@ fun MainScreen(
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Login) }
     val snackbarHostState = remember { SnackbarHostState() }
     var lastNotifId by remember { mutableStateOf<String?>(null) }
+    var topNotificationMessage by remember { mutableStateOf<String?>(null) }
+    var latestNotifications by remember { mutableStateOf<List<AppNotification>>(emptyList()) }
+    var pullDistance by remember { mutableFloatStateOf(0f) }
+    var isPullRefreshing by remember { mutableStateOf(false) }
     val notificationsStartedAt = remember { Clock.System.now() }
+    val pullThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
 
     // Live Flow Collections from SQLDelight Cache & Repositories
     val notices by AppContainer.noticeRepository.getNotices().collectAsState(initial = emptyList())
-    val upcomingEvents by AppContainer.eventRepository.getUpcomingEvents().collectAsState(initial = emptyList())
     val allEvents by AppContainer.eventRepository.getEvents().collectAsState(initial = emptyList())
-    val businesses by AppContainer.businessRepository.getBusinesses().collectAsState(initial = emptyList())
     val offerings by AppContainer.offeringRepository.getOfferings().collectAsState(initial = emptyList())
     val emergencyContacts by AppContainer.emergencyRepository.getEmergencyContacts().collectAsState(initial = emptyList())
     val myComplaints by AppContainer.complaintRepository.getMyComplaints().collectAsState(initial = emptyList())
@@ -103,12 +103,71 @@ fun MainScreen(
         }
     }
 
+    val pullRefreshConnection = remember(currentScreen, currentLanguage, isConnectedToInternet, isPullRefreshing, pullThresholdPx) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f && !isPullRefreshing) {
+                    pullDistance = (pullDistance + available.y).coerceAtMost(pullThresholdPx * 1.5f)
+                } else if (available.y < 0f) {
+                    pullDistance = (pullDistance + available.y).coerceAtLeast(0f)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val shouldRefresh = pullDistance >= pullThresholdPx && !isPullRefreshing
+                pullDistance = 0f
+                if (shouldRefresh) {
+                    coroutineScope.launch {
+                        isPullRefreshing = true
+                        try {
+                            if (!isConnectedToInternet) {
+                                snackbarHostState.showSnackbar(
+                                    if (currentLanguage == AppLanguage.GUJARATI) "તમે ઑફલાઇન છો. સિંક શક્ય નથી." else "You're offline. Refresh is unavailable."
+                                )
+                            } else {
+                                AppContainer.syncEngine.syncAll()
+                                AppContainer.noticeRepository.refreshNotices()
+                                AppContainer.offeringRepository.refreshOfferings()
+                                AppContainer.emergencyRepository.refreshEmergencyContacts()
+                                AppContainer.villageRepository.refreshVillageInfo()
+                                val offeringDetail = currentScreen as? Screen.OfferingDetail
+                                if (offeringDetail != null) refreshOfferingBids(offeringDetail.offeringId)
+                                val freshNotifications = AppContainer.httpClient
+                                    .get(Endpoints.NOTIFICATIONS_LATEST) {
+                                        header("apikey", Endpoints.SUPABASE_ANON_KEY)
+                                        header("Accept", "application/json")
+                                    }
+                                    .body<List<AppNotification>>()
+                                latestNotifications = freshNotifications
+                            }
+                        } catch (error: Exception) {
+                            snackbarHostState.showSnackbar(
+                                error.message ?: if (currentLanguage == AppLanguage.GUJARATI) "રીફ્રેશ નિષ્ફળ થયું." else "Refresh failed."
+                            )
+                        } finally {
+                            isPullRefreshing = false
+                        }
+                    }
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         currentUser = AppContainer.authRepository.getCurrentUser()
         currentScreen = when {
             currentUser?.isStaff == true -> Screen.AdminHome
             currentUser != null -> Screen.Home
             else -> Screen.Login
+        }
+    }
+
+    LaunchedEffect(topNotificationMessage) {
+        if (topNotificationMessage != null) {
+            delay(6000)
+            topNotificationMessage = null
         }
     }
 
@@ -159,7 +218,8 @@ fun MainScreen(
                         header("apikey", Endpoints.SUPABASE_ANON_KEY)
                         header("Accept", "application/json")
                     }
-                    .body<List<NotificationDto>>()
+                    .body<List<AppNotification>>()
+                latestNotifications = notifications
                 val latest = notifications.firstOrNull()
                 if (latest != null && latest.id != lastNotifId) {
                     val arrivedAfterStartup = latest.createdAt?.let { createdAt ->
@@ -170,12 +230,7 @@ fun MainScreen(
                             ?: latest.titleGu ?: "🔔 નવી અપડેટ"
                         val body = (if (currentLanguage == AppLanguage.GUJARATI) latest.bodyGu else latest.bodyEn)
                             ?: latest.bodyGu ?: ""
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = if (body.isNotBlank()) "$title: $body" else title,
-                                duration = SnackbarDuration.Long
-                            )
-                        }
+                        topNotificationMessage = if (body.isNotBlank()) "$title: $body" else title
                     }
                     lastNotifId = latest.id
                 }
@@ -188,19 +243,51 @@ fun MainScreen(
         val lang = LocalAppLanguage.current
 
         val isBottomBarVisible = when (currentScreen) {
-            Screen.Home, Screen.Notices, Screen.Events, Screen.Directory, Screen.Profile -> true
+            Screen.Home, Screen.Notices, Screen.Notifications, Screen.Complaints, Screen.Profile -> true
             else -> false
         }
 
         Scaffold(
             snackbarHost = {
                 SnackbarHost(hostState = snackbarHostState) { data ->
-                    Snackbar(
-                        snackbarData = data,
-                        containerColor = SaffronPrimary,
-                        contentColor = WarmWhiteSurface,
-                        modifier = Modifier.padding(12.dp)
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = WarmWhiteSurface,
+                        shadowElevation = 12.dp,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderStroke)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.size(40.dp).background(LightIconBg, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "🔔", fontSize = 18.sp)
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (lang == AppLanguage.GUJARATI) "નવી સૂચના" else "COMMUNITY UPDATE",
+                                    style = BodlaCaption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                    color = SaffronPrimary
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = data.visuals.message,
+                                    style = BodlaBody,
+                                    color = TextPrimary,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            TextButton(onClick = { data.dismiss() }, contentPadding = PaddingValues(8.dp)) {
+                                Text(text = "×", fontSize = 22.sp, color = TextSecondary)
+                            }
+                        }
+                    }
                 }
             },
             bottomBar = {
@@ -235,12 +322,12 @@ fun MainScreen(
                             )
                         )
 
-                        // 3. Events
+                        // 3. Notifications
                         NavigationBarItem(
-                            selected = currentScreen == Screen.Events,
-                            onClick = { currentScreen = Screen.Events },
-                            icon = { Text(text = "📅", fontSize = 20.sp) },
-                            label = { Text(text = Strings.navEvents(lang), style = BodlaNavigation) },
+                            selected = currentScreen == Screen.Notifications,
+                            onClick = { currentScreen = Screen.Notifications },
+                            icon = { Text(text = "🔔", fontSize = 20.sp) },
+                            label = { Text(text = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Updates", style = BodlaNavigation) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = SaffronPrimary,
                                 selectedTextColor = SaffronPrimary,
@@ -248,12 +335,12 @@ fun MainScreen(
                             )
                         )
 
-                        // 4. Directory
+                        // 4. Complaints
                         NavigationBarItem(
-                            selected = currentScreen == Screen.Directory,
-                            onClick = { currentScreen = Screen.Directory },
-                            icon = { Text(text = "🏛", fontSize = 20.sp) },
-                            label = { Text(text = Strings.navDirectory(lang), style = BodlaNavigation) },
+                            selected = currentScreen == Screen.Complaints,
+                            onClick = { currentScreen = Screen.Complaints },
+                            icon = { Text(text = "✍", fontSize = 20.sp) },
+                            label = { Text(text = Strings.serviceComplaints(lang), style = BodlaNavigation) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = SaffronPrimary,
                                 selectedTextColor = SaffronPrimary,
@@ -354,21 +441,31 @@ fun MainScreen(
                     }
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.weight(1f).nestedScroll(pullRefreshConnection)) {
                     when (val screen = currentScreen) {
                         is Screen.Home -> HomeScreen(
                             onNavigate = { currentScreen = it },
                             userName = currentUser?.fullName ?: (if (lang == AppLanguage.GUJARATI) "ગ્રામજન" else "Resident"),
                             isOffline = !isConnectedToInternet,
                             pinnedNotice = notices.firstOrNull { it.isPinned },
-                            upcomingEvents = upcomingEvents,
                             latestNotices = notices.take(5),
+                            modifier = contentModifier
+                        )
+
+                        is Screen.VillageHistory -> VillageHistoryScreen(
+                            onBack = { currentScreen = Screen.Home },
                             modifier = contentModifier
                         )
 
                         is Screen.Notices -> NoticeListScreen(
                             onNavigate = { currentScreen = it },
                             notices = notices,
+                            modifier = contentModifier
+                        )
+
+                        is Screen.Notifications -> NotificationCenterScreen(
+                            notifications = latestNotifications,
+                            onBack = { currentScreen = Screen.Home },
                             modifier = contentModifier
                         )
 
@@ -380,7 +477,7 @@ fun MainScreen(
 
                         is Screen.Directory -> DirectoryScreen(
                             onNavigate = { currentScreen = it },
-                            businesses = businesses,
+                            businesses = emptyList(),
                             modifier = contentModifier
                         )
 
@@ -400,6 +497,9 @@ fun MainScreen(
 
                         is Screen.AdminHome -> AdminHomeScreen(
                             profile = currentUser,
+                            authRepository = AppContainer.authRepository,
+                            notices = notices,
+                            offerings = offerings,
                             onNavigate = { currentScreen = it },
                             onLogout = {
                                 coroutineScope.launch {
@@ -483,6 +583,7 @@ fun MainScreen(
                                     result
                                 }
                             },
+                            onRefreshBids = { refreshOfferingBids(screen.offeringId) },
                             onBack = { currentScreen = Screen.Offerings },
                             modifier = contentModifier
                         )
@@ -490,18 +591,13 @@ fun MainScreen(
                         is Screen.AddOffering -> if (currentUser?.isStaff == true) {
                             AddOfferingScreen(
                                 onBack = { currentScreen = Screen.Offerings },
-                                onSubmit = { titleGu, amount, locationGu ->
+                                onSubmit = { offering ->
                                     coroutineScope.launch {
-                                        val newOffering = Offering(
-                                            id = "off_${Clock.System.now().toEpochMilliseconds()}",
-                                            titleGu = titleGu,
-                                            titleEn = titleGu,
-                                            amount = amount,
-                                            locationGu = locationGu,
-                                            status = "ACTIVE"
-                                        )
-                                        AppContainer.offeringRepository.submitOffering(newOffering)
-                                        currentScreen = Screen.Offerings
+                                        AppContainer.offeringRepository.submitOffering(offering)
+                                            .onSuccess { currentScreen = Screen.Offerings }
+                                            .onFailure { error ->
+                                                snackbarHostState.showSnackbar(error.message ?: "Could not create offering.")
+                                            }
                                     }
                                 },
                                 modifier = contentModifier
@@ -548,6 +644,83 @@ fun MainScreen(
                             onNavigate = { currentScreen = it },
                             modifier = contentModifier
                         )
+                    }
+
+                    if (pullDistance > 0f || isPullRefreshing) {
+                        Surface(
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            color = WarmWhiteSurface,
+                            shadowElevation = 6.dp,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderStroke)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isPullRefreshing) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = SaffronPrimary)
+                                } else {
+                                    Text(text = "↓", color = SaffronPrimary, fontSize = 18.sp)
+                                }
+                                Text(
+                                    text = when {
+                                        isPullRefreshing && lang == AppLanguage.GUJARATI -> "રીફ્રેશ થઈ રહ્યું છે…"
+                                        isPullRefreshing -> "Refreshing…"
+                                        pullDistance >= pullThresholdPx && lang == AppLanguage.GUJARATI -> "રીફ્રેશ કરવા છોડો"
+                                        pullDistance >= pullThresholdPx -> "Release to refresh"
+                                        lang == AppLanguage.GUJARATI -> "રીફ્રેશ કરવા નીચે ખેંચો"
+                                        else -> "Pull down to refresh"
+                                    },
+                                    style = BodlaCaption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    topNotificationMessage?.let { message ->
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = WarmWhiteSurface,
+                            shadowElevation = 14.dp,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderStroke)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(40.dp).background(LightIconBg, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = "🔔", fontSize = 18.sp)
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (lang == AppLanguage.GUJARATI) "નવી સૂચના" else "COMMUNITY UPDATE",
+                                        style = BodlaCaption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                        color = SaffronPrimary
+                                    )
+                                    Text(
+                                        text = message,
+                                        style = BodlaBody,
+                                        color = TextPrimary,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                TextButton(onClick = { topNotificationMessage = null }, contentPadding = PaddingValues(8.dp)) {
+                                    Text(text = "×", fontSize = 22.sp, color = TextSecondary)
+                                }
+                            }
+                        }
                     }
                 }
             }

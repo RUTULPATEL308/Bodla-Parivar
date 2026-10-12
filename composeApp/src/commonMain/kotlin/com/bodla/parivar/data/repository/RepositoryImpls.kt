@@ -11,10 +11,15 @@ import com.bodla.parivar.data.remote.dto.*
 import com.bodla.parivar.database.AppDatabase
 import com.bodla.parivar.domain.model.*
 import com.bodla.parivar.domain.repository.*
+import com.bodla.parivar.features.offerings.calculateMinimumBidAmount
+import kotlin.math.roundToLong
 import io.github.aakira.napier.Napier
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.request.get
+import io.ktor.client.request.delete
+import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -563,6 +568,7 @@ class OfferingRepositoryImpl(
             val response = httpClient.get(Endpoints.OFFERINGS)
             if (response.status.isSuccess()) {
                 val dtos = response.body<List<OfferingDto>>()
+                val serverIds = dtos.map { it.id }.toSet()
                 database.transaction {
                     for (dto in dtos) {
                         database.appDatabaseQueries.insertOrReplaceOffering(
@@ -582,8 +588,35 @@ class OfferingRepositoryImpl(
                             endAt = dto.endAt,
                             bidCallCount = dto.bidCallCount.toLong(),
                             winningBidderName = dto.winningBidderName,
-                            winningBidAmount = dto.winningBidAmount
+                            winningBidAmount = dto.winningBidAmount,
+                            winnerNameStatus = dto.winnerNameStatus,
+                            winnerDisplayName = dto.winnerDisplayName,
+                            winnerNameDeadlineAt = dto.winnerNameDeadlineAt
                         )
+                    }
+
+                    // Delete cached offerings that are no longer on the server and have no pending sync mutations
+                    val pendingItems = database.appDatabaseQueries.selectPendingSyncItems().executeAsList()
+                    val pendingOfferingIds = mutableSetOf<String>()
+                    for (item in pendingItems) {
+                        when (item.entityType.uppercase()) {
+                            "OFFERING" -> pendingOfferingIds.add(item.id)
+                            "OFFERING_BID" -> {
+                                runCatching {
+                                    Json.parseToJsonElement(item.payloadJson)
+                                        .jsonObject["offering_id"]
+                                        ?.jsonPrimitive
+                                        ?.contentOrNull
+                                }.getOrNull()?.let { pendingOfferingIds.add(it) }
+                            }
+                        }
+                    }
+
+                    val cachedIds = database.appDatabaseQueries.selectAllOfferingIds().executeAsList()
+                    for (cachedId in cachedIds) {
+                        if (cachedId !in serverIds && cachedId !in pendingOfferingIds) {
+                            database.appDatabaseQueries.deleteOfferingById(cachedId)
+                        }
                     }
                 }
                 Napier.i("OfferingRepository: Refreshed ${dtos.size} offerings")
@@ -615,7 +648,7 @@ class OfferingRepositoryImpl(
                 offering.amount?.let { put("amount", it) }
                 offering.locationGu?.let { put("location_gu", it) }
                 offering.locationEn?.let { put("location_en", it) }
-                put("status", "ACTIVE")
+                put("status", offering.status)
             }
 
             // Write to offline SyncQueue
@@ -642,12 +675,15 @@ class OfferingRepositoryImpl(
                 locationGu = offering.locationGu,
                 locationEn = offering.locationEn,
                 imageUrl = offering.imageUrl,
-                status = "ACTIVE",
+                status = offering.status,
                 startAt = offering.startAt,
                 endAt = offering.endAt,
                 bidCallCount = offering.bidCallCount.toLong(),
                 winningBidderName = offering.winningBidderName,
-                winningBidAmount = offering.winningBidAmount
+                winningBidAmount = offering.winningBidAmount,
+                winnerNameStatus = "NOT_STARTED",
+                winnerDisplayName = null,
+                winnerNameDeadlineAt = null
             )
 
             // Opportunistically trigger background sync
@@ -659,6 +695,43 @@ class OfferingRepositoryImpl(
         }
     }
 
+    override suspend fun updateOfferingStatus(offeringId: String, status: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.patch("${Endpoints.OFFERINGS_BASE}?id=eq.$offeringId") {
+                    contentType(ContentType.Application.Json)
+                    header("Prefer", "return=representation")
+                    setBody(buildJsonObject { put("status", status) }.toString())
+                }
+            }
+            if (!response.status.isSuccess()) Result.failure(Exception(response.body<String>()))
+            else {
+                refreshOfferings()
+                Result.success(Unit)
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    override suspend fun deleteOffering(offeringId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.delete("${Endpoints.OFFERINGS_BASE}?id=eq.$offeringId&select=id") {
+                    header("Prefer", "return=representation")
+                }
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception(response.body<String>()))
+            if (response.body<List<JsonObject>>().isEmpty()) {
+                return@withContext Result.failure(Exception("No offering was deleted. Check staff access and try again."))
+            }
+            refreshOfferings()
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     override suspend fun submitOfferingBid(
         offeringId: String,
         bidderName: String,
@@ -666,6 +739,36 @@ class OfferingRepositoryImpl(
         bidderPhone: String?
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val offering = database.appDatabaseQueries
+                .selectOfferingById(offeringId)
+                .executeAsOneOrNull()
+                ?.toDomain()
+
+            if (offering == null) {
+                return@withContext Result.failure(IllegalStateException("Offering not found."))
+            }
+
+            if (!offering.isBidOpen) {
+                return@withContext Result.failure(
+                    IllegalStateException("Bidding is closed for this offering (current status: ${offering.status}).")
+                )
+            }
+
+            val latestBids = getOfferingBids(offeringId).getOrElse { error ->
+                return@withContext Result.failure(error)
+            }
+            val currentHighestBid = latestBids
+                .filter { it.status != "REJECTED" }
+                .maxOfOrNull { it.amount }
+            val minimumAllowed = calculateMinimumBidAmount(offering.amount, currentHighestBid)
+            if (amount < minimumAllowed) {
+                return@withContext Result.failure(
+                    IllegalArgumentException(
+                        "Bid must be at least ₹${minimumAllowed.roundToLong()} for this offering."
+                    )
+                )
+            }
+
             val now = Clock.System.now().toString()
             val queueId = "bid_${Clock.System.now().toEpochMilliseconds()}"
             val payload = buildJsonObject {
@@ -720,6 +823,277 @@ class OfferingRepositoryImpl(
         } catch (e: Exception) {
             Napier.w("OfferingRepository: Error fetching offering bids", e)
             Result.failure(e)
+        }
+    }
+
+    override suspend fun getAllOfferingBids(): Result<List<OfferingBid>> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest { httpClient.get(Endpoints.OFFERING_BIDS) }
+            if (response.status.isSuccess()) Result.success(response.body())
+            else Result.failure(Exception("HTTP ${response.status.value}: ${response.body<String>()}"))
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    override suspend fun updateOfferingBidStatus(
+        offeringId: String,
+        bid: OfferingBid,
+        status: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.patch(Endpoints.offeringBidById(bid.id)) {
+                    contentType(ContentType.Application.Json)
+                    setBody(buildJsonObject { put("status", status) }.toString())
+                }
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception(response.body<String>()))
+
+            if (status == "APPROVED") {
+                val amountResponse = authorizedRequest {
+                    httpClient.patch("${Endpoints.OFFERINGS_BASE}?id=eq.$offeringId") {
+                        contentType(ContentType.Application.Json)
+                        setBody(buildJsonObject { put("amount", bid.amount) }.toString())
+                    }
+                }
+                if (!amountResponse.status.isSuccess()) {
+                    return@withContext Result.failure(Exception("Bid approved, but offering amount update failed: ${amountResponse.body<String>()}"))
+                }
+                runCatching {
+                    authorizedRequest {
+                        httpClient.post("${Endpoints.REST_BASE_URL}/notifications") {
+                            contentType(ContentType.Application.Json)
+                            setBody(buildJsonObject {
+                                put("title_gu", "🔔 નવી બોલી મંજૂર")
+                                put("title_en", "New Bid Approved")
+                                put("body_gu", "₹${bid.amount.toInt()} – ${bid.bidderName}")
+                                put("body_en", "₹${bid.amount.toInt()} by ${bid.bidderName}")
+                                put("type", "OFFERING")
+                                put("reference_id", offeringId)
+                            }.toString())
+                        }
+                    }
+                }
+            }
+            refreshOfferings()
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    override suspend fun deleteOfferingBid(offeringId: String, bidId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.delete("${Endpoints.offeringBidById(bidId)}&select=id") {
+                    header("Prefer", "return=representation")
+                }
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception(response.body<String>()))
+            if (response.body<List<JsonObject>>().isEmpty()) {
+                return@withContext Result.failure(Exception("The bid was not deleted. Check staff access and try again."))
+            }
+            refreshOfferings()
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    override suspend fun addStaffOfferingBid(offeringId: String, bidderName: String, amount: Double): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.post(Endpoints.OFFERING_BIDS_BASE) {
+                    contentType(ContentType.Application.Json)
+                    header("Prefer", "return=representation")
+                    setBody(buildJsonObject {
+                        put("offering_id", offeringId)
+                        put("bidder_name", bidderName.trim())
+                        put("amount", amount)
+                        put("status", "APPROVED")
+                    }.toString())
+                }
+            }
+            if (response.status.isSuccess()) Result.success(Unit)
+            else Result.failure(Exception(response.body<String>()))
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    override suspend fun callOfferingBid(offeringId: String, winnerName: String?): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.post(Endpoints.RPC_CALL_OFFERING_BID) {
+                    contentType(ContentType.Application.Json)
+                    setBody(buildJsonObject {
+                        put("p_offering_id", offeringId)
+                        if (winnerName.isNullOrBlank()) put("p_winner_name", JsonNull)
+                        else put("p_winner_name", winnerName)
+                    }.toString())
+                }
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception(response.body<String>()))
+            val callCount = response.body<Int>()
+            val topBid = getOfferingBids(offeringId).getOrNull()
+                ?.filter { it.status != "REJECTED" }
+                ?.maxByOrNull { it.amount }
+            if (topBid != null) {
+                val offering = getOfferingById(offeringId)
+                runCatching {
+                    authorizedRequest {
+                        httpClient.post("${Endpoints.REST_BASE_URL}/notifications") {
+                            contentType(ContentType.Application.Json)
+                            setBody(buildJsonObject {
+                                put("title_gu", "🔔 ${offering?.titleGu ?: "ચઢાવો"} – ₹${topBid.amount.toInt()} · $callCount વાર")
+                                put("title_en", "Bid Call $callCount/3: ${offering?.titleEn ?: "Offering"}")
+                                put("body_gu", if (callCount == 3) "બોલી બંધ! વિજેતા: ${winnerName ?: topBid.bidderName}" else "₹${topBid.amount.toInt()} – $callCount વાર બોલો")
+                                put("body_en", if (callCount == 3) "Bidding closed! Winner: ${winnerName ?: topBid.bidderName}" else "₹${topBid.amount.toInt()} – Call $callCount of 3")
+                                put("type", "OFFERING")
+                                put("reference_id", offeringId)
+                            }.toString())
+                        }
+                    }
+                }.onFailure { error -> Napier.w("OfferingRepository: Bid call saved but notification failed", error) }
+            }
+            refreshOfferings()
+            Result.success(callCount)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    override suspend fun adminSetWinnerDisplayName(offeringId: String, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = authorizedRequest {
+                httpClient.post(Endpoints.RPC_ADMIN_SET_WINNER_DISPLAY_NAME) {
+                    contentType(ContentType.Application.Json)
+                    setBody(buildJsonObject {
+                        put("p_offering_id", offeringId)
+                        put("p_name", name.trim())
+                    }.toString())
+                }
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception(response.body<String>()))
+            refreshOfferings()
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    private suspend fun authorizedRequest(request: suspend () -> HttpResponse): HttpResponse {
+        var response = request()
+        if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+            response = request()
+        }
+        return response
+    }
+
+    override suspend fun isCurrentUserWinner(offeringId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val payload = buildJsonObject {
+                put("p_offering_id", offeringId)
+            }.toString()
+
+            var response = httpClient.post(Endpoints.RPC_IS_CURRENT_USER_OFFERING_WINNER) {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+                response = httpClient.post(Endpoints.RPC_IS_CURRENT_USER_OFFERING_WINNER) {
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }
+            }
+
+            if (response.status.isSuccess()) {
+                Result.success(response.body<Boolean>())
+            } else if (response.status == HttpStatusCode.Unauthorized) {
+                Result.success(false)
+            } else {
+                val errorBody = response.body<String>()
+                Napier.w("OfferingRepository: isCurrentUserWinner failed: HTTP ${response.status.value} $errorBody")
+                Result.failure(WinnerFlowException.Unknown("Unable to verify winner status (${response.status.value})."))
+            }
+        } catch (e: Exception) {
+            Napier.w("OfferingRepository: Error checking winner status", e)
+            Result.failure(WinnerFlowException.Network(e))
+        }
+    }
+
+    override suspend fun submitWinnerDisplayName(offeringId: String, name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val payload = buildJsonObject {
+                put("p_offering_id", offeringId)
+                put("p_name", name.trim())
+            }.toString()
+
+            var response = httpClient.post(Endpoints.RPC_SUBMIT_WINNER_DISPLAY_NAME) {
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+
+            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+                response = httpClient.post(Endpoints.RPC_SUBMIT_WINNER_DISPLAY_NAME) {
+                    contentType(ContentType.Application.Json)
+                    setBody(payload)
+                }
+            }
+
+            if (response.status.isSuccess()) {
+                refreshOfferings()
+                Result.success(Unit)
+            } else {
+                val errorBody = response.body<String>()
+                val mappedException = mapWinnerSubmissionError(errorBody, response.status)
+                Napier.w("OfferingRepository: submitWinnerDisplayName failed: $errorBody")
+                Result.failure(mappedException)
+            }
+        } catch (e: WinnerFlowException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Napier.e("OfferingRepository: Network error submitting winner display name", e)
+            Result.failure(WinnerFlowException.Network(e))
+        }
+    }
+
+    override suspend fun getServerTimeOffsetMillis(): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            val t0 = Clock.System.now().toEpochMilliseconds()
+            val response = httpClient.get(Endpoints.RPC_GET_SERVER_TIME)
+            val t1 = Clock.System.now().toEpochMilliseconds()
+
+            if (response.status.isSuccess()) {
+                val rawBody = response.body<String>().trim().trim('"')
+                val serverInstant = kotlinx.datetime.Instant.parse(rawBody)
+                val serverEpoch = serverInstant.toEpochMilliseconds()
+                val clientMidpoint = (t0 + t1) / 2
+                val offset = serverEpoch - clientMidpoint
+                Result.success(offset)
+            } else {
+                Result.failure(WinnerFlowException.Unknown("Failed to synchronize with server clock."))
+            }
+        } catch (e: Exception) {
+            Napier.w("OfferingRepository: Error calculating server time offset", e)
+            Result.failure(WinnerFlowException.Network(e))
+        }
+    }
+
+    private fun mapWinnerSubmissionError(errorBody: String, status: HttpStatusCode): WinnerFlowException {
+        val lower = errorBody.lowercase()
+        return when {
+            "only the winning bidder" in lower || status == HttpStatusCode.Forbidden ->
+                WinnerFlowException.NotWinner
+            "deadline has passed" in lower ->
+                WinnerFlowException.DeadlineExpired
+            "between 2 and 60" in lower || "invalid characters" in lower ->
+                WinnerFlowException.InvalidName
+            status == HttpStatusCode.Unauthorized ->
+                WinnerFlowException.NotWinner
+            else ->
+                WinnerFlowException.Unknown("Unable to update winner display name. Please try again.")
         }
     }
 

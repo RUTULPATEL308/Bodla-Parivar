@@ -79,6 +79,10 @@ export interface Offering {
   bid_call_count: number;
   winning_bidder_name: string | null;
   winning_bid_amount: number | null;
+  winner_name_status?: string | null;
+  winner_display_name?: string | null;
+  winner_name_deadline_at?: string | null;
+  winner_profile_name?: string | null;
 }
 
 export interface OfferingBid {

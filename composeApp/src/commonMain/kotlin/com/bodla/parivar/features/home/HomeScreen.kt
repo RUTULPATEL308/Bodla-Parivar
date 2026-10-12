@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -29,7 +27,6 @@ import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.composeapp.generated.resources.Res
 import com.bodla.parivar.composeapp.generated.resources.bodla_parivar_logo
 import org.jetbrains.compose.resources.painterResource
-import com.bodla.parivar.domain.model.Event
 import com.bodla.parivar.domain.model.Notice
 
 @Composable
@@ -39,7 +36,6 @@ fun HomeScreen(
     userName: String = "ગ્રામજન",
     isOffline: Boolean = false,
     pinnedNotice: Notice? = null,
-    upcomingEvents: List<Event> = emptyList(),
     latestNotices: List<Notice> = emptyList()
 ) {
     val lang = LocalAppLanguage.current
@@ -48,7 +44,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             HomeTopBar(
-                onNotificationClick = { /* Handle notification bell */ },
+                onNotificationClick = { onNavigate(Screen.Notifications) },
                 onProfileClick = { onNavigate(Screen.Profile) }
             )
         },
@@ -186,18 +182,13 @@ fun HomeScreen(
 
                     val services = listOf(
                         Triple(Strings.serviceNotices(lang), "📢", Screen.Notices),
-                        Triple(Strings.serviceEvents(lang), "📅", Screen.Events),
-                        Triple(Strings.serviceBusinesses(lang), "🏪", Screen.Directory),
-                        Triple(Strings.serviceJobs(lang), "💼", Screen.Directory),
                         Triple(Strings.serviceOfferings(lang), "🙏", Screen.Offerings), // ચઢાવો
                         Triple(Strings.serviceEmergency(lang), "🚨", Screen.Emergency),
-                        Triple(Strings.servicePlaces(lang), "🏛", Screen.Places),
                         Triple(Strings.serviceGallery(lang), "🖼", Screen.Gallery),
                         Triple(Strings.serviceComplaints(lang), "✍", Screen.Complaints)
                     )
 
-                    // 3 rows of 3 columns
-                    for (row in 0 until 3) {
+                    for (row in 0 until (services.size + 2) / 3) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -206,30 +197,30 @@ fun HomeScreen(
                         ) {
                             for (col in 0 until 3) {
                                 val itemIndex = row * 3 + col
-                                val (title, iconSymbol, destination) = services[itemIndex]
-
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { onNavigate(destination) }
-                                        .padding(vertical = 4.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    AppIconContainer {
+                                if (itemIndex < services.size) {
+                                    val (title, iconSymbol, destination) = services[itemIndex]
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable { onNavigate(destination) }
+                                            .padding(vertical = 4.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        AppIconContainer {
+                                            Text(text = iconSymbol, fontSize = 22.sp)
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
                                         Text(
-                                            text = iconSymbol,
-                                            fontSize = 22.sp
+                                            text = title,
+                                            style = BodlaNavigation,
+                                            color = TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = title,
-                                        style = BodlaNavigation,
-                                        color = TextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
                                 }
                             }
                         }
@@ -237,83 +228,44 @@ fun HomeScreen(
                 }
             }
 
-            // 5. Upcoming Events Section
             item {
-                Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        SectionHeader(
-                            title = Strings.upcomingEvents(lang),
-                            actionText = Strings.viewMore(lang),
-                            onActionClick = { onNavigate(Screen.Events) }
-                        )
-                    }
-
-                    val events = if (upcomingEvents.isNotEmpty()) upcomingEvents else listOf(
-                        Event(
-                            id = "demo_event_1",
-                            titleGu = "[DEMO DATA] વાર્ષિક સાંસ્કૃતિક ઉત્સવ",
-                            titleEn = "[DEMO DATA] Annual Cultural Celebration",
-                            startAt = "2026-10-05 18:00",
-                            locationGu = "બોદલા પ્રાથમિક શાળા મેદાન",
-                            locationEn = "Bodla Primary School Ground"
-                        ),
-                        Event(
-                            id = "demo_event_2",
-                            titleGu = "[DEMO DATA] વિનામૂલ્યે આરોગ્ય તપાસ કેમ્પ",
-                            titleEn = "[DEMO DATA] Free Medical Health Camp",
-                            startAt = "2026-10-12 09:00",
-                            locationGu = "પ્રાથમિક આરોગ્ય કેન્દ્ર",
-                            locationEn = "Primary Health Center"
-                        )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable { onNavigate(Screen.VillageHistory) },
+                    shape = RoundedCornerShape(CardCornerRadius),
+                    colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
+                    border = CardDefaults.outlinedCardBorder().copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(BorderStroke)
                     )
-
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(events) { event ->
-                            Card(
-                                modifier = Modifier
-                                    .width(260.dp)
-                                    .clickable { onNavigate(Screen.EventDetail(event.id)) },
-                                shape = RoundedCornerShape(CardCornerRadius),
-                                colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
-                                border = CardDefaults.outlinedCardBorder().copy(
-                                    brush = androidx.compose.ui.graphics.SolidColor(BorderStroke)
-                                )
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    DemoDataBadge()
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = if (lang == AppLanguage.GUJARATI) event.titleGu else event.titleEn,
-                                        style = BodlaCardTitle,
-                                        color = TextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "📍 " + (if (lang == AppLanguage.GUJARATI) event.locationGu.orEmpty() else event.locationEn.orEmpty()),
-                                        style = BodlaCaption,
-                                        color = TextSecondary,
-                                        maxLines = 1
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "🕒 " + event.startAt,
-                                        style = BodlaCaption,
-                                        color = SaffronPrimary,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
+                        Text(text = "📖", fontSize = 28.sp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = Strings.villageHistory(lang),
+                                style = BodlaCardTitle,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (lang == AppLanguage.GUJARATI) "ગામના મૂળ અને પ્રગતિની વાતો" else "Stories of our roots and growth",
+                                style = BodlaCaption,
+                                color = TextSecondary
+                            )
                         }
+                        Text(text = "→", fontSize = 22.sp, color = SaffronPrimary)
                     }
                 }
             }
 
-            // 6. Latest Notices Section
+            // Latest Notices Section
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     SectionHeader(

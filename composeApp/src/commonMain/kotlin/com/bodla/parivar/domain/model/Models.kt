@@ -134,8 +134,14 @@ data class Offering(
     val endAt: String? = null,
     val bidCallCount: Int = 0,
     val winningBidderName: String? = null,
-    val winningBidAmount: Double? = null
-)
+    val winningBidAmount: Double? = null,
+    val winnerNameStatus: String = "NOT_STARTED",
+    val winnerDisplayName: String? = null,
+    val winnerNameDeadlineAt: String? = null
+) {
+    val isBidOpen: Boolean
+        get() = status == "ACTIVE" && bidCallCount < 3
+}
 
 @Serializable
 data class OfferingBid(

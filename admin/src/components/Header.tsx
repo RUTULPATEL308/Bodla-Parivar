@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Globe, LogOut, User } from 'lucide-react';
+import { useAdminLanguage } from '@/components/AdminLanguageContext';
 
 export default function Header({ email, onSignOut }: { email: string; onSignOut: () => void }) {
-  const [lang, setLang] = useState<'gu' | 'en'>('gu');
+  const { lang, toggleLanguage } = useAdminLanguage();
 
   return (
     <header className="h-16 bg-cream-surface border-b border-brand-border px-6 flex items-center justify-between sticky top-0 z-30">
@@ -20,7 +21,7 @@ export default function Header({ email, onSignOut }: { email: string; onSignOut:
       <div className="flex items-center gap-4">
         {/* Language Toggle */}
         <button
-          onClick={() => setLang(lang === 'gu' ? 'en' : 'gu')}
+          onClick={toggleLanguage}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-border hover:bg-saffron-container text-xs font-medium text-brand-text transition"
         >
           <Globe className="w-3.5 h-3.5 text-saffron" />

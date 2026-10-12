@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import VillageHistory from '@/components/VillageHistory';
 
 interface PortalNotice {
   id: string;
@@ -78,6 +79,8 @@ export default function MemberPortal({
           <h1 className="mt-2 text-2xl font-bold text-brand-text">Welcome, {fullName || 'Bodla resident'}</h1>
           <p className="mt-1 text-sm text-brand-muted">{email}</p>
         </section>
+
+        <VillageHistory compact />
 
         <div className="grid gap-8 md:grid-cols-2">
           <section className="py-6">

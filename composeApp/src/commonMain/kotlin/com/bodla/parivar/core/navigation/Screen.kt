@@ -3,7 +3,9 @@ package com.bodla.parivar.core.navigation
 sealed class Screen(val route: String) {
     // 5-item Bottom Navigation
     data object Home : Screen("home")
+    data object VillageHistory : Screen("village_history")
     data object Notices : Screen("notices")
+    data object Notifications : Screen("notifications")
     data object Events : Screen("events")
     data object Directory : Screen("directory")
     data object Profile : Screen("profile")
