@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { UserRole } from '@/lib/types';
+import PrintControls from '@/components/PrintControls';
+import type { UserFeature, UserRole } from '@/lib/types';
 
 interface ManagedUser {
   id: string;
@@ -15,6 +16,7 @@ interface ManagedUser {
   created_at: string;
   auth_exists: boolean;
   roles: UserRole[];
+  feature_permissions: UserFeature[];
 }
 
 interface UserForm {
@@ -23,7 +25,19 @@ interface UserForm {
   phone: string;
   status: 'ACTIVE' | 'SUSPENDED';
   roles: UserRole[];
+  feature_permissions: UserFeature[];
 }
+
+const featureOptions: { value: UserFeature; label: string; labelGu: string }[] = [
+  { value: 'members', label: 'Members & roles', labelGu: 'સભ્યો અને ભૂમિકાઓ' },
+  { value: 'notices', label: 'Notice management', labelGu: 'સૂચના વ્યવસ્થાપન' },
+  { value: 'offerings', label: 'Offering management', labelGu: 'ચઢાવા વ્યવસ્થાપન' },
+  { value: 'navratri', label: 'Navratri management', labelGu: 'નવરાત્રી વ્યવસ્થાપન' },
+  { value: 'complaints', label: 'Complaints', labelGu: 'ફરિયાદો' },
+  { value: 'emergency_contacts', label: 'Emergency contacts', labelGu: 'તાત્કાલિક સંપર્ક' },
+  { value: 'village_history', label: 'Village history', labelGu: 'ગામનો ઇતિહાસ' },
+  { value: 'notifications', label: 'Notifications', labelGu: 'સૂચનાઓ' },
+];
 
 const roleOptions: { value: UserRole; label: string; labelGu: string }[] = [
   { value: 'USER', label: 'Member', labelGu: 'સભ્ય' },
@@ -40,6 +54,7 @@ const emptyForm: UserForm = {
   phone: '',
   status: 'ACTIVE',
   roles: ['USER'],
+  feature_permissions: [],
 };
 
 async function callUsersApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: object) {
@@ -85,8 +100,8 @@ export default function UserManagement() {
   async function loadUsers() {
     try {
       const result = await callUsersApi('GET');
-      setUsers(result.users as ManagedUser[]);
-      setIsAdmin(true);
+      setUsers((result.users as ManagedUser[]).map((user) => ({ ...user, feature_permissions: user.feature_permissions ?? [] })));
+      setIsAdmin(result.canManageUsers === true);
       setError(null);
     } catch (loadError) {
       setUsers([]);
@@ -101,8 +116,8 @@ export default function UserManagement() {
     let active = true;
     void callUsersApi('GET').then((result) => {
       if (!active) return;
-      setUsers(result.users as ManagedUser[]);
-      setIsAdmin(true);
+      setUsers((result.users as ManagedUser[]).map((user) => ({ ...user, feature_permissions: user.feature_permissions ?? [] })));
+      setIsAdmin(result.canManageUsers === true);
       setError(null);
     }).catch((loadError: unknown) => {
       if (!active) return;
@@ -137,6 +152,7 @@ export default function UserManagement() {
       phone: user.phone ?? '',
       status: user.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE',
       roles: [...user.roles],
+      feature_permissions: [...user.feature_permissions],
     });
     setEditingUser(user);
     setIsCreating(false);
@@ -159,6 +175,15 @@ export default function UserManagement() {
     }));
   }
 
+  function toggleFeature(feature: UserFeature) {
+    setForm((current) => ({
+      ...current,
+      feature_permissions: current.feature_permissions.includes(feature)
+        ? current.feature_permissions.filter((item) => item !== feature)
+        : [...current.feature_permissions, feature],
+    }));
+  }
+
   async function saveUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.roles.length) {
@@ -175,6 +200,7 @@ export default function UserManagement() {
         email: form.email,
         phone: form.phone,
         roles: form.roles,
+        feature_permissions: form.feature_permissions,
       });
       setEditingUser(null);
       setIsCreating(false);
@@ -205,7 +231,7 @@ export default function UserManagement() {
     return <p className="text-sm text-brand-muted">Loading registered users…</p>;
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && error) {
     const hasServerKeyError = error?.includes('server-side Supabase API key')
       || error?.includes('SUPABASE_SERVICE_ROLE_KEY')
       || false;
@@ -246,20 +272,21 @@ export default function UserManagement() {
               className="w-full border border-brand-border bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-saffron"
             />
           </label>
-          <button
+          {isAdmin && <button
             type="button"
             onClick={openCreate}
             className="inline-flex min-h-10 items-center justify-center gap-2 bg-saffron px-4 text-sm font-semibold text-white hover:bg-saffron-dark"
           >
             <Plus className="h-4 w-4" /> Add user
-          </button>
+          </button>}
         </div>
       </header>
 
       {error && <p role="alert" className="border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
 
       <div className="overflow-x-auto border-y border-brand-border">
-        <table className="w-full min-w-[880px] text-left text-sm">
+        <div className="no-print flex justify-end border-b border-brand-border p-3"><PrintControls /></div>
+        <table data-print-area className="w-full min-w-[880px] text-left text-sm">
           <thead className="bg-cream text-xs uppercase text-brand-muted">
             <tr>
               <th className="px-4 py-3 font-semibold">Name</th>
@@ -267,7 +294,7 @@ export default function UserManagement() {
               <th className="px-4 py-3 font-semibold">Roles</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Registered</th>
-              <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              {isAdmin && <th className="no-print px-4 py-3 text-right font-semibold">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-brand-border">
@@ -293,7 +320,7 @@ export default function UserManagement() {
                   {!user.auth_exists && <span className="mt-1 block text-xs text-rose-700">Auth account missing</span>}
                 </td>
                 <td className="px-4 py-3 text-brand-muted">{new Date(user.created_at).toLocaleDateString()}</td>
-                <td className="px-4 py-3">
+                {isAdmin && <td className="no-print px-4 py-3">
                   <div className="flex justify-end gap-1">
                     <button
                       type="button"
@@ -314,12 +341,12 @@ export default function UserManagement() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                </td>
+                </td>}
               </tr>
             ))}
             {!filteredUsers.length && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-brand-muted">
+                <td colSpan={isAdmin ? 6 : 5} className="px-4 py-10 text-center text-brand-muted">
                   {users.length ? 'No users match this search.' : 'No registered user profiles found.'}
                 </td>
               </tr>
@@ -370,6 +397,20 @@ export default function UserManagement() {
                       <input type="checkbox" checked={form.roles.includes(role.value)} onChange={() => toggleRole(role.value)} className="h-4 w-4 accent-amber-600" />
                       <span>{role.label}</span>
                       <span className="ml-auto text-xs text-brand-muted">{role.labelGu}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="text-sm font-semibold text-brand-text">Extra feature access</legend>
+                <p className="mt-1 text-xs leading-5 text-brand-muted">Members keep the standard resident features by default. Select only the additional modules this member should access; elevated admin actions remain limited to assigned staff roles.</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {featureOptions.map((feature) => (
+                    <label key={feature.value} className="flex min-h-11 items-center gap-2 border border-brand-border bg-white px-3 py-2 text-sm text-brand-text">
+                      <input type="checkbox" checked={form.feature_permissions.includes(feature.value)} onChange={() => toggleFeature(feature.value)} className="h-4 w-4 accent-amber-600" />
+                      <span>{feature.label}</span>
+                      <span className="ml-auto text-xs text-brand-muted">{feature.labelGu}</span>
                     </label>
                   ))}
                 </div>

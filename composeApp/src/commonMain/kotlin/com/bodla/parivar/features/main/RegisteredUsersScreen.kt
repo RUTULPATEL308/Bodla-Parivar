@@ -36,6 +36,7 @@ import com.bodla.parivar.core.theme.TextPrimary
 import com.bodla.parivar.core.theme.TextSecondary
 import com.bodla.parivar.core.theme.WarmWhiteSurface
 import com.bodla.parivar.core.ui.BodlaCard
+import com.bodla.parivar.core.ui.PrintAction
 import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.domain.repository.AuthRepository
 
@@ -61,7 +62,11 @@ fun RegisteredUsersScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (lang == AppLanguage.GUJARATI) "નોંધાયેલા સભ્યો" else "Registered users", style = BodlaPageTitle) },
+            title = { Text(if (lang == AppLanguage.GUJARATI) "નોંધાયેલા સભ્યો" else "Registered users", style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(title = if (lang == AppLanguage.GUJARATI) "સભ્યો" else "Members",
+                        content = profiles.joinToString("\n\n") { "${it.fullName}\n${it.email.orEmpty()}\n${it.phone.orEmpty()}\n${it.status}" })
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Text("←", color = TextPrimary)

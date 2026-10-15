@@ -79,6 +79,13 @@ class AuthRepositoryImpl(
     private val tokenStorage: TokenStorage
 ) : AuthRepository {
 
+    private data class AuthData(
+        val profile: Profile?,
+        val access: Pair<Boolean, Boolean>,
+        val roles: List<String>,
+        val features: List<String>
+    )
+
     private var cachedProfile: Profile? = null
 
     override suspend fun login(email: String, password: String): Result<Profile> = withContext(Dispatchers.IO) {
@@ -107,16 +114,18 @@ class AuthRepositoryImpl(
             authDto.refreshToken?.let(tokenStorage::saveRefreshToken)
             val userId = authDto.user?.id
 
-            val (storedProfile, accessFlags, roles) = if (userId != null) {
+            val result = if (userId != null) {
                 coroutineScope {
                     val profileRequest = async { fetchProfileByAuthId(userId) }
                     val accessRequest = async { fetchAccessFlags() }
                     val rolesRequest = async { fetchCurrentUserRoles() }
-                    Triple(profileRequest.await(), accessRequest.await(), rolesRequest.await())
+                    val featuresRequest = async { fetchCurrentUserFeaturePermissions() }
+                    AuthData(profileRequest.await(), accessRequest.await(), rolesRequest.await(), featuresRequest.await())
                 }
             } else {
-                Triple(null, false to false, emptyList())
+                AuthData(null, false to false, emptyList(), emptyList())
             }
+            val (storedProfile, accessFlags, roles, featurePermissions) = result
 
             val (isStaff, isAdmin) = accessFlags
             val profile = storedProfile ?: if (userId != null) {
@@ -138,7 +147,7 @@ class AuthRepositoryImpl(
                 )
             }
 
-            val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin, roles = roles)
+            val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin, roles = roles, featurePermissions = featurePermissions, featureContext = !isStaff && featurePermissions.isNotEmpty())
             cachedProfile = profileWithAccess
             runCatching { tokenStorage.saveUserProfile(Json.encodeToString(profileWithAccess)) }
             Result.success(profileWithAccess)
@@ -216,12 +225,14 @@ class AuthRepositoryImpl(
             val response = httpClient.get(Endpoints.AUTH_USER)
             if (response.status.isSuccess()) {
                 val user = response.body<AuthUserDto>()
-                val (storedProfile, accessFlags, roles) = coroutineScope {
+                val result = coroutineScope {
                     val profileRequest = async { fetchProfileByAuthId(user.id) }
                     val accessRequest = async { fetchAccessFlags() }
                     val rolesRequest = async { fetchCurrentUserRoles() }
-                    Triple(profileRequest.await(), accessRequest.await(), rolesRequest.await())
+                    val featuresRequest = async { fetchCurrentUserFeaturePermissions() }
+                    AuthData(profileRequest.await(), accessRequest.await(), rolesRequest.await(), featuresRequest.await())
                 }
+                val (storedProfile, accessFlags, roles, featurePermissions) = result
                 val profile = storedProfile ?: Profile(
                     id = user.id,
                     authUserId = user.id,
@@ -230,7 +241,7 @@ class AuthRepositoryImpl(
                     phone = user.userMetadata?.get("phone")
                 )
                 val (isStaff, isAdmin) = accessFlags
-                val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin, roles = roles)
+                val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin, roles = roles, featurePermissions = featurePermissions, featureContext = !isStaff && featurePermissions.isNotEmpty())
                 cachedProfile = profileWithAccess
                 runCatching { tokenStorage.saveUserProfile(Json.encodeToString(profileWithAccess)) }
                 profileWithAccess
@@ -346,11 +357,28 @@ class AuthRepositoryImpl(
         }
     }
 
+    private suspend fun fetchCurrentUserFeaturePermissions(): List<String> {
+        return try {
+            val response = httpClient.post(Endpoints.CURRENT_USER_FEATURE_PERMISSIONS) {
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+            if (response.status.isSuccess()) response.body<List<String>>().map { it.lowercase() } else emptyList()
+        } catch (e: Exception) {
+            Napier.w("AuthRepository: Could not load current user feature permissions", e)
+            emptyList()
+        }
+    }
+
     override suspend fun getRegisteredUsers(): Result<List<Profile>> = withContext(Dispatchers.IO) {
         try {
-            if (!fetchAdminAccess()) {
+            val isAdmin = fetchAdminAccess()
+            val hasMemberFeature = fetchCurrentUserFeaturePermissions().contains("members")
+            if (!isAdmin && !hasMemberFeature) {
                 return@withContext Result.failure(Exception("Administrator access is required to view registered users."))
             }
+            val profile = getCurrentUser()
+                ?: return@withContext Result.failure(Exception("Sign in before viewing registered users."))
             val response = httpClient.get("${Endpoints.PROFILES}?select=*&order=created_at.desc")
             if (!response.status.isSuccess()) {
                 return@withContext Result.failure(Exception("Could not load registered users (${response.status.value})."))
@@ -362,6 +390,8 @@ class AuthRepositoryImpl(
             Result.failure(e)
         }
     }
+
+    override suspend fun getFeaturePermissions(): List<String> = fetchCurrentUserFeaturePermissions()
 }
 
 // ==============================================================================
@@ -578,6 +608,12 @@ class OfferingRepositoryImpl(
     private val syncEngine: SyncEngine
 ) : OfferingRepository {
 
+    private suspend fun canManageOfferings(): Boolean = try {
+        val staff = httpClient.post(Endpoints.IS_STAFF) { contentType(ContentType.Application.Json); setBody("{}") }.body<Boolean>()
+        val features = httpClient.post(Endpoints.CURRENT_USER_FEATURE_PERMISSIONS) { contentType(ContentType.Application.Json); setBody("{}") }.body<List<String>>()
+        staff || "offerings" in features
+    } catch (_: Exception) { false }
+
     override fun getOfferings(): Flow<List<Offering>> {
         return database.appDatabaseQueries
             .selectAllOfferings()
@@ -588,7 +624,9 @@ class OfferingRepositoryImpl(
 
     override suspend fun refreshOfferings(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient.get(Endpoints.OFFERINGS)
+            val canManage = canManageOfferings()
+            val endpoint = if (canManage) "${Endpoints.OFFERINGS_BASE}?select=*,category:offering_categories(name_gu,name_en)&order=created_at.desc" else Endpoints.OFFERINGS
+            val response = httpClient.get(endpoint)
             if (response.status.isSuccess()) {
                 val dtos = response.body<List<OfferingDto>>()
                 val serverIds = dtos.map { it.id }.toSet()
@@ -851,6 +889,7 @@ class OfferingRepositoryImpl(
 
     override suspend fun getAllOfferingBids(): Result<List<OfferingBid>> = withContext(Dispatchers.IO) {
         try {
+            if (!canManageOfferings()) return@withContext Result.failure(Exception("Offering feature access is required."))
             val response = authorizedRequest { httpClient.get(Endpoints.OFFERING_BIDS) }
             if (response.status.isSuccess()) Result.success(response.body())
             else Result.failure(Exception("HTTP ${response.status.value}: ${response.body<String>()}"))
@@ -1133,7 +1172,7 @@ class ComplaintRepositoryImpl(
 
     override fun getMyComplaints(): Flow<List<Complaint>> = flow {
         try {
-            val response = httpClient.get(Endpoints.COMPLAINTS)
+            val response = httpClient.get(if (hasComplaintManagementAccess()) "${Endpoints.COMPLAINTS}?select=*" else "${Endpoints.COMPLAINTS}?select=*&user_id=eq.${fetchCurrentProfileId()}")
             if (response.status.isSuccess()) {
                 val list = response.body<List<Complaint>>()
                 emit(list)
@@ -1146,6 +1185,23 @@ class ComplaintRepositoryImpl(
         }
     }
 
+    private suspend fun fetchCurrentProfileId(): String? {
+        return try {
+            val authId = httpClient.get(Endpoints.AUTH_USER).body<AuthUserDto>().id
+            httpClient.get("${Endpoints.PROFILES}?select=id&auth_user_id=eq.$authId")
+                .body<List<ProfileDto>>()
+                .firstOrNull()?.id
+        } catch (_: Exception) { null }
+    }
+
+    private suspend fun hasComplaintManagementAccess(): Boolean {
+        return try {
+            val staff = httpClient.post(Endpoints.IS_STAFF) { contentType(ContentType.Application.Json); setBody("{}") }.body<Boolean>()
+            val features = httpClient.post(Endpoints.CURRENT_USER_FEATURE_PERMISSIONS) { contentType(ContentType.Application.Json); setBody("{}") }.body<List<String>>()
+            staff || "complaints" in features
+        } catch (_: Exception) { false }
+    }
+
     override suspend fun submitComplaint(
         title: String,
         description: String,
@@ -1154,9 +1210,11 @@ class ComplaintRepositoryImpl(
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val now = Clock.System.now().toString()
-            val id = "comp_${Clock.System.now().toEpochMilliseconds()}"
+            val id = "complaint-${Clock.System.now().toEpochMilliseconds()}"
+            val profileId = fetchCurrentProfileId()
+                ?: return@withContext Result.failure(Exception("Sign in before submitting a complaint."))
             val payload = buildJsonObject {
-                put("id", id)
+                put("user_id", profileId)
                 put("title", title)
                 put("description", description)
                 categoryId?.let { put("category_id", it) }

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { LoaderCircle, PhoneCall, Plus, Save, ShieldCheck, Trash2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import PrintControls from '@/components/PrintControls';
 import { EmergencyContact } from '@/lib/types';
 
 type ContactCategory = EmergencyContact['category'];
@@ -201,6 +202,7 @@ export default function AdminEmergencyPage() {
       )}
 
       <section aria-label="Emergency contact list" className="overflow-hidden rounded-2xl border border-brand-border bg-white shadow-sm">
+        <div className="no-print flex justify-end border-b border-brand-border p-3"><PrintControls /></div>
         {loading ? (
           <p role="status" className="flex items-center gap-3 p-6 text-base text-brand-muted"><LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" /> Loading emergency contacts…</p>
         ) : contacts.length === 0 ? (
@@ -211,22 +213,22 @@ export default function AdminEmergencyPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-base text-brand-text">
+            <table data-print-area className="w-full min-w-[760px] text-left text-base text-brand-text">
               <thead className="bg-cream text-sm text-brand-muted">
                 <tr>
                   <th scope="col" className="px-4 py-3">Service</th>
                   <th scope="col" className="px-4 py-3">Phone</th>
                   <th scope="col" className="px-4 py-3">Category</th>
                   <th scope="col" className="px-4 py-3">Visibility</th>
-                  <th scope="col" className="px-4 py-3">Actions</th>
+                  <th scope="col" className="no-print px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-border">
                 {contacts.map((contact) => (
                   <tr key={contact.id}>
                     <td className="px-4 py-4">
-                      <p className="font-semibold">{contact.name_gu}</p>
-                      <p className="text-sm text-brand-muted">{contact.name_en}{contact.organization ? ` · ${contact.organization}` : ''}</p>
+                      <p className="font-semibold"><span data-print-lang="gu">{contact.name_gu}</span></p>
+                      <p className="text-sm text-brand-muted"><span data-print-lang="en">{contact.name_en}{contact.organization ? ` · ${contact.organization}` : ''}</span></p>
                     </td>
                     <td className="px-4 py-4">
                       <a href={`tel:${contact.phone}`} className="font-semibold text-saffron underline decoration-saffron/40 underline-offset-2">{contact.phone}</a>
@@ -238,7 +240,7 @@ export default function AdminEmergencyPage() {
                         <ShieldCheck aria-hidden="true" className="h-4 w-4" /> {contact.is_active ? 'Visible' : 'Hidden'}
                       </button>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="no-print px-4 py-4">
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={() => startEdit(contact)} className="min-h-11 rounded-lg border border-brand-border px-3 text-sm font-semibold hover:bg-cream">Edit</button>
                         <button type="button" onClick={() => void deleteContact(contact)} aria-label={`Delete ${contact.name_en}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-rose-700 hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-600">

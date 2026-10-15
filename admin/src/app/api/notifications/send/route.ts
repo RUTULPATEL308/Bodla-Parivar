@@ -45,18 +45,30 @@ export async function POST(request: NextRequest) {
       ? await supabase.from('roles').select('name').in('id', roleIds)
       : { data: [], error: null };
     if (rolesError) return NextResponse.json({ error: 'Could not verify staff access.' }, { status: 500 });
-    if (!(roles ?? []).some((role) => ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'CONTENT_MANAGER'].includes(role.name))) {
-      return NextResponse.json({ error: 'Only staff can send notifications.' }, { status: 403 });
+    const isStaff = (roles ?? []).some((role) => ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'CONTENT_MANAGER'].includes(role.name));
+    if (!isStaff) {
+      const { data: grant, error: grantError } = await supabase
+        .from('profile_feature_permissions')
+        .select('profile_id')
+        .eq('profile_id', profile.id)
+        .eq('feature_key', 'notifications')
+        .maybeSingle();
+      if (grantError) return NextResponse.json({ error: 'Could not verify notification access.' }, { status: 500 });
+      if (!grant) return NextResponse.json({ error: 'Notification feature access is required.' }, { status: 403 });
     }
 
     const body = await request.json();
+    const { target = 'topic' } = body;
+    if (!isStaff && target === 'tokens') {
+      return NextResponse.json({ error: 'Only staff can send direct token notifications.' }, { status: 403 });
+    }
+
     const {
       title_gu,
       title_en,
       body_gu,
       body_en,
       type = 'NOTICE',
-      target = 'topic', // 'topic' | 'tokens'
       reference_id,
     } = body;
 

@@ -1,4 +1,5 @@
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MODERATOR' | 'CONTENT_MANAGER' | 'BUSINESS_OWNER' | 'USER';
+export type UserFeature = 'members' | 'notices' | 'offerings' | 'navratri' | 'complaints' | 'emergency_contacts' | 'village_history' | 'events' | 'directory' | 'gallery' | 'notifications';
 
 export interface Profile {
   id: string;

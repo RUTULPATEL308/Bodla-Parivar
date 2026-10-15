@@ -6,6 +6,7 @@ import { Bell, Bold, FileText, ImagePlus, Italic, LoaderCircle, Pin, Plus, Strik
 import { Notice } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { translateText } from '@/lib/translation';
+import PrintControls from '@/components/PrintControls';
 
 const MAX_MEDIA_SIZE = 100 * 1024 * 1024;
 const MEDIA_ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -288,14 +289,14 @@ export default function AdminNoticesPage() {
           </h1>
           <p className="mt-1 text-sm text-brand-muted">Publish community updates with photos, videos, documents, and formatted text.</p>
         </div>
-        <button
+        <div className="no-print flex flex-wrap items-center gap-2"><PrintControls /><button
           type="button"
           onClick={() => setShowComposer((open) => !open)}
           className="inline-flex items-center justify-center gap-2 bg-saffron px-4 py-2.5 text-sm font-semibold text-white hover:bg-saffron-dark"
         >
           {showComposer ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           {showComposer ? 'àª¬àª‚àª§ àª•àª°à«‹' : 'àª¨àªµà«€ àªªà«‹àª¸à«àªŸ'}
-        </button>
+        </button></div>
       </header>
 
       {error && <p role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
@@ -371,8 +372,8 @@ export default function AdminNoticesPage() {
         </form>
       )}
 
-      <section className="border-y border-brand-border">
-        <div className="flex items-center justify-between border-b border-brand-border py-3">
+      <section data-print-area className="border-y border-brand-border">
+        <div className="no-print flex items-center justify-between border-b border-brand-border py-3">
           <h2 className="font-semibold text-brand-text">àªªà«àª°àª•àª¾àª¶àª¿àª¤ àª…àª¨à«‡ àª…àª—àª¾àª‰àª¨à«€ àª¸à«‚àªšàª¨àª¾àª“</h2>
           <span className="text-xs text-brand-muted">{notices.length} total</span>
         </div>
@@ -385,10 +386,10 @@ export default function AdminNoticesPage() {
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 font-semibold text-brand-text">
                     {notice.is_pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-saffron" />}
-                    <span className="break-words">{notice.title_gu}</span>
+                    <span data-print-lang="gu" className="break-words">{notice.title_gu}</span>
                   </p>
-                  <p className="mt-1 text-xs text-brand-muted">{notice.title_en} Â· {new Date(notice.created_at).toLocaleDateString()}</p>
-                  <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-brand-muted">{formattedPreview(notice.description_gu ?? '')}</p>
+                  <p className="mt-1 text-xs text-brand-muted"><span data-print-lang="en">{notice.title_en} · </span>{new Date(notice.created_at).toLocaleDateString()}</p>
+                  <p data-print-lang="gu" className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-brand-muted">{formattedPreview(notice.description_gu ?? '')}</p>
                   <div className="mt-2 flex gap-3 text-xs text-leaf">
                     {notice.image_url && <a href={notice.image_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1"><ImagePlus className="h-3.5 w-3.5" /> Image</a>}
                     {notice.attachment_url && <a href={notice.attachment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1">{/\.(mp4|webm|mov)(\?|$)/i.test(notice.attachment_url) ? <Video className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />} Attachment</a>}

@@ -82,6 +82,14 @@ fun EmergencyScreen(
         topBar = {
             TopAppBar(
                 title = { Text(text = Strings.emergencyTitle(lang), style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(
+                        title = if (lang == AppLanguage.GUJARATI) "તાત્કાલિક સંપર્ક" else "Emergency contacts",
+                        content = officialHelplines.joinToString("\n\n") { "${it.nameGu}\n${it.organization.orEmpty()}\n${it.phone}\n${it.alternatePhone.orEmpty()}" },
+                        englishContent = officialHelplines.joinToString("\n\n") { "${it.nameEn}\n${it.organization.orEmpty()}\n${it.phone}\n${it.alternatePhone.orEmpty()}" },
+                        bothContent = officialHelplines.joinToString("\n\n") { "${it.nameGu}\n${it.nameEn}\n${it.organization.orEmpty()}\n${it.phone}\n${it.alternatePhone.orEmpty()}" }
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Text(text = "←", fontSize = 22.sp, color = TextPrimary)

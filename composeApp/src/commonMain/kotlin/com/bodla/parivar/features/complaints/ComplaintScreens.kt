@@ -32,6 +32,12 @@ fun ComplaintListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(text = Strings.complaintsTitle(lang), style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(title = if (lang == AppLanguage.GUJARATI) "ફરિયાદો" else "Complaints",
+                        content = complaints.joinToString("\n\n") { "${it.title}\n${it.description}\n${it.status}\n${it.priority}\n${it.createdAt}" },
+                        englishContent = complaints.joinToString("\n\n") { "${it.title}\n${it.description}\n${it.status}\n${it.priority}\n${it.createdAt}" },
+                        bothContent = complaints.joinToString("\n\n") { "${it.title}\n${it.description}\n${it.status}\n${it.priority}\n${it.createdAt}" })
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {

@@ -77,6 +77,48 @@ fun MainScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
     val notificationsStartedAt = remember { Clock.System.now() }
     val pullThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
+    val pullRefreshConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0f && pullDistance > 0f) {
+                    val newDistance = (pullDistance + available.y).coerceAtLeast(0f)
+                    val consumed = pullDistance - newDistance
+                    pullDistance = newDistance
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y > 0f && !isPullRefreshing) {
+                    pullDistance = (pullDistance + available.y * 0.5f).coerceAtMost(pullThresholdPx * 1.5f)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullDistance >= pullThresholdPx && !isPullRefreshing) {
+                    isPullRefreshing = true
+                    coroutineScope.launch {
+                        try {
+                            AppContainer.syncEngine.syncAll()
+                        } finally {
+                            isPullRefreshing = false
+                            pullDistance = 0f
+                        }
+                    }
+                } else {
+                    pullDistance = 0f
+                }
+                return super.onPreFling(available)
+            }
+        }
+    }
 
     // Live Flow Collections from SQLDelight Cache & Repositories
     val notices by AppContainer.noticeRepository.getNotices().collectAsState(initial = emptyList())
@@ -107,168 +149,13 @@ fun MainScreen(
         }
     }
 
-    val pullRefreshConnection = remember(currentScreen, currentLanguage, isConnectedToInternet, isPullRefreshing, pullThresholdPx) {
-        object : NestedScrollConnection {
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f && !isPullRefreshing) {
-                    pullDistance = (pullDistance + available.y).coerceAtMost(pullThresholdPx * 1.5f)
-                } else if (available.y < 0f) {
-                    pullDistance = (pullDistance + available.y).coerceAtLeast(0f)
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                val shouldRefresh = pullDistance >= pullThresholdPx && !isPullRefreshing
-                pullDistance = 0f
-                if (shouldRefresh) {
-                    coroutineScope.launch {
-                        isPullRefreshing = true
-                        try {
-                            if (!isConnectedToInternet) {
-                                snackbarHostState.showSnackbar(
-                                    if (currentLanguage == AppLanguage.GUJARATI) "તમે ઑફલાઇન છો. સિંક શક્ય નથી." else "You're offline. Refresh is unavailable."
-                                )
-                            } else {
-                                AppContainer.syncEngine.syncAll()
-                                AppContainer.noticeRepository.refreshNotices().getOrThrow()
-                                AppContainer.offeringRepository.refreshOfferings()
-                                AppContainer.emergencyRepository.refreshEmergencyContacts()
-                                AppContainer.villageRepository.refreshVillageInfo()
-                                val offeringDetail = currentScreen as? Screen.OfferingDetail
-                                if (offeringDetail != null) refreshOfferingBids(offeringDetail.offeringId)
-                                try {
-                                    val notificationResponse = AppContainer.httpClient.get(Endpoints.NOTIFICATIONS_LATEST) {
-                                        header("apikey", Endpoints.SUPABASE_ANON_KEY)
-                                        header("Accept", "application/json")
-                                        headers.remove(HttpHeaders.Authorization)
-                                    }
-                                    if (notificationResponse.status.isSuccess()) {
-                                        latestNotifications = notificationResponse.body<List<AppNotification>>()
-                                    }
-                                } catch (_: Exception) {
-                                    // Non-critical: ignore notification refresh errors so notices and main app data load successfully
-                                }
-                            }
-                        } catch (error: Exception) {
-                            snackbarHostState.showSnackbar(
-                                error.message ?: if (currentLanguage == AppLanguage.GUJARATI) "રીફ્રેશ નિષ્ફળ થયું." else "Refresh failed."
-                            )
-                        } finally {
-                            isPullRefreshing = false
-                        }
-                    }
-                }
-                return Velocity.Zero
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        currentUser = AppContainer.authRepository.getCurrentUser()
-        currentScreen = when {
-            currentUser?.isStaff == true -> Screen.AdminHome
-            currentUser != null -> Screen.Home
-            else -> Screen.Login
-        }
-    }
-
-    LaunchedEffect(currentUser, pendingNoticeId) {
-        if (currentUser != null && !pendingNoticeId.isNullOrBlank()) {
-            currentScreen = Screen.NoticeDetail(pendingNoticeId!!)
-            pendingNoticeId = null
-        }
-    }
-
-    LaunchedEffect(topNotificationMessage) {
-        if (topNotificationMessage != null) {
-            delay(6000)
-            topNotificationMessage = null
-        }
-    }
-
-    // Refresh public community data in background after first UI frame renders
-    LaunchedEffect(isConnectedToInternet) {
-        if (isConnectedToInternet && com.bodla.parivar.core.network.Endpoints.isConfigured) {
-            delay(300) // Yield to UI so app opens without stutter
-            coroutineScope.launch { AppContainer.offeringRepository.refreshOfferings() }
-            coroutineScope.launch {
-                AppContainer.noticeRepository.refreshNotices().onFailure { error ->
-                    snackbarHostState.showSnackbar(
-                        "Could not load notices: ${error.message ?: "Check your connection and Supabase settings."}"
-                    )
-                }
-            }
-            coroutineScope.launch { AppContainer.eventRepository.refreshEvents() }
-            coroutineScope.launch { AppContainer.businessRepository.refreshBusinesses() }
-            coroutineScope.launch { AppContainer.emergencyRepository.refreshEmergencyContacts() }
-            coroutineScope.launch { AppContainer.villageRepository.refreshVillageInfo() }
-            coroutineScope.launch { AppContainer.syncEngine.syncAll() }
-        }
-    }
-
-    LaunchedEffect(isConnectedToInternet) {
-        if (!isConnectedToInternet) return@LaunchedEffect
-
-        while (isConnectedToInternet) {
-            AppContainer.offeringRepository.refreshOfferings()
-            delay(10000)
-        }
-    }
-
-    LaunchedEffect(currentScreen, isConnectedToInternet) {
-        if (!isConnectedToInternet) return@LaunchedEffect
-
-        if (currentScreen !is Screen.OfferingDetail) return@LaunchedEffect
-
-        val offeringDetail = currentScreen as? Screen.OfferingDetail ?: return@LaunchedEffect
-        while (true) {
-            refreshOfferingBids(offeringDetail.offeringId)
-            AppContainer.offeringRepository.refreshOfferings()
-            delay(2000) // 2-second fast refresh for live bidding
-        }
-    }
-
-    // Poll notifications table for in-app toasts for ALL app users (every 3 seconds for instant real-time feel)
-    LaunchedEffect(isConnectedToInternet) {
-        if (!isConnectedToInternet) return@LaunchedEffect
-        if (!Endpoints.isConfigured) return@LaunchedEffect
-        while (true) {
-            try {
-                val notifications = AppContainer.httpClient
-                    .get(Endpoints.NOTIFICATIONS_LATEST) {
-                        header("apikey", Endpoints.SUPABASE_ANON_KEY)
-                        header("Accept", "application/json")
-                        headers.remove(HttpHeaders.Authorization)
-                    }
-                    .body<List<AppNotification>>()
-                latestNotifications = notifications
-                val latest = notifications.firstOrNull()
-                if (latest != null && latest.id != lastNotifId) {
-                    val arrivedAfterStartup = latest.createdAt?.let { createdAt ->
-                        runCatching { Instant.parse(createdAt) >= notificationsStartedAt }.getOrDefault(false)
-                    } == true
-                    if (lastNotifId != null || arrivedAfterStartup) {
-                        val title = (if (currentLanguage == AppLanguage.GUJARATI) latest.titleGu else latest.titleEn)
-                            ?: latest.titleGu ?: "🔔 નવી અપડેટ"
-                        val body = (if (currentLanguage == AppLanguage.GUJARATI) latest.bodyGu else latest.bodyEn)
-                            ?: latest.bodyGu ?: ""
-                        topNotificationMessage = if (body.isNotBlank()) "$title: $body" else title
-                    }
-                    lastNotifId = latest.id
-                }
-            } catch (_: Exception) { /* ignore poll errors */ }
-            delay(3000)
-        }
-    }
-
     ProvideAppLanguage(language = currentLanguage) {
         val lang = LocalAppLanguage.current
 
         val isBottomBarVisible = when (currentScreen) {
-            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Notifications, Screen.Complaints, Screen.Profile -> true
+            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Navratri, Screen.Offerings, Screen.AddOffering, Screen.Notifications, Screen.Complaints, Screen.Emergency, Screen.VillageHistory, Screen.Profile -> true
             else -> false
-        } || currentUser?.isStaff == true
+        } || currentUser?.isStaff == true || currentUser?.featurePermissions?.isNotEmpty() == true
 
         Scaffold(
             snackbarHost = {
@@ -319,7 +206,7 @@ fun MainScreen(
                         containerColor = WarmWhiteSurface,
                         tonalElevation = 8.dp
                     ) {
-                        if (currentUser?.isStaff == true) {
+                        if (currentUser?.isStaff == true || currentUser?.featurePermissions?.isNotEmpty() == true) {
                             NavigationBarItem(
                                 selected = currentScreen == Screen.AdminHome,
                                 onClick = { currentScreen = Screen.AdminHome },
@@ -327,7 +214,7 @@ fun MainScreen(
                                 label = { Text(text = if (lang == AppLanguage.GUJARATI) "ડેશબોર્ડ" else "Dashboard", style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                            if (currentUser?.isAdmin == true) {
+                            if (currentUser?.isAdmin == true || currentUser?.featurePermissions?.contains("members") == true) {
                                 NavigationBarItem(
                                     selected = currentScreen == Screen.AdminUsers,
                                     onClick = { currentScreen = Screen.AdminUsers },
@@ -336,25 +223,46 @@ fun MainScreen(
                                     colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                                 )
                             }
-                            if (currentUser?.roles?.any { it in setOf("ADMIN", "SUPER_ADMIN", "CONTENT_MANAGER") } == true || currentUser?.isAdmin == true) NavigationBarItem(
+                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("notices") == true) NavigationBarItem(
                                 selected = currentScreen == Screen.Notices,
                                 onClick = { currentScreen = Screen.Notices },
                                 icon = { Text(text = "📢", fontSize = 20.sp) },
                                 label = { Text(text = Strings.navNotices(lang), style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                            if (currentUser?.roles?.any { it in setOf("ADMIN", "SUPER_ADMIN", "MODERATOR") } == true || currentUser?.isAdmin == true) NavigationBarItem(
+                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true) NavigationBarItem(
                                 selected = currentScreen == Screen.Offerings,
                                 onClick = { currentScreen = Screen.Offerings },
                                 icon = { Text(text = "🙏", fontSize = 20.sp) },
                                 label = { Text(text = if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offerings", style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                            if (currentUser?.roles?.any { it in setOf("ADMIN", "SUPER_ADMIN", "CONTENT_MANAGER") } == true || currentUser?.isAdmin == true) NavigationBarItem(
+                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("navratri") == true) NavigationBarItem(
                                 selected = currentScreen == Screen.Navratri,
                                 onClick = { currentScreen = Screen.Navratri },
                                 icon = { Text(text = "✨", fontSize = 20.sp) },
                                 label = { Text(text = if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("complaints") == true) NavigationBarItem(
+                                selected = currentScreen == Screen.Complaints,
+                                onClick = { currentScreen = Screen.Complaints },
+                                icon = { Text(text = "📝", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ફરિયાદો" else "Complaints", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("emergency_contacts") == true) NavigationBarItem(
+                                selected = currentScreen == Screen.Emergency,
+                                onClick = { currentScreen = Screen.Emergency },
+                                icon = { Text(text = "🚨", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "કટોકટી સંપર્ક" else "Emergency", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("village_history") == true) NavigationBarItem(
+                                selected = currentScreen == Screen.VillageHistory,
+                                onClick = { currentScreen = Screen.VillageHistory },
+                                icon = { Text(text = "📖", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ઇતિહાસ" else "History", style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
                             NavigationBarItem(
@@ -535,7 +443,7 @@ fun MainScreen(
 
                         is Screen.Navratri -> com.bodla.parivar.features.navratri.NavratriScreen(
                             onBack = { currentScreen = Screen.Home },
-                            canManage = currentUser?.isStaff == true,
+                            canManage = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("navratri") == true,
                             modifier = contentModifier
                         )
 
@@ -635,7 +543,7 @@ fun MainScreen(
                             onNavigate = { currentScreen = it },
                             offerings = offerings,
                             onBack = { currentScreen = Screen.Home },
-                            canManageOfferings = currentUser?.isStaff == true,
+                            canManageOfferings = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true,
                             modifier = contentModifier
                         )
 
@@ -645,6 +553,7 @@ fun MainScreen(
                             existingBids = offeringBidsById[screen.offeringId].orEmpty(),
                             bidLoadError = offeringBidsError,
                             bidderProfile = currentUser,
+                            canManageOfferings = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true,
                             onPlaceBid = { amount ->
                                 val profile = currentUser
                                 if (profile == null) {
@@ -667,7 +576,7 @@ fun MainScreen(
                             modifier = contentModifier
                         )
 
-                        is Screen.AddOffering -> if (currentUser?.isStaff == true) {
+                        is Screen.AddOffering -> if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true) {
                             AddOfferingScreen(
                                 onBack = { currentScreen = Screen.Offerings },
                                 onSubmit = { offering ->

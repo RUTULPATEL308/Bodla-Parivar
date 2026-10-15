@@ -8,6 +8,7 @@ interface AuthRepository {
     suspend fun register(fullName: String, email: String, password: String, phone: String?): Result<Profile>
     suspend fun getCurrentUser(): Profile?
     suspend fun getRegisteredUsers(): Result<List<Profile>>
+    suspend fun getFeaturePermissions(): List<String>
     suspend fun updateProfile(profile: Profile): Result<Profile>
     suspend fun logout(): Result<Unit>
 }

@@ -1,39 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import StatusBadge from '@/components/StatusBadge';
-import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Complaint } from '@/lib/types';
+import PrintControls from '@/components/PrintControls';
+import { supabase } from '@/lib/supabase';
 
 export default function AdminComplaintsPage() {
-  const [complaints, setComplaints] = useState<Complaint[]>([
-    {
-      id: 'comp_1',
-      user_id: 'usr_1',
-      title: '[DEMO DATA] પંચાયત રોડ પર શેરી લાઈટ બંધ છે',
-      description: 'છેલ્લા બે દિવસથી પંચાયત રોડ પર લાઈટ બંધ હોવાથી અંધારું રહે છે.',
-      status: 'IN_PROGRESS',
-      priority: 'NORMAL',
-      resolution_note: 'લાઈટમેનને સોંપવામાં આવ્યું છે. સાંજ સુધીમાં ચાલુ થશે.',
-      created_at: '2026-09-26'
-    },
-    {
-      id: 'comp_2',
-      user_id: 'usr_2',
-      title: '[DEMO DATA] તળાવ પાસે કચરાના ઢગલાની સફાઈ બાબત',
-      description: 'તળાવ પાસે કચરો જમા થવાથી દુર્ગંધ આવે છે.',
-      status: 'SUBMITTED',
-      priority: 'HIGH',
-      created_at: '2026-09-28'
-    }
-  ]);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loadError, setLoadError] = useState('');
 
-  const updateStatus = (id: string, newStatus: Complaint['status']) => {
-    setComplaints(prev =>
-      prev.map(c => (c.id === id ? { ...c, status: newStatus } : c))
-    );
+  useEffect(() => {
+    let active = true;
+    void supabase.from('complaints').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+      if (!active) return;
+      setLoadError(error?.message ?? '');
+      setComplaints((data ?? []) as Complaint[]);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const updateStatus = async (id: string, newStatus: Complaint['status']) => {
+    const { error } = await supabase.from('complaints').update({ status: newStatus }).eq('id', id);
+    if (error) setLoadError(error.message);
+    else setComplaints((current) => current.map((complaint) => complaint.id === id ? { ...complaint, status: newStatus } : complaint));
   };
-
   return (
     <div className="space-y-6">
       <div>
@@ -47,14 +39,16 @@ export default function AdminComplaintsPage() {
       </div>
 
       <div className="bg-cream-surface border border-brand-border rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-left text-sm text-brand-text">
+        <div className="no-print flex justify-end border-b border-brand-border p-3"><PrintControls /></div>
+        {loadError && <p role="alert" className="p-3 text-sm text-rose-700">{loadError}</p>}
+        <table data-print-area className="w-full text-left text-sm text-brand-text">
           <thead className="bg-cream text-xs text-brand-muted uppercase border-b border-brand-border">
             <tr>
               <th className="py-3 px-4">ફરિયાદ / Grievance</th>
               <th className="py-3 px-4">પ્રાથમિકતા / Priority</th>
               <th className="py-3 px-4">સ્થિતિ / Status</th>
               <th className="py-3 px-4">તારીખ / Date</th>
-              <th className="py-3 px-4 text-right">સ્થિતિ બદલો / Update</th>
+              <th className="no-print py-3 px-4 text-right">સ્થિતિ બદલો / Update</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-brand-border">
@@ -82,7 +76,7 @@ export default function AdminComplaintsPage() {
                   <StatusBadge status={comp.status} />
                 </td>
                 <td className="py-3.5 px-4 text-xs text-brand-muted">{comp.created_at}</td>
-                <td className="py-3.5 px-4 text-right">
+                <td className="no-print py-3.5 px-4 text-right">
                   <select
                     value={comp.status}
                     onChange={e => updateStatus(comp.id, e.target.value as Complaint['status'])}

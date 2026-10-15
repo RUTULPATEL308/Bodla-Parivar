@@ -152,7 +152,7 @@ fun ProfileScreen(
                 }
             }
 
-            if (profile?.isStaff == true) {
+            if (profile?.isStaff == true || profile?.featurePermissions?.isNotEmpty() == true) {
                 item {
                     BodlaCard {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -162,7 +162,7 @@ fun ProfileScreen(
                                 color = TextPrimary
                             )
                             BodlaButton(
-                                text = if (lang == AppLanguage.GUJARATI) "એડમિન વર્કસ્પેસ ખોલો" else "Open admin workspace",
+                                text = if (lang == AppLanguage.GUJARATI) "ડેશબોર્ડ ખોલો" else "Open dashboard",
                                 onClick = { onNavigate(Screen.AdminHome) }
                             )
                         }

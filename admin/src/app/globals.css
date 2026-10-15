@@ -54,6 +54,37 @@
   }
 }
 
+@media print {
+  @page { margin: 12mm; }
+  body * { visibility: hidden !important; }
+  .no-print { display: none !important; }
+  html[data-print-all='true'] [data-print-area],
+  html[data-print-all='true'] [data-print-area] * { visibility: visible !important; }
+  html[data-print-all='true'] [data-print-area] {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+  html[data-print-all='true'] [data-print-area] table { width: 100% !important; min-width: 0 !important; border-collapse: collapse !important; }
+  html[data-print-all='true'] [data-print-area] tr { break-inside: avoid; }
+  html[data-print-all='true'] [data-print-area] button,
+  html[data-print-all='true'] [data-print-area] select { display: none !important; }
+  html[data-print-all='true'] [data-print-area] th,
+  html[data-print-all='true'] [data-print-area] td { color: black !important; border-color: #aaa !important; }
+  html[data-print-language='gu'] [data-print-lang='en'],
+  html[data-print-language='en'] [data-print-lang='gu'] { display: none !important; }
+  html[data-print-language='both'] [data-print-lang] { display: initial !important; }
+  main, section, article { break-inside: avoid; }
+  a { color: inherit !important; text-decoration: none !important; }
+}
+
 /* Custom scrollbars matching warm aesthetic */
 ::-webkit-scrollbar {
   width: 6px;

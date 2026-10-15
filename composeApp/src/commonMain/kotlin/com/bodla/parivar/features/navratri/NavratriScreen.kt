@@ -16,6 +16,7 @@ import com.bodla.parivar.core.di.AppContainer
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.theme.*
+import com.bodla.parivar.core.ui.PrintAction
 import com.bodla.parivar.features.notices.NoticeAttachmentPreview
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
@@ -219,6 +220,25 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
             TopAppBar(
                 title = { Text(if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri") },
                 navigationIcon = { TextButton(onClick = { if (selected != null) selected = null else onBack() }) { Text(if (lang == AppLanguage.GUJARATI) "પાછા" else "Back") } },
+                actions = {
+                    if (canManage && adminView && selected == null) {
+                        val guBookingReport = bookings.joinToString("\n\n") { booking ->
+                            "${booking.customerName}\n${booking.option?.titleGu.orEmpty()}\n${booking.phone.orEmpty()}\n${booking.amount ?: ""}\n${booking.status} / ${booking.paymentStatus}"
+                        }
+                        val enBookingReport = bookings.joinToString("\n\n") { booking ->
+                            "${booking.customerName}\n${booking.option?.titleEn.orEmpty()}\n${booking.phone.orEmpty()}\n${booking.amount ?: ""}\n${booking.status} / ${booking.paymentStatus}"
+                        }
+                        val bookingReport = bookings.joinToString("\n\n") { booking ->
+                            "${booking.customerName}\n${booking.option?.titleGu.orEmpty()} / ${booking.option?.titleEn.orEmpty()}\n${booking.phone.orEmpty()}\n${booking.amount ?: ""}\n${booking.status} / ${booking.paymentStatus}"
+                        }
+                        PrintAction(
+                            title = if (lang == AppLanguage.GUJARATI) "નવરાત્રી બુકિંગ" else "Navratri bookings",
+                            content = bookingReport,
+                            englishContent = enBookingReport,
+                            bothContent = bookingReport
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
             )
         },

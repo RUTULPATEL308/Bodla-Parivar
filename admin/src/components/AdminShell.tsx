@@ -5,10 +5,9 @@ import type { Session } from '@supabase/supabase-js';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, HeartHandshake, Home, Sparkles, Users } from 'lucide-react';
-import { LogIn, LogOut } from 'lucide-react';
+import { AlertCircle, Bell, BookOpen, HeartHandshake, Home, PhoneCall, Send, Sparkles, Users, LogIn, LogOut } from 'lucide-react';
 import Header from '@/components/Header';
-import { AdminLanguageProvider } from '@/components/AdminLanguageContext';
+import { AdminLanguageProvider, useAdminFeatures, useAdminLanguage, type AdminFeature } from '@/components/AdminLanguageContext';
 import MemberPortal from '@/components/MemberPortal';
 import Sidebar from '@/components/Sidebar';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -18,23 +17,30 @@ type AuthMode = 'login' | 'signup' | 'recover' | 'update-password';
 
 const mobileAdminLinks = [
   { label: 'Home', href: '/', icon: Home },
-  { label: 'Users', href: '/users', icon: Users },
-  { label: 'Notices', href: '/notices', icon: Bell },
-  { label: 'Offerings', href: '/offerings', icon: HeartHandshake },
-  { label: 'Navratri', href: '/navratri', icon: Sparkles },
+  { label: 'Users', href: '/users', icon: Users, feature: 'members' as AdminFeature },
+  { label: 'Notices', href: '/notices', icon: Bell, feature: 'notices' as AdminFeature },
+  { label: 'Offerings', href: '/offerings', icon: HeartHandshake, feature: 'offerings' as AdminFeature },
+  { label: 'Navratri', href: '/navratri', icon: Sparkles, feature: 'navratri' as AdminFeature },
+  { label: 'Complaints', href: '/complaints', icon: AlertCircle, feature: 'complaints' as AdminFeature },
+  { label: 'Emergency', href: '/emergency', icon: PhoneCall, feature: 'emergency_contacts' as AdminFeature },
+  { label: 'History', href: '/history', icon: BookOpen, feature: 'village_history' as AdminFeature },
+  { label: 'Notifications', href: '/notifications', icon: Send, feature: 'notifications' as AdminFeature },
 ];
 
 function MobileAdminFooter() {
   const pathname = usePathname();
+  const { lang } = useAdminLanguage();
+  const { features, isFullStaff } = useAdminFeatures();
+  const links = mobileAdminLinks.filter((link) => link.href === '/' || isFullStaff || (link.feature != null && features.includes(link.feature)));
 
   return (
-    <nav aria-label="Admin menu" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-brand-border bg-cream-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
-      {mobileAdminLinks.map(({ label, href, icon: Icon }) => {
+    <nav aria-label="Admin menu" style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-50 grid border-t border-brand-border bg-cream-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+      {links.map(({ label, href, icon: Icon }) => {
         const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-semibold ${active ? 'text-saffron' : 'text-brand-muted'}`}>
             <Icon aria-hidden="true" className="h-6 w-6" />
-            <span className="truncate leading-5">{label}</span>
+            <span className="truncate leading-5">{lang === 'gu' ? ({ Home: 'હોમ', Users: 'સભ્યો', Notices: 'સૂચનાઓ', Offerings: 'ચઢાવો', Navratri: 'નવરાત્રી', Complaints: 'ફરિયાદો', Emergency: 'કટોકટી', History: 'ઇતિહાસ', Notifications: 'પ્રસારણ' }[label] ?? label) : label}</span>
           </Link>
         );
       })}
@@ -81,9 +87,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const authEventVersion = useRef(0);
+  const [grantedFeatures, setGrantedFeatures] = useState<AdminFeature[]>([]);
+  const [isFullStaff, setIsFullStaff] = useState(false);
 
   async function resolveAccess(session: Session | null) {
     if (!session) {
+      setGrantedFeatures([]);
+      setIsFullStaff(false);
       setSignedInEmail('');
       setAccessState('signed-out');
       return;
@@ -120,9 +130,28 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       if (profileError) throw profileError;
       setSignedInName(profile?.full_name || metadataName);
 
+      const { data: featurePermissions, error: featureError } = await supabase.rpc('current_user_feature_permissions');
+      if (featureError) throw featureError;
+      setGrantedFeatures(Array.isArray(featurePermissions) ? featurePermissions as AdminFeature[] : []);
       const { data, error } = await supabase.rpc('is_staff');
       if (error) throw error;
-      setAccessState(data === true ? 'staff' : 'member');
+      setIsFullStaff(data === true);
+      if (data !== true && Array.isArray(featurePermissions) && window.location.pathname !== '/') {
+        const pathFeature: Record<string, AdminFeature | null> = {
+          '/': null,
+          '/users': 'members', '/notices': 'notices', '/offerings': 'offerings', '/navratri': 'navratri',
+          '/notifications': 'notifications', '/complaints': 'complaints', '/emergency': 'emergency_contacts', '/history': 'village_history',
+        };
+        const requested = window.location.pathname;
+        const key = Object.keys(pathFeature).sort((a, b) => b.length - a.length).find((path) => requested === path || (path !== '/' && requested.startsWith(`${path}/`)));
+        const feature = key ? pathFeature[key] : undefined;
+        if (!feature || !featurePermissions.includes(feature)) {
+          setAuthError('This administration module requires an explicit feature grant or a staff role.');
+          setAccessState('unauthorized');
+          return;
+        }
+      }
+      setAccessState(data === true || (Array.isArray(featurePermissions) && featurePermissions.length > 0) ? 'staff' : 'member');
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       if (message.includes('auth session missing')) {
@@ -331,7 +360,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               Forgot password?
             </button>
           )}
-          <p className="mt-5 text-xs leading-relaxed text-brand-muted">Creating an account does not grant staff access. An administrator must assign an authorized role before the console can be opened.</p>
+          <p className="mt-5 text-xs leading-relaxed text-brand-muted">Creating an account does not grant staff access. An administrator must assign an authorized role or an individual feature grant before the console can be opened.</p>
         </section>
       </main>
     );
@@ -339,14 +368,22 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <AdminLanguageProvider>
-      <div className="flex min-h-screen flex-1 flex-col md:flex-row">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Header email={signedInEmail} onSignOut={handleSignOut} />
-          <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-28 md:p-8">{children}</main>
+      <AdminFeaturesProvider features={grantedFeatures} isFullStaff={isFullStaff}>
+        <div className="flex min-h-screen flex-1 flex-col md:flex-row">
+          <Sidebar />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Header email={signedInEmail} onSignOut={handleSignOut} />
+            <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-28 md:p-8">{children}</main>
+          </div>
+          <MobileAdminFooter />
         </div>
-        <MobileAdminFooter />
-      </div>
+      </AdminFeaturesProvider>
     </AdminLanguageProvider>
   );
+}
+
+function AdminFeaturesProvider({ features, isFullStaff, children }: { features: AdminFeature[]; isFullStaff: boolean; children: React.ReactNode }) {
+  const { setFeatures, setIsFullStaff } = useAdminFeatures();
+  useEffect(() => { setFeatures(features); setIsFullStaff(isFullStaff); }, [features, isFullStaff, setFeatures, setIsFullStaff]);
+  return <>{children}</>;
 }

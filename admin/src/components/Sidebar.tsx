@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useAdminFeatures } from '@/components/AdminLanguageContext';
 import {
   LayoutDashboard,
   Users,
@@ -43,6 +44,18 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { features, isFullStaff } = useAdminFeatures();
+  const featureByPath: Record<string, string> = {
+    '/users': 'members', '/notices': 'notices', '/offerings': 'offerings', '/navratri': 'navratri',
+    '/notifications': 'notifications', '/complaints': 'complaints', '/emergency': 'emergency_contacts', '/history': 'village_history',
+  };
+  const visibleItems = navItems.filter((item) => {
+    if (isFullStaff) return true;
+    if (item.href === '/') return true;
+    if (item.href === '/roles' || item.href === '/audit-logs' || item.href === '/settings') return false;
+    const feature = featureByPath[item.href];
+    return Boolean(feature && features.includes(feature as never));
+  });
 
   return (
     <aside className="hidden w-72 shrink-0 border-r border-brand-border bg-cream-surface md:flex md:min-h-screen md:flex-col">
@@ -62,7 +75,7 @@ export default function Sidebar() {
 
       {/* Navigation Links */}
       <nav aria-label="Main administration" className="flex-1 space-y-1 overflow-y-auto p-3">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
 

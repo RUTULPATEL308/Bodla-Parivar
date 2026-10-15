@@ -36,6 +36,9 @@ object Endpoints {
     val CURRENT_USER_ROLES: String
         get() = "$REST_BASE_URL/rpc/current_user_roles"
 
+    val CURRENT_USER_FEATURE_PERMISSIONS: String
+        get() = "$REST_BASE_URL/rpc/current_user_feature_permissions"
+
     val AUTH_LOGOUT: String
         get() = "$AUTH_BASE_URL/logout"
 

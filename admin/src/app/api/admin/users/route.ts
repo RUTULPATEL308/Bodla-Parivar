@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const roleNames = ['SUPER_ADMIN', 'ADMIN', 'MODERATOR', 'CONTENT_MANAGER', 'BUSINESS_OWNER', 'USER'] as const;
 type RoleName = (typeof roleNames)[number];
+const featureKeys = [
+  'members', 'notices', 'offerings', 'navratri', 'complaints',
+  'emergency_contacts', 'village_history', 'events', 'directory',
+  'gallery', 'notifications',
+] as const;
+type FeatureKey = (typeof featureKeys)[number];
 
 type AdminContext = {
   supabase: SupabaseClient;
@@ -17,7 +23,7 @@ function errorResponse(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-async function requireAdmin(request: NextRequest): Promise<ApiResult> {
+async function requireAdmin(request: NextRequest, allowMemberFeature: boolean = false): Promise<ApiResult> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -71,7 +77,18 @@ async function requireAdmin(request: NextRequest): Promise<ApiResult> {
   if (rolesError) return { response: errorResponse(rolesError.message, 500) };
 
   const roles = (roleRows ?? []).map((role) => role.name as RoleName);
-  if (!roles.some((role) => role === 'ADMIN' || role === 'SUPER_ADMIN')) {
+  const isAdmin = roles.some((role) => role === 'ADMIN' || role === 'SUPER_ADMIN');
+  if (!isAdmin && allowMemberFeature) {
+    const { data: grants, error: grantsError } = await supabase
+      .from('profile_feature_permissions')
+      .select('feature_key')
+      .eq('profile_id', profile.id);
+    if (grantsError) return { response: errorResponse(grantsError.message, 500) };
+    if (grants?.some(({ feature_key }) => feature_key === 'members')) {
+      return { context: { supabase, authUserId: user.id, profileId: profile.id, roles } };
+    }
+  }
+  if (!isAdmin) {
     return { response: errorResponse('Only administrators can manage member accounts.', 403) };
   }
 
@@ -82,6 +99,44 @@ function validRoleList(value: unknown): value is RoleName[] {
   return Array.isArray(value) && value.length > 0 && value.every(
     (role): role is RoleName => typeof role === 'string' && roleNames.includes(role as RoleName)
   );
+}
+
+function validFeatureList(value: unknown): value is FeatureKey[] {
+  return Array.isArray(value) && value.every(
+    (feature): feature is FeatureKey => typeof feature === 'string' && featureKeys.includes(feature as FeatureKey)
+  );
+}
+
+async function getFeaturePermissions(supabase: SupabaseClient, profileIds: string[]) {
+  const byProfile = new Map<string, FeatureKey[]>();
+  if (!profileIds.length) return byProfile;
+  const { data, error } = await supabase
+    .from('profile_feature_permissions')
+    .select('profile_id,feature_key')
+    .in('profile_id', profileIds);
+  if (error) throw new Error(error.message);
+  for (const grant of data ?? []) {
+    const key = grant.feature_key as FeatureKey;
+    byProfile.set(grant.profile_id, [...(byProfile.get(grant.profile_id) ?? []), key]);
+  }
+  return byProfile;
+}
+
+async function replaceFeaturePermissions(
+  context: AdminContext,
+  profileId: string,
+  desired: FeatureKey[]
+) {
+  const { error: deleteError } = await context.supabase
+    .from('profile_feature_permissions')
+    .delete()
+    .eq('profile_id', profileId);
+  if (deleteError) throw new Error(deleteError.message);
+  if (!desired.length) return;
+  const { error } = await context.supabase.from('profile_feature_permissions').insert(
+    desired.map((feature_key) => ({ profile_id: profileId, feature_key, granted_by: context.profileId }))
+  );
+  if (error) throw new Error(error.message);
 }
 
 async function loadRoleIds(supabase: SupabaseClient) {
@@ -177,9 +232,10 @@ async function replaceRoles(
 }
 
 export async function GET(request: NextRequest) {
-  const result = await requireAdmin(request);
+  const result = await requireAdmin(request, true);
   if ('response' in result) return result.response;
   const { supabase } = result.context;
+  const isAdministrator = result.context.roles.some((role) => role === 'ADMIN' || role === 'SUPER_ADMIN');
 
   const [{ data: users, error: usersError }, { data: assignments, error: assignmentsError }, { data: roles, error: rolesError }] = await Promise.all([
     supabase.from('profiles').select('id,auth_user_id,full_name,email,phone,status,created_at').order('created_at', { ascending: false }),
@@ -190,11 +246,13 @@ export async function GET(request: NextRequest) {
   if (error) return errorResponse(error.message, 500);
 
   const authUserIds = new Set<string>();
-  for (let page = 1; ; page += 1) {
-    const { data: authPage, error: authListError } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-    if (authListError) return errorResponse(authListError.message, 500);
-    for (const authUser of authPage.users) authUserIds.add(authUser.id);
-    if (authPage.users.length < 1000) break;
+  if (isAdministrator) {
+    for (let page = 1; ; page += 1) {
+      const { data: authPage, error: authListError } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+      if (authListError) return errorResponse(authListError.message, 500);
+      for (const authUser of authPage.users) authUserIds.add(authUser.id);
+      if (authPage.users.length < 1000) break;
+    }
   }
 
   const roleById = new Map((roles ?? []).map((role) => [role.id, role.name as RoleName]));
@@ -204,15 +262,22 @@ export async function GET(request: NextRequest) {
     if (!role) continue;
     roleByUser.set(assignment.user_id, [...(roleByUser.get(assignment.user_id) ?? []), role]);
   }
+  let featuresByUser: Map<string, FeatureKey[]>;
+  try {
+    featuresByUser = await getFeaturePermissions(supabase, (users ?? []).map((user) => user.id));
+  } catch (permissionError) {
+    return errorResponse(permissionError instanceof Error ? permissionError.message : 'Could not load feature access.', 500);
+  }
 
-  return NextResponse.json({
-    users: (users ?? []).map((user) => ({
+  const allUsers = (users ?? []).map((user) => ({
       ...user,
-      auth_exists: authUserIds.has(user.auth_user_id),
+      auth_exists: isAdministrator ? authUserIds.has(user.auth_user_id) : true,
       roles: roleByUser.get(user.id) ?? [],
-    })),
-    roles: roles ?? [],
-  });
+      feature_permissions: featuresByUser.get(user.id) ?? [],
+    }));
+  return NextResponse.json(isAdministrator
+    ? { users: allUsers, roles: roles ?? [], canManageUsers: true }
+    : { users: allUsers.map(({ auth_user_id: _authUserId, ...user }) => ({ ...user, auth_exists: false })), roles: [], canManageUsers: false });
 }
 
 export async function POST(request: NextRequest) {
@@ -226,7 +291,8 @@ export async function POST(request: NextRequest) {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const roles = body.roles ?? ['USER'];
-    if (!fullName || !email || !validRoleList(roles)) {
+    const featurePermissions = body.feature_permissions ?? [];
+    if (!fullName || !email || !validRoleList(roles) || !validFeatureList(featurePermissions)) {
       return errorResponse('Name, valid email, and at least one valid role are required.', 400);
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return errorResponse('Enter a valid email address.', 400);
@@ -255,7 +321,8 @@ export async function POST(request: NextRequest) {
 
     const currentRoles = await getAssignedRoles(context.supabase, profile.id);
     await replaceRoles(context, profile.id, roles, currentRoles);
-    return NextResponse.json({ user: { ...profile, roles } }, { status: 201 });
+    await replaceFeaturePermissions(context, profile.id, featurePermissions);
+    return NextResponse.json({ user: { ...profile, roles, feature_permissions: featurePermissions } }, { status: 201 });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Could not create the member account.', 500);
   }
@@ -274,7 +341,8 @@ export async function PATCH(request: NextRequest) {
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
     const status = body.status;
     const roles = body.roles;
-    if (!profileId || !fullName || !email || !validRoleList(roles) || !['ACTIVE', 'SUSPENDED', 'DELETED'].includes(status)) {
+    const featurePermissions = body.feature_permissions;
+    if (!profileId || !fullName || !email || !validRoleList(roles) || !validFeatureList(featurePermissions) || !['ACTIVE', 'SUSPENDED', 'DELETED'].includes(status)) {
       return errorResponse('Valid member details, status, and at least one role are required.', 400);
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return errorResponse('Enter a valid email address.', 400);
@@ -313,7 +381,8 @@ export async function PATCH(request: NextRequest) {
     if (updateError) return errorResponse(`Auth account updated, but profile update failed: ${updateError.message}`, 500);
 
     await replaceRoles(context, profile.id, roles, currentRoles);
-    return NextResponse.json({ user: { ...updatedProfile, roles } });
+    await replaceFeaturePermissions(context, profile.id, featurePermissions);
+    return NextResponse.json({ user: { ...updatedProfile, roles, feature_permissions: featurePermissions } });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Could not update the member account.', 500);
   }

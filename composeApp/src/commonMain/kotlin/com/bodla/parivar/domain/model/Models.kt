@@ -22,7 +22,9 @@ data class Profile(
     val status: String = "ACTIVE",
     val isStaff: Boolean = false,
     val isAdmin: Boolean = false,
-    val roles: List<String> = emptyList()
+    val roles: List<String> = emptyList(),
+    val featurePermissions: List<String> = emptyList(),
+    val featureContext: Boolean = false
 )
 
 @Serializable

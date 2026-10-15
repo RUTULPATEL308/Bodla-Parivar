@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.localization.Strings
+import com.bodla.parivar.core.ui.PrintAction
 import com.bodla.parivar.core.theme.*
 
 private data class HistorySection(
@@ -71,6 +72,14 @@ fun VillageHistoryScreen(
         topBar = {
             TopAppBar(
                 title = { Text(Strings.villageHistory(lang), style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(
+                        title = if (lang == AppLanguage.GUJARATI) "ગામનો ઇતિહાસ" else "Village history",
+                        content = sections.joinToString("\n\n") { "${it.titleGu}\n${it.textGu}" },
+                        englishContent = sections.joinToString("\n\n") { "${it.titleEn}\n${it.textEn}" },
+                        bothContent = sections.joinToString("\n\n") { "${it.titleGu}\n${it.textGu}\n${it.titleEn}\n${it.textEn}" }
+                    )
+                },
                 navigationIcon = {
                     androidx.compose.material3.IconButton(onClick = onBack) {
                         Text(text = "←", fontSize = 22.sp, color = TextPrimary)

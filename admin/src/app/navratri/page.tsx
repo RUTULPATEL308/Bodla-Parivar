@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Check, LoaderCircle, Plus, Save, Sparkles, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import PrintControls from '@/components/PrintControls';
 
 type NavratriOption = {
   id: string;
@@ -166,7 +167,7 @@ export default function NavratriAdminPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-brand-text"><Sparkles className="h-6 w-6 text-saffron" /> Navratri management</h1>
           <p className="mt-1 text-sm text-brand-muted">Manage public Navratri options, the Aheval report, and cash booking requests.</p>
         </div>
-        <button type="button" onClick={resetDraft} className="inline-flex items-center justify-center gap-2 rounded-lg bg-saffron px-4 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> New option</button>
+        <div className="no-print flex flex-wrap items-center gap-2"><PrintControls /><button type="button" onClick={resetDraft} className="inline-flex items-center justify-center gap-2 rounded-lg bg-saffron px-4 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> New option</button></div>
       </header>
 
       {(error || message) && <p role={error ? 'alert' : 'status'} className={`rounded-lg border p-3 text-sm ${error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || message}</p>}
@@ -238,17 +239,17 @@ export default function NavratriAdminPage() {
       </section>
 
       <section className="overflow-hidden rounded-xl border border-brand-border bg-white shadow-sm">
-        <div className="border-b border-brand-border p-4"><h2 className="text-lg font-bold text-brand-text">Booking requests <span className="ml-1 text-sm font-normal text-brand-muted">({bookings.length})</span></h2></div>
+        <div className="no-print flex items-center justify-between gap-3 border-b border-brand-border p-4"><h2 className="text-lg font-bold text-brand-text">Booking requests <span className="ml-1 text-sm font-normal text-brand-muted">({bookings.length})</span></h2><PrintControls /></div>
         {loading ? <p className="p-4 text-sm text-brand-muted">Loading bookings…</p> : bookings.length === 0 ? <p className="p-4 text-sm text-brand-muted">No bookings have been submitted.</p> : (
-          <div className="overflow-x-auto">
+          <div data-print-area className="overflow-x-auto">
             <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="bg-cream text-xs uppercase text-brand-muted"><tr><th className="p-3">Resident / option</th><th className="p-3">Phone</th><th className="p-3">Qty / notes</th><th className="p-3">Payment</th><th className="p-3">Booking status</th><th className="p-3">Submitted</th></tr></thead>
+              <thead className="bg-cream text-xs uppercase text-brand-muted"><tr><th className="p-3">Resident / option</th><th className="p-3">Phone</th><th className="p-3">Qty / notes</th><th className="no-print p-3">Payment</th><th className="no-print p-3">Booking status</th><th className="p-3">Submitted</th></tr></thead>
               <tbody className="divide-y divide-brand-border">{bookings.map((booking) => <tr key={booking.id}>
-                <td className="p-3"><p className="font-semibold">{booking.customer_name}</p><p className="text-xs text-brand-muted">{booking.option?.title_en ?? 'Navratri'} / {booking.option?.title_gu}</p></td>
+                <td className="p-3"><p className="font-semibold">{booking.customer_name}</p><p className="text-xs text-brand-muted"><span data-print-lang="en">{booking.option?.title_en ?? 'Navratri'}</span><span data-print-lang="gu">{booking.option?.title_gu}</span></p></td>
                 <td className="p-3">{booking.phone || '—'}</td>
                 <td className="max-w-xs p-3">{booking.amount != null ? `₹${booking.amount.toLocaleString('en-IN')}` : booking.quantity}{Object.entries(booking.form_data ?? {}).filter(([key]) => !['phone', 'amount'].includes(key)).map(([key, value]) => <p key={key} className="mt-1 whitespace-pre-wrap text-xs text-brand-muted">{key}: {value}</p>)}{booking.notes && <p className="mt-1 whitespace-pre-wrap text-xs text-brand-muted">{booking.notes}</p>}</td>
-                <td className="p-3"><p>Cash</p><select aria-label={`Payment status for ${booking.customer_name}`} value={booking.payment_status} onChange={(e) => void updateBooking(booking, { payment_status: e.target.value as NavratriBooking['payment_status'] })} className="mt-1 rounded border border-brand-border px-2 py-1 text-xs"><option value="PENDING">Pending</option><option value="PAID">Paid</option></select></td>
-                <td className="p-3"><select aria-label={`Status for ${booking.customer_name}`} value={booking.status} onChange={(e) => void updateBooking(booking, { status: e.target.value as NavratriBooking['status'] })} className="rounded border border-brand-border px-2 py-1 text-xs"><option>PENDING</option><option>CONFIRMED</option><option>COMPLETED</option><option>CANCELLED</option></select></td>
+                <td className="no-print p-3"><p>Cash</p><select aria-label={`Payment status for ${booking.customer_name}`} value={booking.payment_status} onChange={(e) => void updateBooking(booking, { payment_status: e.target.value as NavratriBooking['payment_status'] })} className="mt-1 rounded border border-brand-border px-2 py-1 text-xs"><option value="PENDING">Pending</option><option value="PAID">Paid</option></select></td>
+                <td className="no-print p-3"><select aria-label={`Status for ${booking.customer_name}`} value={booking.status} onChange={(e) => void updateBooking(booking, { status: e.target.value as NavratriBooking['status'] })} className="rounded border border-brand-border px-2 py-1 text-xs"><option>PENDING</option><option>CONFIRMED</option><option>COMPLETED</option><option>CANCELLED</option></select></td>
                 <td className="p-3 text-xs text-brand-muted">{new Date(booking.created_at).toLocaleString()}</td>
               </tr>)}</tbody>
             </table>

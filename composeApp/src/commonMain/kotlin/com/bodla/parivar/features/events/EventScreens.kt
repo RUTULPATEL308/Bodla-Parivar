@@ -16,6 +16,7 @@ import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.domain.model.Event
+import com.bodla.parivar.core.ui.PrintAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +31,12 @@ fun EventListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(text = Strings.navEvents(lang), style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(title = if (lang == AppLanguage.GUJARATI) "કાર્યક્રમો" else "Events",
+                        content = events.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.startAt}\n${it.locationGu.orEmpty()}" },
+                        englishContent = events.joinToString("\n\n") { "${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.startAt}\n${it.locationEn.orEmpty()}" },
+                        bothContent = events.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.startAt}\n${it.locationGu.orEmpty()} ${it.locationEn.orEmpty()}" })
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
             )
         },

@@ -36,6 +36,7 @@ import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.domain.model.Notice
+import com.bodla.parivar.core.ui.PrintAction
 
 private fun formatNoticeText(value: String): AnnotatedString = buildAnnotatedString {
     val markup = Regex("""(https?://[^\s<>]+|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)""", RegexOption.IGNORE_CASE)
@@ -77,6 +78,12 @@ fun NoticeListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(text = Strings.navNotices(lang), style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(title = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Notices",
+                        content = notices.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.createdAt}" },
+                        englishContent = notices.joinToString("\n\n") { "${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.createdAt}" },
+                        bothContent = notices.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.createdAt}" })
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = WarmWhiteSurface,
                     titleContentColor = TextPrimary

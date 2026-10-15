@@ -36,6 +36,7 @@ import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.domain.model.Offering
+import com.bodla.parivar.core.ui.PrintAction
 import com.bodla.parivar.domain.model.OfferingBid
 import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.core.di.AppContainer
@@ -114,6 +115,12 @@ fun OfferingListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(text = Strings.offeringsTitle(lang), style = BodlaPageTitle) },
+                actions = {
+                    PrintAction(title = if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offerings",
+                        content = offerings.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.status}\n${it.amount ?: it.quantity ?: ""}" },
+                        englishContent = offerings.joinToString("\n\n") { "${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.status}\n${it.amount ?: it.quantity ?: ""}" },
+                        bothContent = offerings.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.status}\n${it.amount ?: it.quantity ?: ""}" })
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -386,6 +393,7 @@ fun OfferingDetailScreen(
     existingBids: List<OfferingBid> = emptyList(),
     bidLoadError: String? = null,
     bidderProfile: Profile? = null,
+    canManageOfferings: Boolean = bidderProfile?.isStaff == true,
     onPlaceBid: suspend (amount: Double) -> Result<Unit>,
     onRefreshBids: suspend () -> Unit,
     modifier: Modifier = Modifier
@@ -482,7 +490,7 @@ fun OfferingDetailScreen(
 
     val isDeadlinePassed = remainingSeconds == 0L
     val waitingForCountdown = deadlineEpochMs != null && remainingSeconds == null
-    val canStaffOverrideWinner = bidderProfile?.isStaff == true && currentOffering.status == "COMPLETED" && when (currentOffering.winnerNameStatus) {
+    val canStaffOverrideWinner = canManageOfferings && currentOffering.status == "COMPLETED" && when (currentOffering.winnerNameStatus) {
         "AWAITING_ADMIN", "CONFIRMED" -> true
         "AWAITING_WINNER" -> deadlineEpochMs?.let {
             Clock.System.now().toEpochMilliseconds() + serverTimeOffsetMillis > it
@@ -1088,7 +1096,7 @@ fun OfferingDetailScreen(
                 }
             }
 
-            if (bidderProfile?.isStaff == true) {
+            if (canManageOfferings) {
                 item {
                     BodlaCard {
                         Text(
@@ -1210,7 +1218,7 @@ fun OfferingDetailScreen(
 
             // ── Bid History Section ─────────────────────────────────────
             val visibleBids = when {
-                bidderProfile?.isStaff == true -> existingBids
+                canManageOfferings -> existingBids
                 bidderProfile == null -> emptyList()
                 else -> filterVisibleBidsForUser(existingBids, bidderProfile)
             }
@@ -1218,7 +1226,7 @@ fun OfferingDetailScreen(
             if (visibleBids.isNotEmpty()) {
                 item {
                     Text(
-                        text = if (bidderProfile?.isStaff == true) {
+                        text = if (canManageOfferings) {
                             if (lang == AppLanguage.GUJARATI) "બોલી ઇતિહાસ (${visibleBids.size})" else "Bid history (${visibleBids.size})"
                         } else {
                             if (lang == AppLanguage.GUJARATI) "📋 તમારી બોલીઓ (${visibleBids.size})" else "📋 Your bids (${visibleBids.size})"
@@ -1236,10 +1244,10 @@ fun OfferingDetailScreen(
                     BidHistoryItem(
                         bid = bid,
                         lang = lang,
-                        showPhone = bidderProfile?.isStaff == true,
-                        onApprove = if (bidderProfile?.isStaff == true) ({ updateBidStatus(bid, "APPROVED") }) else null,
-                        onReject = if (bidderProfile?.isStaff == true) ({ updateBidStatus(bid, "REJECTED") }) else null,
-                        onDelete = if (bidderProfile?.isStaff == true) ({ bidToDelete = bid }) else null
+                        showPhone = canManageOfferings,
+                        onApprove = if (canManageOfferings) ({ updateBidStatus(bid, "APPROVED") }) else null,
+                        onReject = if (canManageOfferings) ({ updateBidStatus(bid, "REJECTED") }) else null,
+                        onDelete = if (canManageOfferings) ({ bidToDelete = bid }) else null
                     )
                 }
             }

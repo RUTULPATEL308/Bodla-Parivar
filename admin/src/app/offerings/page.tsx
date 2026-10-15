@@ -10,6 +10,7 @@ import {
 import { Offering, OfferingBid } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAdminLanguage } from '@/components/AdminLanguageContext';
+import PrintControls from '@/components/PrintControls';
 import { translateText, type TranslationLanguage } from '@/lib/translation';
 
 // ---------------------------------------------------------------------------
@@ -660,7 +661,7 @@ export default function AdminOfferingsPage() {
   return (
     <div className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="no-print flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-brand-text font-gujarati flex items-center gap-2">
@@ -688,6 +689,7 @@ export default function AdminOfferingsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <PrintControls />
           <button
             type="button"
             onClick={() => void refreshSnapshotRef.current?.()}
@@ -768,7 +770,7 @@ export default function AdminOfferingsPage() {
           </div>
         )}
         <div className="hidden w-full min-w-0 overflow-x-auto xl:block">
-          <table className="w-full min-w-[1100px] table-fixed text-left text-sm text-brand-text">
+          <table data-print-area className="w-full min-w-[1100px] table-fixed text-left text-sm text-brand-text">
             <colgroup>
               <col className="w-[27%]" />
               <col className="w-[14%]" />
@@ -812,9 +814,9 @@ export default function AdminOfferingsPage() {
                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                           </span>
                         )}
-                        <span className="font-gujarati">{item.title_gu}</span>
+                        <span data-print-lang="gu" className="font-gujarati">{item.title_gu}</span>
                       </div>
-                      <div className="text-xs text-brand-muted">{item.title_en}</div>
+                      <div data-print-lang="en" className="text-xs text-brand-muted">{item.title_en}</div>
                     </td>
 
                     {/* Amount */}
@@ -865,7 +867,7 @@ export default function AdminOfferingsPage() {
                     </td>
 
                     {/* Actions */}
-                    <td className="sticky right-0 z-10 bg-cream-surface py-3.5 px-4 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.25)]">
+                    <td className="no-print sticky right-0 z-10 bg-cream-surface py-3.5 px-4 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.25)]">
                       <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
                         <button
                           onClick={() => selectOffering(item)}
