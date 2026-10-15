@@ -127,7 +127,9 @@ Access at `http://localhost:3000`.
 
 ### 3. Running Mobile Client
 - **Android**: Open project in Android Studio Iguana+, select `composeApp`, and run on emulator or physical device.
-- **iOS**: Open `iosApp/iosApp.xcodeproj` in Xcode on macOS. Select an iPhone Simulator to test without signing, or select a physical iPhone and configure an Apple Development team in Signing & Capabilities. Windows cannot build or install iOS apps; use a Mac or cloud Mac for iOS builds.
+- **iOS (physical iPhone)**: iOS apps must be built and installed from macOS with Xcode. From this repository on your Mac, open `iosApp/iosApp.xcodeproj`, select the `iosApp` scheme and your connected iPhone as the run destination, then under **Signing & Capabilities** select your Apple Development team. Set a unique bundle identifier if Xcode reports that `com.bodla.parivar.ios` is already in use. Connect and trust the iPhone, enable Developer Mode if prompted, and press **Run**. Xcode builds the shared Kotlin framework through the project’s Gradle build phase and installs the app on the phone. The first build needs internet access to download Gradle dependencies.
+- **iOS (simulator)**: Open the same Xcode project on macOS, select an iPhone Simulator, and press **Run**. A simulator does not need device signing.
+- **Windows**: Windows cannot build or install iOS apps. Commit/push this repository and open it on a Mac, or use a cloud Mac with Xcode.
 
 ---
 
