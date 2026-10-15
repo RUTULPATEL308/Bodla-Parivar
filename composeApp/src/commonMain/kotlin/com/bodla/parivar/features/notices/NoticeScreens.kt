@@ -21,8 +21,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -46,9 +44,11 @@ private fun formatNoticeText(value: String): AnnotatedString = buildAnnotatedStr
         if (match.value.startsWith("http://", ignoreCase = true) || match.value.startsWith("https://", ignoreCase = true)) {
             val url = match.value.trimEnd('.', ',', '!', '?', ':', ';', ')', ']')
             val trailing = match.value.removePrefix(url)
-            pushLink(LinkAnnotation.Url(url, TextLinkStyles(SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF1565C0), textDecoration = TextDecoration.Underline))))
+            pushStringAnnotation(tag = "URL", annotation = url)
+            pushStyle(SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF1565C0), textDecoration = TextDecoration.Underline))
             append(url)
-            pop()
+            pop() // style
+            pop() // URL annotation
             append(trailing)
             cursor = match.range.last + 1
             return@forEach
@@ -232,11 +232,17 @@ fun NoticeDetailScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider(color = BorderStroke)
                 Spacer(modifier = Modifier.height(16.dp))
+                val noticeDescription = formatNoticeText((if (lang == AppLanguage.GUJARATI) currentNotice.descriptionGu else currentNotice.descriptionEn).orEmpty())
                 Text(
-                    text = formatNoticeText((if (lang == AppLanguage.GUJARATI) currentNotice.descriptionGu else currentNotice.descriptionEn).orEmpty()),
+                    text = noticeDescription,
                     style = BodlaBody,
                     color = TextPrimary,
-                    lineHeight = 26.sp
+                    lineHeight = 26.sp,
+                    modifier = Modifier.clickable {
+                        noticeDescription.getStringAnnotations("URL", 0, noticeDescription.length)
+                            .firstOrNull()
+                            ?.let { uriHandler.openUri(it.item) }
+                    }
                 )
                 val imageUrl = currentNotice.imageUrl
                 if (!imageUrl.isNullOrBlank()) {

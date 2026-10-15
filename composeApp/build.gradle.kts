@@ -78,6 +78,8 @@ kotlin {
         }
 
         iosMain.dependencies {
+            implementation(compose.ui)
+            implementation(compose.ui.interop)
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
         }
