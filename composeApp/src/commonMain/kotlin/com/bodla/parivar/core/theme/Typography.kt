@@ -56,24 +56,24 @@ val BodlaBody = TextStyle(
 val BodlaButton = TextStyle(
     fontFamily = BodlaFontFamily,
     fontWeight = FontWeight.SemiBold,
-    fontSize = 15.sp,
-    lineHeight = 20.sp,
+    fontSize = 16.sp,
+    lineHeight = 24.sp,
     letterSpacing = 0.1.sp
 )
 
 val BodlaCaption = TextStyle(
     fontFamily = BodlaFontFamily,
     fontWeight = FontWeight.Normal,
-    fontSize = 13.sp,
-    lineHeight = 18.sp,
+    fontSize = 14.sp,
+    lineHeight = 20.sp,
     letterSpacing = 0.2.sp
 )
 
 val BodlaNavigation = TextStyle(
     fontFamily = BodlaFontFamily,
     fontWeight = FontWeight.Medium,
-    fontSize = 12.sp,
-    lineHeight = 16.sp,
+    fontSize = 14.sp,
+    lineHeight = 20.sp,
     letterSpacing = 0.4.sp
 )
 
@@ -83,7 +83,7 @@ val AppTypography = Typography(
     titleMedium = BodlaSection,
     titleSmall = BodlaCardTitle,
     bodyLarge = BodlaBody,
-    bodyMedium = BodlaBody.copy(fontSize = 15.sp, lineHeight = 22.sp),
+    bodyMedium = BodlaBody.copy(fontSize = 16.sp, lineHeight = 24.sp),
     labelLarge = BodlaButton,
     bodySmall = BodlaCaption,
     labelSmall = BodlaNavigation

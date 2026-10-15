@@ -24,6 +24,7 @@ import com.bodla.parivar.core.localization.ProvideAppLanguage
 import com.bodla.parivar.core.localization.Strings
 import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.network.Endpoints
+import io.ktor.http.HttpHeaders
 import com.bodla.parivar.core.network.KtorClientFactory
 import com.bodla.parivar.core.sync.SyncStatus
 import com.bodla.parivar.core.theme.*
@@ -53,6 +54,7 @@ import com.bodla.parivar.features.offerings.replaceBidHistory
 import com.bodla.parivar.features.profile.ProfileScreen
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -68,6 +70,7 @@ fun MainScreen(
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Login) }
     val snackbarHostState = remember { SnackbarHostState() }
     var lastNotifId by remember { mutableStateOf<String?>(null) }
+    var pendingNoticeId by remember { mutableStateOf(consumePendingNoticeId()) }
     var topNotificationMessage by remember { mutableStateOf<String?>(null) }
     var latestNotifications by remember { mutableStateOf<List<AppNotification>>(emptyList()) }
     var pullDistance by remember { mutableFloatStateOf(0f) }
@@ -78,6 +81,7 @@ fun MainScreen(
     // Live Flow Collections from SQLDelight Cache & Repositories
     val notices by AppContainer.noticeRepository.getNotices().collectAsState(initial = emptyList())
     val allEvents by AppContainer.eventRepository.getEvents().collectAsState(initial = emptyList())
+    val businesses by AppContainer.businessRepository.getBusinesses().collectAsState(initial = emptyList())
     val offerings by AppContainer.offeringRepository.getOfferings().collectAsState(initial = emptyList())
     val emergencyContacts by AppContainer.emergencyRepository.getEmergencyContacts().collectAsState(initial = emptyList())
     val myComplaints by AppContainer.complaintRepository.getMyComplaints().collectAsState(initial = emptyList())
@@ -127,19 +131,24 @@ fun MainScreen(
                                 )
                             } else {
                                 AppContainer.syncEngine.syncAll()
-                                AppContainer.noticeRepository.refreshNotices()
+                                AppContainer.noticeRepository.refreshNotices().getOrThrow()
                                 AppContainer.offeringRepository.refreshOfferings()
                                 AppContainer.emergencyRepository.refreshEmergencyContacts()
                                 AppContainer.villageRepository.refreshVillageInfo()
                                 val offeringDetail = currentScreen as? Screen.OfferingDetail
                                 if (offeringDetail != null) refreshOfferingBids(offeringDetail.offeringId)
-                                val freshNotifications = AppContainer.httpClient
-                                    .get(Endpoints.NOTIFICATIONS_LATEST) {
+                                try {
+                                    val notificationResponse = AppContainer.httpClient.get(Endpoints.NOTIFICATIONS_LATEST) {
                                         header("apikey", Endpoints.SUPABASE_ANON_KEY)
                                         header("Accept", "application/json")
+                                        headers.remove(HttpHeaders.Authorization)
                                     }
-                                    .body<List<AppNotification>>()
-                                latestNotifications = freshNotifications
+                                    if (notificationResponse.status.isSuccess()) {
+                                        latestNotifications = notificationResponse.body<List<AppNotification>>()
+                                    }
+                                } catch (_: Exception) {
+                                    // Non-critical: ignore notification refresh errors so notices and main app data load successfully
+                                }
                             }
                         } catch (error: Exception) {
                             snackbarHostState.showSnackbar(
@@ -164,6 +173,13 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(currentUser, pendingNoticeId) {
+        if (currentUser != null && !pendingNoticeId.isNullOrBlank()) {
+            currentScreen = Screen.NoticeDetail(pendingNoticeId!!)
+            pendingNoticeId = null
+        }
+    }
+
     LaunchedEffect(topNotificationMessage) {
         if (topNotificationMessage != null) {
             delay(6000)
@@ -176,7 +192,13 @@ fun MainScreen(
         if (isConnectedToInternet && com.bodla.parivar.core.network.Endpoints.isConfigured) {
             delay(300) // Yield to UI so app opens without stutter
             coroutineScope.launch { AppContainer.offeringRepository.refreshOfferings() }
-            coroutineScope.launch { AppContainer.noticeRepository.refreshNotices() }
+            coroutineScope.launch {
+                AppContainer.noticeRepository.refreshNotices().onFailure { error ->
+                    snackbarHostState.showSnackbar(
+                        "Could not load notices: ${error.message ?: "Check your connection and Supabase settings."}"
+                    )
+                }
+            }
             coroutineScope.launch { AppContainer.eventRepository.refreshEvents() }
             coroutineScope.launch { AppContainer.businessRepository.refreshBusinesses() }
             coroutineScope.launch { AppContainer.emergencyRepository.refreshEmergencyContacts() }
@@ -217,6 +239,7 @@ fun MainScreen(
                     .get(Endpoints.NOTIFICATIONS_LATEST) {
                         header("apikey", Endpoints.SUPABASE_ANON_KEY)
                         header("Accept", "application/json")
+                        headers.remove(HttpHeaders.Authorization)
                     }
                     .body<List<AppNotification>>()
                 latestNotifications = notifications
@@ -243,9 +266,9 @@ fun MainScreen(
         val lang = LocalAppLanguage.current
 
         val isBottomBarVisible = when (currentScreen) {
-            Screen.Home, Screen.Notices, Screen.Notifications, Screen.Complaints, Screen.Profile -> true
+            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Notifications, Screen.Complaints, Screen.Profile -> true
             else -> false
-        }
+        } || currentUser?.isStaff == true
 
         Scaffold(
             snackbarHost = {
@@ -296,6 +319,52 @@ fun MainScreen(
                         containerColor = WarmWhiteSurface,
                         tonalElevation = 8.dp
                     ) {
+                        if (currentUser?.isStaff == true) {
+                            NavigationBarItem(
+                                selected = currentScreen == Screen.AdminHome,
+                                onClick = { currentScreen = Screen.AdminHome },
+                                icon = { Text(text = "🏠", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ડેશબોર્ડ" else "Dashboard", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            if (currentUser?.isAdmin == true) {
+                                NavigationBarItem(
+                                    selected = currentScreen == Screen.AdminUsers,
+                                    onClick = { currentScreen = Screen.AdminUsers },
+                                    icon = { Text(text = "👥", fontSize = 20.sp) },
+                                    label = { Text(text = if (lang == AppLanguage.GUJARATI) "સભ્યો" else "Members", style = BodlaNavigation) },
+                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                                )
+                            }
+                            if (currentUser?.roles?.any { it in setOf("ADMIN", "SUPER_ADMIN", "CONTENT_MANAGER") } == true || currentUser?.isAdmin == true) NavigationBarItem(
+                                selected = currentScreen == Screen.Notices,
+                                onClick = { currentScreen = Screen.Notices },
+                                icon = { Text(text = "📢", fontSize = 20.sp) },
+                                label = { Text(text = Strings.navNotices(lang), style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            if (currentUser?.roles?.any { it in setOf("ADMIN", "SUPER_ADMIN", "MODERATOR") } == true || currentUser?.isAdmin == true) NavigationBarItem(
+                                selected = currentScreen == Screen.Offerings,
+                                onClick = { currentScreen = Screen.Offerings },
+                                icon = { Text(text = "🙏", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offerings", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            if (currentUser?.roles?.any { it in setOf("ADMIN", "SUPER_ADMIN", "CONTENT_MANAGER") } == true || currentUser?.isAdmin == true) NavigationBarItem(
+                                selected = currentScreen == Screen.Navratri,
+                                onClick = { currentScreen = Screen.Navratri },
+                                icon = { Text(text = "✨", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                            NavigationBarItem(
+                                selected = currentScreen == Screen.Profile,
+                                onClick = { currentScreen = Screen.Profile },
+                                icon = { Text(text = "👤", fontSize = 20.sp) },
+                                label = { Text(text = Strings.navProfile(lang), style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+                        } else {
                         // 1. Home
                         NavigationBarItem(
                             selected = currentScreen == Screen.Home,
@@ -360,6 +429,7 @@ fun MainScreen(
                                 indicatorColor = LightIconBg
                             )
                         )
+                        }
                     }
                 }
             },
@@ -463,9 +533,20 @@ fun MainScreen(
                             modifier = contentModifier
                         )
 
+                        is Screen.Navratri -> com.bodla.parivar.features.navratri.NavratriScreen(
+                            onBack = { currentScreen = Screen.Home },
+                            canManage = currentUser?.isStaff == true,
+                            modifier = contentModifier
+                        )
+
                         is Screen.Notifications -> NotificationCenterScreen(
                             notifications = latestNotifications,
                             onBack = { currentScreen = Screen.Home },
+                            onNotificationClick = { notification ->
+                                if (notification.type == "NOTICE" && !notification.referenceId.isNullOrBlank()) {
+                                    currentScreen = Screen.NoticeDetail(notification.referenceId)
+                                }
+                            },
                             modifier = contentModifier
                         )
 
@@ -476,8 +557,8 @@ fun MainScreen(
                         )
 
                         is Screen.Directory -> DirectoryScreen(
+                            businesses = businesses,
                             onNavigate = { currentScreen = it },
-                            businesses = emptyList(),
                             modifier = contentModifier
                         )
 
@@ -539,14 +620,12 @@ fun MainScreen(
                         )
 
                         is Screen.NoticeDetail -> NoticeDetailScreen(
-                            noticeId = screen.noticeId,
                             notice = notices.find { it.id == screen.noticeId },
                             onBack = { currentScreen = Screen.Notices },
                             modifier = contentModifier
                         )
 
                         is Screen.EventDetail -> EventDetailScreen(
-                            eventId = screen.eventId,
                             event = allEvents.find { it.id == screen.eventId },
                             onBack = { currentScreen = Screen.Events },
                             modifier = contentModifier
@@ -620,7 +699,7 @@ fun MainScreen(
 
                         is Screen.CreateComplaint -> CreateComplaintScreen(
                             onBack = { currentScreen = Screen.Complaints },
-                            onSubmit = { title, description, category ->
+                            onSubmit = { title, description ->
                                 coroutineScope.launch {
                                     AppContainer.complaintRepository.submitComplaint(
                                         title = title,

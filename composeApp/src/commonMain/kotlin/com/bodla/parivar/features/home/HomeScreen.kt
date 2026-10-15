@@ -119,16 +119,7 @@ fun HomeScreen(
 
             // 3. Important / Pinned Notice Card
             item {
-                val notice = pinnedNotice ?: Notice(
-                    id = "demo_pinned",
-                    titleGu = "[DEMO DATA] ગ્રામ પંચાયત સામાન્ય સભાનું આયોજન",
-                    titleEn = "[DEMO DATA] Gram Panchayat General Meeting Scheduled",
-                    descriptionGu = "આગામી રવિવારે પંચાયત હોલ ખાતે બેઠક મળશે.",
-                    descriptionEn = "Upcoming community meeting at Panchayat hall.",
-                    isPinned = true,
-                    createdAt = "2026-09-28"
-                )
-
+                val notice = pinnedNotice ?: return@item
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Card(
                         modifier = Modifier
@@ -153,7 +144,6 @@ fun HomeScreen(
                                         color = SaffronPrimary
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    DemoDataBadge()
                                 }
                                 Text(
                                     text = Strings.viewMore(lang),
@@ -181,6 +171,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     val services = listOf(
+                        Triple(if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", "✨", Screen.Navratri),
                         Triple(Strings.serviceNotices(lang), "📢", Screen.Notices),
                         Triple(Strings.serviceOfferings(lang), "🙏", Screen.Offerings), // ચઢાવો
                         Triple(Strings.serviceEmergency(lang), "🚨", Screen.Emergency),
@@ -274,23 +265,8 @@ fun HomeScreen(
                         onActionClick = { onNavigate(Screen.Notices) }
                     )
 
-                    val notices = if (latestNotices.isNotEmpty()) latestNotices else listOf(
-                        Notice(
-                            id = "demo_notice_1",
-                            titleGu = "[DEMO DATA] પીવાના પાણીના વિતરણ સમયમાં ફેરફાર",
-                            titleEn = "[DEMO DATA] Change in Drinking Water Distribution Schedule",
-                            createdAt = "2026-09-27"
-                        ),
-                        Notice(
-                            id = "demo_notice_2",
-                            titleGu = "[DEMO DATA] પશુપાલન સહાય યોજના અરજી શરૂ",
-                            titleEn = "[DEMO DATA] Animal Husbandry Scheme Applications Open",
-                            createdAt = "2026-09-25"
-                        )
-                    )
-
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        notices.forEach { notice ->
+                        latestNotices.forEach { notice ->
                             BodlaCard(
                                 onClick = { onNavigate(Screen.NoticeDetail(notice.id)) }
                             ) {
@@ -314,7 +290,6 @@ fun HomeScreen(
                                             color = TextSecondary
                                         )
                                     }
-                                    DemoDataBadge()
                                 }
                             }
                         }

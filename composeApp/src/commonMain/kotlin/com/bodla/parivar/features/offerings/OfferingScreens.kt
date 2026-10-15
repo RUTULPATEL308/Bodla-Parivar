@@ -138,34 +138,7 @@ fun OfferingListScreen(
         containerColor = CreamBackground,
         modifier = modifier
     ) { innerPadding ->
-        val displayOfferings = if (offerings.isNotEmpty() || canManageOfferings) offerings else listOf(
-            Offering(
-                id = "demo_offering_1",
-                titleGu = "[DEMO DATA] શ્રી મહાદેવ મંદિર ધ્વજારોહણ સેવા",
-                titleEn = "[DEMO DATA] Shri Mahadev Temple Dhwajarohan Seva",
-                descriptionGu = "આ ડેમો ચઢાવો છે. શ્રાવણ માસ નિમિત્તે મંદિર ધ્વજારોહણ ચઢાવા સેવા.",
-                descriptionEn = "This is demo data. Temple flag hoisting offering seva for the holy month of Shravan.",
-                categoryNameGu = "ધ્વજારોહણ ચઢાવો",
-                categoryNameEn = "Temple Flag Hoisting",
-                amount = 5100.0,
-                locationGu = "બોદલા મંદિર સંકુલ",
-                locationEn = "Bodla Temple Complex",
-                status = "ACTIVE"
-            ),
-            Offering(
-                id = "demo_offering_2",
-                titleGu = "[DEMO DATA] ગૌશાળા ઘાસચારો સહાય સેવા",
-                titleEn = "[DEMO DATA] Gaushala Fodder Offering Seva",
-                descriptionGu = "આ ડેમો ચઢાવો છે. ગામની ગૌશાળા માટે લીલા ઘાસચારાની દૈનિક સેવા.",
-                descriptionEn = "This is demo data. Daily fodder offering for the village gaushala.",
-                categoryNameGu = "ગૌશાળા ઘાસચારો",
-                categoryNameEn = "Gaushala Fodder",
-                amount = 2100.0,
-                locationGu = "બોદલા ગૌશાળા",
-                locationEn = "Bodla Gaushala",
-                status = "ACTIVE"
-            )
-        )
+        val displayOfferings = offerings
 
         val filteredOfferings = displayOfferings.filter { offering ->
             val matchesSearch = searchQuery.isBlank() ||
@@ -227,45 +200,6 @@ fun OfferingListScreen(
                 item { Text(message, color = MaterialTheme.colorScheme.error, style = BodlaCaption) }
             }
 
-            if (canManageOfferings && allBids.isNotEmpty()) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = if (lang == AppLanguage.GUJARATI) "તાજેતરની બોલીઓ" else "Recent bids",
-                            style = BodlaCardTitle,
-                            color = TextPrimary
-                        )
-                        allBids.take(5).forEach { bid ->
-                            val offering = displayOfferings.firstOrNull { it.id == bid.offeringId }
-                            BodlaCard(
-                                onClick = { offering?.let { onNavigate(Screen.OfferingDetail(it.id)) } },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(bid.bidderName, style = BodlaCardTitle, color = TextPrimary)
-                                        Text(
-                                            text = if (lang == AppLanguage.GUJARATI) offering?.titleGu.orEmpty() else offering?.titleEn.orEmpty(),
-                                            style = BodlaCaption,
-                                            color = TextSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text("₹${bid.amount.toInt().toLocaleString()}", style = BodlaCardTitle, color = SaffronPrimary)
-                                        Text(bid.status, style = BodlaCaption, color = if (bid.status == "PENDING") StatusWarning else TextSecondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             if (filteredOfferings.isEmpty()) {
                 item {
@@ -334,7 +268,6 @@ fun OfferingListScreen(
                                 )
                             }
                         }
-                        if (!canManageOfferings) DemoDataBadge()
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -471,20 +404,28 @@ fun OfferingDetailScreen(
     var bidToDelete by remember { mutableStateOf<OfferingBid?>(null) }
     var showCallConfirmation by remember { mutableStateOf(false) }
 
-    val currentOffering = offering ?: Offering(
-        id = offeringId,
-        titleGu = "[DEMO DATA] શ્રી મહાદેવ મંદિર ધ્વજારોહણ સેવા",
-        titleEn = "[DEMO DATA] Shri Mahadev Temple Dhwajarohan Seva",
-        descriptionGu = "આ ડેમો ચઢાવો છે. શ્રાવણ માસ દરમિયાન ગામના શ્રી મહાદેવ મંદિરે પરંપરાગત ધ્વજારોહણ સેવા ચઢાવો નોંધાવેલ છે. આમાં સહભાગી થવા ઈચ્છુક ગ્રામજનો સંપર્ક કરી શકે છે.",
-        descriptionEn = "This is demo data. Traditional flag hoisting offering for Shri Mahadev Temple during Shravan month. Community members wishing to participate can contact.",
-        categoryNameGu = "ધ્વજારોહણ ચઢાવો",
-        categoryNameEn = "Temple Flag Hoisting",
-        amount = 5100.0,
-        locationGu = "બોદલા મંદિર સંકુલ",
-        locationEn = "Bodla Temple Complex",
-        status = "ACTIVE"
-    )
-
+    if (offering == null) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offering", style = BodlaPageTitle) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) { Text("←", fontSize = 22.sp, color = TextPrimary) }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
+                )
+            },
+            containerColor = CreamBackground,
+            modifier = modifier
+        ) { padding ->
+            EmptyStateView(
+                message = if (lang == AppLanguage.GUJARATI) "આ ચઢાવો હવે ઉપલબ્ધ નથી." else "This offering is no longer available.",
+                modifier = Modifier.fillMaxSize().padding(padding)
+            )
+        }
+        return
+    }
+    val currentOffering = offering
     val isActive = currentOffering.isBidOpen
     val topBid = resolveCurrentHighestBid(existingBids, currentOffering.winningBidAmount)
 
@@ -768,7 +709,6 @@ fun OfferingDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DemoDataBadge()
                         if (isActive) {
                             val pulsing by rememberInfiniteTransition(label = "pulse")
                                 .animateFloat(
@@ -1092,7 +1032,7 @@ fun OfferingDetailScreen(
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
-                    Divider(color = BorderStroke)
+                    HorizontalDivider(color = BorderStroke)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = (if (lang == AppLanguage.GUJARATI) currentOffering.descriptionGu else currentOffering.descriptionEn).orEmpty(),
@@ -1625,7 +1565,7 @@ fun BidPlacementDialog(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Divider(color = BorderStroke)
+                HorizontalDivider(color = BorderStroke)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // ── Name ────────────────────────────────────────────────

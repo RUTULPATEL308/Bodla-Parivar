@@ -8,9 +8,9 @@ export default function Header({ email, onSignOut }: { email: string; onSignOut:
   const { lang, toggleLanguage } = useAdminLanguage();
 
   return (
-    <header className="h-16 bg-cream-surface border-b border-brand-border px-6 flex items-center justify-between sticky top-0 z-30">
+    <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-brand-border bg-cream-surface px-3 py-2 sm:px-4 md:px-6">
       <div>
-        <h2 className="text-base font-semibold text-brand-text">
+        <h2 className="text-sm font-semibold text-brand-text sm:text-base">
           {lang === 'gu' ? 'બોદલા ગ્રામીણ વ્યવસ્થાપન પેનલ' : 'Bodla Village Management Portal'}
         </h2>
         <p className="text-xs text-brand-muted">
@@ -18,20 +18,20 @@ export default function Header({ email, onSignOut }: { email: string; onSignOut:
         </p>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3 md:gap-4">
         {/* Language Toggle */}
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-border hover:bg-saffron-container text-xs font-medium text-brand-text transition"
+          className="flex min-h-11 items-center gap-1.5 rounded-xl border border-brand-border px-2.5 py-2 text-sm font-semibold text-brand-text transition hover:bg-saffron-container sm:px-3"
         >
-          <Globe className="w-3.5 h-3.5 text-saffron" />
+          <Globe aria-hidden="true" className="h-4 w-4 text-saffron" />
           <span>{lang === 'gu' ? 'English' : 'ગુજરાતી'}</span>
         </button>
 
         {/* Admin Profile Pill */}
         <div className="flex items-center gap-2.5 pl-3 border-l border-brand-border">
-          <div className="w-8 h-8 rounded-full bg-saffron-container flex items-center justify-center text-saffron">
-            <User className="w-4 h-4" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-saffron-container text-saffron">
+            <User aria-hidden="true" className="h-5 w-5" />
           </div>
           <div className="hidden sm:block text-left">
             <span className="block max-w-48 truncate text-xs font-semibold text-brand-text leading-tight">{email || 'Staff account'}</span>
@@ -43,10 +43,10 @@ export default function Header({ email, onSignOut }: { email: string; onSignOut:
           onClick={onSignOut}
           title="Sign out"
           aria-label="Sign out"
-          className="flex items-center gap-2 border border-brand-border px-3 py-2 text-xs font-medium text-brand-text transition hover:bg-saffron-container"
+          className="flex min-h-11 items-center gap-2 rounded-xl border border-brand-border px-3 py-2 text-sm font-semibold text-brand-text transition hover:bg-saffron-container"
         >
-          <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">Sign out</span>
+          <LogOut aria-hidden="true" className="h-4 w-4" />
+          <span>Sign out</span>
         </button>
       </div>
     </header>

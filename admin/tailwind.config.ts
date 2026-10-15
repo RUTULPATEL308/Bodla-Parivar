@@ -10,10 +10,10 @@ const config: Config = {
     extend: {
       colors: {
         saffron: {
-          DEFAULT: "#D97706",
-          dark: "#B45309",
-          light: "#FDE68A",
-          container: "#FEF3C7"
+          DEFAULT: "#173B78",
+          dark: "#102B59",
+          light: "#DCE6F6",
+          container: "#EAF0FA"
         },
         leaf: {
           DEFAULT: "#4F7D4A",
@@ -21,7 +21,7 @@ const config: Config = {
           light: "#A3C49E"
         },
         golden: {
-          DEFAULT: "#E9A23B"
+          DEFAULT: "#D9A441"
         },
         cream: {
           DEFAULT: "#FFF8E7",
@@ -29,13 +29,17 @@ const config: Config = {
         },
         brand: {
           text: "#292524",
-          muted: "#78716C",
+          muted: "#625B53",
           border: "#E7E5E4"
         }
       },
       fontFamily: {
-        gujarati: ["Anek Gujarati", "sans-serif"],
-        english: ["DM Sans", "sans-serif"]
+        gujarati: ["var(--font-anek-gujarati)", "sans-serif"],
+        english: ["var(--font-dm-sans)", "sans-serif"]
+      },
+      fontSize: {
+        xs: ["0.875rem", { lineHeight: "1.25rem" }],
+        sm: ["1rem", { lineHeight: "1.5rem" }],
       }
     },
   },

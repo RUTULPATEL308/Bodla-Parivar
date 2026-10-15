@@ -83,12 +83,11 @@ export default function UserManagement() {
   const [isSaving, setIsSaving] = useState(false);
 
   async function loadUsers() {
-    setIsLoading(true);
-    setError(null);
     try {
       const result = await callUsersApi('GET');
       setUsers(result.users as ManagedUser[]);
       setIsAdmin(true);
+      setError(null);
     } catch (loadError) {
       setUsers([]);
       setIsAdmin(false);
@@ -99,7 +98,21 @@ export default function UserManagement() {
   }
 
   useEffect(() => {
-    void loadUsers();
+    let active = true;
+    void callUsersApi('GET').then((result) => {
+      if (!active) return;
+      setUsers(result.users as ManagedUser[]);
+      setIsAdmin(true);
+      setError(null);
+    }).catch((loadError: unknown) => {
+      if (!active) return;
+      setUsers([]);
+      setIsAdmin(false);
+      setError(loadError instanceof Error ? loadError.message : 'Could not load members.');
+    }).finally(() => {
+      if (active) setIsLoading(false);
+    });
+    return () => { active = false; };
   }, []);
 
   const normalizedSearch = search.trim().toLowerCase();

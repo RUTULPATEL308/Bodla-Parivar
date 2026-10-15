@@ -20,16 +20,16 @@
   - Gujarati: **Anek Gujarati** (first-class Unicode, 16sp+ for body text)
   - English & Numerals: **DM Sans**
 - **Color Palette**:
-  - Primary Saffron: `#D97706`
+  - Primary Brand Navy: `#173B78`
   - Secondary Leaf Green: `#4F7D4A`
-  - Accent Golden: `#E9A23B`
+  - Accent Logo Gold: `#D9A441`
   - Background Cream: `#FFF8E7`
   - Surface Warm White: `#FFFCF5`
   - Primary Text: `#292524`
-  - Secondary Text: `#78716C`
+  - Secondary Text: `#625B53`
   - Border: `#E7E5E4`
   - Icon Container: `#FEF3C7` (48dp × 48dp, 14dp radius)
-- **Icons**: Material Symbols Rounded outline style in `#D97706`.
+- **Icons**: Material Symbols Rounded outline style in `#173B78`.
 
 ---
 

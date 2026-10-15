@@ -11,9 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.ktor.http.encodeURLParameter
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.localization.Strings
@@ -31,8 +33,8 @@ enum class DirectoryTab {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DirectoryScreen(
-    onNavigate: (Screen) -> Unit,
     businesses: List<Business> = emptyList(),
+    onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
@@ -95,7 +97,7 @@ fun DirectoryScreen(
             }
 
             when (selectedTab) {
-                DirectoryTab.BUSINESSES -> BusinessListTab(onNavigate = onNavigate, businesses = businesses)
+                DirectoryTab.BUSINESSES -> BusinessListTab(businesses = businesses)
                 DirectoryTab.JOBS -> JobListTab()
                 DirectoryTab.PLACES -> PlaceListTab()
                 DirectoryTab.OFFERINGS -> Unit
@@ -106,43 +108,12 @@ fun DirectoryScreen(
 
 @Composable
 fun BusinessListTab(
-    onNavigate: (Screen) -> Unit,
     businesses: List<Business> = emptyList()
 ) {
     val lang = LocalAppLanguage.current
+    val uriHandler = LocalUriHandler.current
 
-    val demoBusinesses = listOf(
-        Business(
-            id = "demo_biz_1",
-            nameGu = "[DEMO DATA] શ્રી અંબિકા કરિયાણા સ્ટોર",
-            nameEn = "[DEMO DATA] Shri Ambika Grocery Store",
-            descriptionGu = "શુદ્ધ તેલ, અનાજ અને કરિયાણાની તમામ વસ્તુઓ ઉપલબ્ધ છે.",
-            descriptionEn = "Pure edible oil, grains, and all grocery items.",
-            categoryNameGu = "કરિયાણું અને જનરલ સ્ટોર",
-            categoryNameEn = "Grocery & General Store",
-            phone = "9800000000",
-            whatsapp = "9800000000",
-            addressGu = "મુખ્ય બજાર, બોદલા",
-            addressEn = "Main Bazaar, Bodla",
-            isVerified = true
-        ),
-        Business(
-            id = "demo_biz_2",
-            nameGu = "[DEMO DATA] પટેલ ટ્રેક્ટર ગેરેજ & સ્પેરપાર્ટ્સ",
-            nameEn = "[DEMO DATA] Patel Tractor Garage & Spare Parts",
-            descriptionGu = "તમામ પ્રકારના ટ્રેક્ટર અને કૃષિ સાધનોનું સમારકામ.",
-            descriptionEn = "Repair of all types of tractors and farm equipment.",
-            categoryNameGu = "વાહન સેવા અને ગેરેજ",
-            categoryNameEn = "Automobile & Garage",
-            phone = "9800000001",
-            whatsapp = "9800000001",
-            addressGu = "હાઇવે રોડ, બોદલા",
-            addressEn = "Highway Road, Bodla",
-            isVerified = true
-        )
-    )
-
-    val displayBusinesses = if (businesses.isNotEmpty()) businesses else demoBusinesses
+    val displayBusinesses = businesses
 
     LazyColumn(
         modifier = Modifier
@@ -150,6 +121,9 @@ fun BusinessListTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (displayBusinesses.isEmpty()) {
+            item { EmptyStateView(if (lang == AppLanguage.GUJARATI) "હજુ કોઈ વ્યવસાયની માહિતી ઉપલબ્ધ નથી." else "No business listings are available yet.") }
+        }
         items(displayBusinesses) { business ->
             BodlaCard {
                 Row(
@@ -171,7 +145,6 @@ fun BusinessListTab(
                             )
                         }
                     }
-                    DemoDataBadge()
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -200,17 +173,27 @@ fun BusinessListTab(
                 ) {
                     BodlaOutlinedButton(
                         text = "📞 " + Strings.call(lang),
-                        onClick = { /* Launch Call Intent */ },
+                        onClick = { business.phone?.trim()?.takeIf(String::isNotBlank)?.let { uriHandler.openUri("tel:$it") } },
                         modifier = Modifier.weight(1f)
                     )
                     BodlaOutlinedButton(
                         text = "💬 " + Strings.whatsapp(lang),
-                        onClick = { /* Launch WhatsApp Intent */ },
+                        onClick = {
+                            business.whatsapp?.filter(Char::isDigit)?.takeIf(String::isNotBlank)?.let { number ->
+                                val internationalNumber = if (number.length == 10) "91$number" else number
+                                uriHandler.openUri("https://wa.me/$internationalNumber")
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                     BodlaOutlinedButton(
                         text = "🗺 " + Strings.map(lang),
-                        onClick = { /* Launch Map Intent */ },
+                        onClick = {
+                            val address = (if (lang == AppLanguage.GUJARATI) business.addressGu else business.addressEn).orEmpty()
+                            address.takeIf(String::isNotBlank)?.let {
+                                uriHandler.openUri("https://www.google.com/maps/search/?api=1&query=${it.encodeURLParameter()}")
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -222,19 +205,7 @@ fun BusinessListTab(
 @Composable
 fun JobListTab() {
     val lang = LocalAppLanguage.current
-    val demoJobs = listOf(
-        Job(
-            id = "demo_job_1",
-            titleGu = "[DEMO DATA] ટ્રેક્ટર ડ્રાઈવર જરૂર છે",
-            titleEn = "[DEMO DATA] Tractor Driver Required",
-            companyName = "પટેલ એગ્રો ફાર્મ",
-            locationGu = "બોદલા સીમ વિસ્તાર",
-            locationEn = "Bodla Sim Area",
-            salaryMin = 15000.0,
-            salaryMax = 20000.0,
-            employmentType = "FULL_TIME"
-        )
-    )
+    val displayJobs = emptyList<Job>()
 
     LazyColumn(
         modifier = Modifier
@@ -242,9 +213,11 @@ fun JobListTab() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(demoJobs) { job ->
+        if (displayJobs.isEmpty()) {
+            item { EmptyStateView(if (lang == AppLanguage.GUJARATI) "હાલમાં કોઈ નોકરીની જાહેરાત નથી." else "No job listings are available yet.") }
+        }
+        items(displayJobs) { job ->
             BodlaCard {
-                DemoDataBadge()
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = if (lang == AppLanguage.GUJARATI) job.titleGu else job.titleEn,
@@ -270,30 +243,7 @@ fun JobListTab() {
 @Composable
 fun PlaceListTab() {
     val lang = LocalAppLanguage.current
-    val demoPlaces = listOf(
-        Place(
-            id = "demo_place_1",
-            nameGu = "[DEMO DATA] શ્રી મહાદેવ મંદિર",
-            nameEn = "[DEMO DATA] Shri Mahadev Temple",
-            descriptionGu = "ગામનું પ્રાચીન અને પવિત્ર શિવ મંદિર.",
-            descriptionEn = "Ancient and holy Shiva temple of the village.",
-            categoryNameGu = "મંદિર / ધાર્મિક સ્થળ",
-            categoryNameEn = "Temple / Religious Site",
-            addressGu = "મંદિર ચોક, બોદલા",
-            addressEn = "Mandir Chowk, Bodla"
-        ),
-        Place(
-            id = "demo_place_2",
-            nameGu = "[DEMO DATA] બોદલા ગ્રામ પંચાયત ભવન",
-            nameEn = "[DEMO DATA] Bodla Gram Panchayat Bhavan",
-            descriptionGu = "ગામના વહીવટી અને નાગરિક સેવાઓનું મુખ્ય કેન્દ્ર.",
-            descriptionEn = "Central administrative and civic services building.",
-            categoryNameGu = "ગ્રામ પંચાયત ભવન",
-            categoryNameEn = "Gram Panchayat Office",
-            addressGu = "પંચાયત માર્ગ, બોદલા",
-            addressEn = "Panchayat Road, Bodla"
-        )
-    )
+    val displayPlaces = emptyList<Place>()
 
     LazyColumn(
         modifier = Modifier
@@ -301,9 +251,11 @@ fun PlaceListTab() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(demoPlaces) { place ->
+        if (displayPlaces.isEmpty()) {
+            item { EmptyStateView(if (lang == AppLanguage.GUJARATI) "હજુ કોઈ સ્થળની માહિતી ઉપલબ્ધ નથી." else "No places are available yet.") }
+        }
+        items(displayPlaces) { place ->
             BodlaCard {
-                DemoDataBadge()
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = if (lang == AppLanguage.GUJARATI) place.nameGu else place.nameEn,

@@ -3,9 +3,54 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    --bodla-canvas: #fff8e7;
+    --bodla-surface: #fffcf5;
+    --bodla-text: #292524;
+    --bodla-muted: #625b53;
+    --bodla-accent: #173b78;
+    --bodla-border: #e7e5e4;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    background-color: #FFF8E7;
-    color: #292524;
+    background-color: var(--bodla-canvas);
+    color: var(--bodla-text);
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    min-height: 2.75rem;
+    cursor: pointer;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 3rem;
+    border-radius: 0.75rem;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--bodla-accent);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: #fde68a;
+    color: var(--bodla-text);
   }
 }
 
@@ -25,5 +70,16 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #D97706;
+  background: #173B78;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

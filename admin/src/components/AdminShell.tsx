@@ -3,6 +3,9 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Bell, HeartHandshake, Home, Sparkles, Users } from 'lucide-react';
 import { LogIn, LogOut } from 'lucide-react';
 import Header from '@/components/Header';
 import { AdminLanguageProvider } from '@/components/AdminLanguageContext';
@@ -12,6 +15,32 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 type AccessState = 'checking' | 'signed-out' | 'staff' | 'member' | 'unauthorized' | 'password-recovery';
 type AuthMode = 'login' | 'signup' | 'recover' | 'update-password';
+
+const mobileAdminLinks = [
+  { label: 'Home', href: '/', icon: Home },
+  { label: 'Users', href: '/users', icon: Users },
+  { label: 'Notices', href: '/notices', icon: Bell },
+  { label: 'Offerings', href: '/offerings', icon: HeartHandshake },
+  { label: 'Navratri', href: '/navratri', icon: Sparkles },
+];
+
+function MobileAdminFooter() {
+  const pathname = usePathname();
+
+  return (
+    <nav aria-label="Admin menu" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-brand-border bg-cream-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+      {mobileAdminLinks.map(({ label, href, icon: Icon }) => {
+        const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+        return (
+          <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-semibold ${active ? 'text-saffron' : 'text-brand-muted'}`}>
+            <Icon aria-hidden="true" className="h-6 w-6" />
+            <span className="truncate leading-5">{label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
 function removeAuthRedirectParams() {
   const url = new URL(window.location.href);
@@ -41,14 +70,14 @@ function readableAuthError(error: unknown) {
 }
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
-  const [accessState, setAccessState] = useState<AccessState>('checking');
+  const [accessState, setAccessState] = useState<AccessState>(isSupabaseConfigured ? 'checking' : 'signed-out');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [signedInEmail, setSignedInEmail] = useState('');
   const [signedInName, setSignedInName] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(isSupabaseConfigured ? null : 'Supabase is not configured for the admin app.');
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const authEventVersion = useRef(0);
@@ -111,10 +140,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     let active = true;
-    if (!isSupabaseConfigured) {
-      setAuthError('Supabase is not configured for the admin app.');
-      setAccessState('signed-out');
-    }
+    if (!isSupabaseConfigured) return () => { active = false; };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
@@ -211,7 +237,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   if (accessState === 'unauthorized') {
     return (
       <main className="flex min-h-screen flex-1 items-center justify-center bg-cream px-5 py-10">
-        <section className="w-full max-w-md border border-brand-border bg-cream-surface p-7 shadow-sm">
+        <section className="w-full max-w-md rounded-3xl border border-brand-border bg-cream-surface p-6 shadow-lg sm:p-8">
           <p className="text-xs font-semibold uppercase text-saffron">Bodla Parivar Admin</p>
           <h1 className="mt-2 text-xl font-bold text-brand-text">Staff access required</h1>
           <p className="mt-2 text-sm text-brand-muted">{authError || 'This account is signed in, but it does not have an admin or staff role.'}</p>
@@ -234,7 +260,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const isPasswordUpdate = authMode === 'update-password';
     return (
       <main className="flex min-h-screen flex-1 items-center justify-center bg-cream px-5 py-10">
-        <section className="w-full max-w-md border border-brand-border bg-cream-surface p-7 shadow-sm">
+        <section className="w-full max-w-md rounded-3xl border border-brand-border bg-cream-surface p-6 shadow-lg sm:p-8">
           <Image
             src="/bodla_parivar_logo.png"
             alt="Bodla Parivar"
@@ -295,7 +321,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             {authError && <p role="alert" className="text-sm text-rose-700">{authError}</p>}
             {authNotice && <p role="status" className="border border-leaf/30 bg-leaf/10 p-3 text-sm text-brand-text">{authNotice}</p>}
 
-            <button type="submit" disabled={isSubmitting || !isSupabaseConfigured} className="inline-flex w-full items-center justify-center gap-2 bg-saffron px-4 py-3 text-sm font-semibold text-white hover:bg-saffron-dark disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting || !isSupabaseConfigured} className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-saffron px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-saffron-dark disabled:cursor-not-allowed disabled:opacity-50">
               <LogIn className="h-4 w-4" />
               {isSubmitting ? 'Please wait…' : isLogin ? 'Sign in' : isSignup ? 'Create account' : isRecoveryRequest ? 'Send recovery email' : 'Update password'}
             </button>
@@ -313,12 +339,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <AdminLanguageProvider>
-      <div className="flex min-h-screen flex-1">
+      <div className="flex min-h-screen flex-1 flex-col md:flex-row">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Header email={signedInEmail} onSignOut={handleSignOut} />
-          <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
+          <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-28 md:p-8">{children}</main>
         </div>
+        <MobileAdminFooter />
       </div>
     </AdminLanguageProvider>
   );

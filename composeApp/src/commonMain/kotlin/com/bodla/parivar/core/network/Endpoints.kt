@@ -33,6 +33,9 @@ object Endpoints {
     val IS_ADMIN: String
         get() = "$REST_BASE_URL/rpc/is_admin"
 
+    val CURRENT_USER_ROLES: String
+        get() = "$REST_BASE_URL/rpc/current_user_roles"
+
     val AUTH_LOGOUT: String
         get() = "$AUTH_BASE_URL/logout"
 
@@ -42,6 +45,12 @@ object Endpoints {
 
     val NOTICES: String
         get() = "$REST_BASE_URL/notices?select=*,category:notice_categories(name_gu,name_en)&status=eq.PUBLISHED&order=is_pinned.desc,created_at.desc"
+
+    val NAVRATRI_OPTIONS: String
+        get() = "$REST_BASE_URL/navratri_options?select=*&is_active=eq.true&order=display_order.asc"
+
+    val NAVRATRI_BOOKINGS: String
+        get() = "$REST_BASE_URL/navratri_bookings"
 
     val EVENTS: String
         get() = "$REST_BASE_URL/events?select=*,category:event_categories(name_gu,name_en)&status=eq.PUBLISHED&order=start_at.asc"

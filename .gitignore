@@ -9,9 +9,15 @@
 *.key
 google-services.json
 GoogleService-Info.plist
+*firebase-adminsdk*.json
+service-account*.json
 
 # Gradle & Kotlin
 .gradle/
+.gradle-cache-local/
+.gradle-user/
+.android-user/
+.android-sdk-home/
 build/
 **/build/
 !src/**/build/
@@ -41,6 +47,7 @@ DerivedData/
 
 # Node & Next.js Admin
 node_modules/
+admin/.npm-cache/
 admin/.next/
 admin/out/
 admin/build/

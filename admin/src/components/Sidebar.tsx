@@ -7,21 +7,16 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  Shield,
   Bell,
-  Calendar,
-  Building2,
-  Briefcase,
-  HeartHandshake,
-  AlertCircle,
-  PhoneCall,
-  MapPin,
-  Image,
   Send,
-  Flag,
-  History,
+  Sparkles,
+  WalletCards,
+  AlertCircle,
   BookOpen,
-  Settings
+  ClipboardList,
+  PhoneCall,
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 
 interface NavItem {
@@ -34,28 +29,23 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: 'Dashboard', nameGu: 'ડેશબોર્ડ', href: '/', icon: LayoutDashboard },
   { name: 'Users', nameGu: 'વપરાશકર્તાઓ', href: '/users', icon: Users },
-  { name: 'Village History', nameGu: 'બોદલા ગામનો ઇતિહાસ', href: '/history', icon: BookOpen },
-  { name: 'Roles & Permissions', nameGu: 'ભૂમિકાઓ અને પરવાનગી', href: '/roles', icon: Shield },
   { name: 'Notices', nameGu: 'સૂચનાઓ', href: '/notices', icon: Bell },
-  { name: 'Events', nameGu: 'કાર્યક્રમો', href: '/events', icon: Calendar },
-  { name: 'Businesses', nameGu: 'વ્યવસાયો', href: '/businesses', icon: Building2 },
-  { name: 'Jobs', nameGu: 'નોકરીઓ', href: '/jobs', icon: Briefcase },
-  { name: 'Offerings / ચઢાવો', nameGu: 'ચઢાવો', href: '/offerings', icon: HeartHandshake },
-  { name: 'Complaints', nameGu: 'ફરિયાદો', href: '/complaints', icon: AlertCircle },
-  { name: 'Emergency Contacts', nameGu: 'ઈમરજન્સી સંપર્કો', href: '/emergency', icon: PhoneCall },
-  { name: 'Places', nameGu: 'સ્થળો', href: '/places', icon: MapPin },
-  { name: 'Gallery', nameGu: 'ગેલેરી', href: '/gallery', icon: Image },
+  { name: 'Offerings', nameGu: 'ચઢાવો', href: '/offerings', icon: WalletCards },
+  { name: 'Navratri', nameGu: 'નવરાત્રી', href: '/navratri', icon: Sparkles },
   { name: 'Notifications', nameGu: 'સૂચના પ્રસારણ', href: '/notifications', icon: Send },
-  { name: 'Reports', nameGu: 'રિપોર્ટ્સ', href: '/reports', icon: Flag },
-  { name: 'Audit Logs', nameGu: 'ઓડિટ લોગ્સ', href: '/audit-logs', icon: History },
-  { name: 'Village Settings', nameGu: 'ગામ સેટિંગ્સ', href: '/settings', icon: Settings },
+  { name: 'Complaints', nameGu: '', href: '/complaints', icon: AlertCircle },
+  { name: 'Emergency contacts', nameGu: '', href: '/emergency', icon: PhoneCall },
+  { name: 'Village history', nameGu: '', href: '/history', icon: BookOpen },
+  { name: 'Roles', nameGu: '', href: '/roles', icon: ShieldCheck },
+  { name: 'Audit logs', nameGu: '', href: '/audit-logs', icon: ClipboardList },
+  { name: 'Settings', nameGu: '', href: '/settings', icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-cream-surface border-r border-brand-border min-h-screen flex flex-col shrink-0">
+    <aside className="hidden w-72 shrink-0 border-r border-brand-border bg-cream-surface md:flex md:min-h-screen md:flex-col">
       {/* Brand Header */}
       <div className="p-5 border-b border-brand-border">
         <div className="flex flex-col items-center gap-2">
@@ -71,7 +61,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav aria-label="Main administration" className="flex-1 space-y-1 overflow-y-auto p-3">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -80,7 +70,8 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex min-h-14 items-center gap-3 rounded-xl px-3 py-3 text-base font-semibold transition-all ${
                 isActive
                   ? 'bg-saffron text-white shadow-sm'
                   : 'text-brand-text hover:bg-saffron-container hover:text-saffron'
@@ -89,9 +80,7 @@ export default function Sidebar() {
               <Icon className="w-5 h-5 shrink-0" />
               <div className="truncate">
                 <span className="block leading-none">{item.name}</span>
-                <span className={`text-[11px] block mt-0.5 ${isActive ? 'text-white/80' : 'text-brand-muted'}`}>
-                  {item.nameGu}
-                </span>
+                {item.nameGu && <span className={`mt-1 block text-xs ${isActive ? 'text-white/90' : 'text-brand-muted'}`}>{item.nameGu}</span>}
               </div>
             </Link>
           );

@@ -1,6 +1,21 @@
 import type { Metadata } from 'next';
+import localFont from 'next/font/local';
 import './globals.css';
 import AdminShell from '@/components/AdminShell';
+
+const gujaratiFont = localFont({
+  src: '../../public/fonts/AnekGujarati-Gujarati.woff2',
+  weight: '400 700',
+  display: 'swap',
+  variable: '--font-anek-gujarati',
+});
+
+const englishFont = localFont({
+  src: '../../public/fonts/DMSans-Latin.woff2',
+  weight: '400 700',
+  display: 'swap',
+  variable: '--font-dm-sans',
+});
 
 export const metadata: Metadata = {
   title: 'બોદલા પરિવાર — Admin Console',
@@ -14,15 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="gu">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Anek+Gujarati:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="bg-cream min-h-screen text-brand-text flex font-english antialiased">
+      <body className={`${gujaratiFont.variable} ${englishFont.variable} bg-cream min-h-screen text-brand-text flex font-english antialiased`}>
         <AdminShell>{children}</AdminShell>
       </body>
     </html>

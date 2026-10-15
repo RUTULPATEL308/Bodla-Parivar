@@ -54,18 +54,7 @@ fun ComplaintListScreen(
         containerColor = CreamBackground,
         modifier = modifier
     ) { innerPadding ->
-        val displayComplaints = if (complaints.isNotEmpty()) complaints else listOf(
-            Complaint(
-                id = "demo_comp_1",
-                userId = "user_1",
-                title = "[DEMO DATA] પંચાયત રોડ પર શેરી લાઈટ બંધ છે",
-                description = "આ ડેમો ફરિયાદ છે. છેલ્લા બે દિવસથી પંચાયત રોડ પર લાઈટ બંધ હોવાથી અંધારું રહે છે.",
-                categoryNameGu = "શેરી લાઈટ",
-                categoryNameEn = "Street Lighting",
-                status = "IN_PROGRESS",
-                createdAt = "2026-09-26"
-            )
-        )
+        val displayComplaints = complaints
 
         LazyColumn(
             modifier = Modifier
@@ -74,6 +63,9 @@ fun ComplaintListScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (displayComplaints.isEmpty()) {
+                item { EmptyStateView(if (lang == AppLanguage.GUJARATI) "હજુ કોઈ ફરિયાદ નોંધાઈ નથી." else "No complaints have been submitted yet.") }
+            }
             items(displayComplaints) { complaint ->
                 BodlaCard {
                     Row(
@@ -82,7 +74,6 @@ fun ComplaintListScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         StatusChip(status = complaint.status)
-                        DemoDataBadge()
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -113,13 +104,12 @@ fun ComplaintListScreen(
 @Composable
 fun CreateComplaintScreen(
     onBack: () -> Unit,
-    onSubmit: (title: String, description: String, category: String) -> Unit,
+    onSubmit: (title: String, description: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("પીવાનું પાણી") }
 
     Scaffold(
         topBar = {
@@ -165,7 +155,7 @@ fun CreateComplaintScreen(
             BodlaButton(
                 text = Strings.submit(lang),
                 onClick = {
-                    onSubmit(title, description, selectedCategory)
+                    onSubmit(title, description)
                     onBack()
                 },
                 enabled = title.isNotBlank() && description.isNotBlank()

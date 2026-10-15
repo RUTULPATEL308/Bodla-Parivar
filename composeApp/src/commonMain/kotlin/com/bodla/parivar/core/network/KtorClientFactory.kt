@@ -6,11 +6,12 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.header
+import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object KtorClientFactory {
-    fun create(authTokenProvider: () -> String?): HttpClient {
+    fun create(_authTokenProvider: () -> String?): HttpClient {
         return HttpClient {
             install(ContentNegotiation) {
                 json(Json {
@@ -29,14 +30,10 @@ object KtorClientFactory {
                 if (Endpoints.SUPABASE_ANON_KEY.isNotBlank() && !headers.contains("apikey")) {
                     header("apikey", Endpoints.SUPABASE_ANON_KEY)
                 }
-                
-                if (!headers.contains("Authorization")) {
-                    val token = authTokenProvider()
-                    if (!token.isNullOrBlank()) {
-                        header("Authorization", "Bearer $token")
-                    } else if (Endpoints.SUPABASE_ANON_KEY.isNotBlank()) {
-                        header("Authorization", "Bearer ${Endpoints.SUPABASE_ANON_KEY}")
-                    }
+                if (!headers.contains(HttpHeaders.Authorization)) {
+                    _authTokenProvider()
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { header(HttpHeaders.Authorization, "Bearer $it") }
                 }
             }
         }

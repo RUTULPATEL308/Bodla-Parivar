@@ -17,6 +17,7 @@ import io.github.aakira.napier.Napier
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.get
 import io.ktor.client.request.delete
 import io.ktor.client.request.header
@@ -106,14 +107,15 @@ class AuthRepositoryImpl(
             authDto.refreshToken?.let(tokenStorage::saveRefreshToken)
             val userId = authDto.user?.id
 
-            val (storedProfile, accessFlags) = if (userId != null) {
+            val (storedProfile, accessFlags, roles) = if (userId != null) {
                 coroutineScope {
                     val profileRequest = async { fetchProfileByAuthId(userId) }
                     val accessRequest = async { fetchAccessFlags() }
-                    profileRequest.await() to accessRequest.await()
+                    val rolesRequest = async { fetchCurrentUserRoles() }
+                    Triple(profileRequest.await(), accessRequest.await(), rolesRequest.await())
                 }
             } else {
-                null to (false to false)
+                Triple(null, false to false, emptyList())
             }
 
             val (isStaff, isAdmin) = accessFlags
@@ -136,7 +138,7 @@ class AuthRepositoryImpl(
                 )
             }
 
-            val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin)
+            val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin, roles = roles)
             cachedProfile = profileWithAccess
             runCatching { tokenStorage.saveUserProfile(Json.encodeToString(profileWithAccess)) }
             Result.success(profileWithAccess)
@@ -202,29 +204,23 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun getCurrentUser(): Profile? = withContext(Dispatchers.IO) {
-        if (cachedProfile != null) return@withContext cachedProfile
-
-        // 1. FAST LOCAL CACHE HIT: Return persisted profile in 0ms so app opens instantly without blocking network delay
-        val savedJson = tokenStorage.getUserProfile()
-        if (!savedJson.isNullOrBlank()) {
-            val localProfile = runCatching { Json.decodeFromString<Profile>(savedJson) }.getOrNull()
-            if (localProfile != null) {
-                cachedProfile = localProfile
-                return@withContext localProfile
-            }
-        }
-
+        // Recheck the signed-in account on startup so role assignments made in the
+        // admin portal are reflected instead of returning a stale cached role list.
+        val persistedProfile = cachedProfile ?: tokenStorage.getUserProfile()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { Json.decodeFromString<Profile>(it) }.getOrNull() }
         val token = tokenStorage.getToken()
-        if (token.isNullOrBlank()) return@withContext null
+        if (token.isNullOrBlank()) return@withContext persistedProfile
 
         try {
             val response = httpClient.get(Endpoints.AUTH_USER)
             if (response.status.isSuccess()) {
                 val user = response.body<AuthUserDto>()
-                val (storedProfile, accessFlags) = coroutineScope {
+                val (storedProfile, accessFlags, roles) = coroutineScope {
                     val profileRequest = async { fetchProfileByAuthId(user.id) }
                     val accessRequest = async { fetchAccessFlags() }
-                    profileRequest.await() to accessRequest.await()
+                    val rolesRequest = async { fetchCurrentUserRoles() }
+                    Triple(profileRequest.await(), accessRequest.await(), rolesRequest.await())
                 }
                 val profile = storedProfile ?: Profile(
                     id = user.id,
@@ -234,7 +230,7 @@ class AuthRepositoryImpl(
                     phone = user.userMetadata?.get("phone")
                 )
                 val (isStaff, isAdmin) = accessFlags
-                val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin)
+                val profileWithAccess = profile.copy(isStaff = isStaff, isAdmin = isAdmin, roles = roles)
                 cachedProfile = profileWithAccess
                 runCatching { tokenStorage.saveUserProfile(Json.encodeToString(profileWithAccess)) }
                 profileWithAccess
@@ -243,7 +239,7 @@ class AuthRepositoryImpl(
             }
         } catch (e: Exception) {
             Napier.w("AuthRepository: Offline or error fetching current user", e)
-            null
+            persistedProfile
         }
     }
 
@@ -332,6 +328,24 @@ class AuthRepositoryImpl(
         staffAccess.await() to adminAccess.await()
     }
 
+    private suspend fun fetchCurrentUserRoles(): List<String> {
+        return try {
+            val response = httpClient.post(Endpoints.CURRENT_USER_ROLES) {
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+            if (response.status.isSuccess()) {
+                response.body<List<String>>().map { it.uppercase() }
+            } else {
+                Napier.w("AuthRepository: Role lookup failed HTTP ${response.status.value}: ${response.bodyAsText()}")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Napier.w("AuthRepository: Could not load current user roles", e)
+            emptyList()
+        }
+    }
+
     override suspend fun getRegisteredUsers(): Result<List<Profile>> = withContext(Dispatchers.IO) {
         try {
             if (!fetchAdminAccess()) {
@@ -370,8 +384,17 @@ class NoticeRepositoryImpl(
         try {
             val response = httpClient.get(Endpoints.NOTICES)
             if (response.status.isSuccess()) {
-                val dtos = response.body<List<NoticeDto>>()
+                val responseText = response.bodyAsText()
+                val dtos = try {
+                    decodeNoticeDtos(responseText)
+                } catch (e: Exception) {
+                    throw IllegalStateException(
+                        "Could not decode notices response (${e.message}): ${responseText.take(180)}",
+                        e
+                    )
+                }
                 database.transaction {
+                    database.appDatabaseQueries.clearNotices()
                     for (dto in dtos) {
                         database.appDatabaseQueries.insertOrReplaceNotice(
                             id = dto.id,
@@ -393,7 +416,7 @@ class NoticeRepositoryImpl(
                 Napier.i("NoticeRepository: Refreshed ${dtos.size} notices from server")
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("HTTP ${response.status} fetching notices"))
+                Result.failure(Exception("HTTP ${response.status} fetching notices: ${response.bodyAsText().take(300)}"))
             }
         } catch (e: Exception) {
             Napier.w("NoticeRepository: Offline mode or error refreshing notices", e)

@@ -163,7 +163,6 @@ class SyncEngine(
             val response = httpClient.post(Endpoints.AUTH_REFRESH) {
                 contentType(ContentType.Application.Json)
                 headers.remove(HttpHeaders.Authorization)
-                header(HttpHeaders.Authorization, "Bearer ${Endpoints.SUPABASE_ANON_KEY}")
                 setBody(buildJsonObject { put("refresh_token", refreshToken) }.toString())
             }
             if (!response.status.isSuccess()) {

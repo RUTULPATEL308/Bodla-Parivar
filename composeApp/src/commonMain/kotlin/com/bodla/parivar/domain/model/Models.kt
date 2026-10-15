@@ -21,7 +21,8 @@ data class Profile(
     val isVerified: Boolean = false,
     val status: String = "ACTIVE",
     val isStaff: Boolean = false,
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val roles: List<String> = emptyList()
 )
 
 @Serializable

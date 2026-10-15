@@ -36,28 +36,7 @@ fun EventListScreen(
         containerColor = CreamBackground,
         modifier = modifier
     ) { innerPadding ->
-        val displayEvents = if (events.isNotEmpty()) events else listOf(
-            Event(
-                id = "demo_event_1",
-                titleGu = "[DEMO DATA] વાર્ષિક સાંસ્કૃતિક ઉત્સવ",
-                titleEn = "[DEMO DATA] Annual Cultural Celebration",
-                descriptionGu = "આ ડેમો કાર્યક્રમ છે. ગામના તમામ પરિવારો માટે સાંસ્કૃતિક મહોત્સવનું આયોજન.",
-                descriptionEn = "This is demo data. Annual cultural celebration for all Bodla Parivar families.",
-                startAt = "2026-10-05 18:00",
-                locationGu = "બોદલા પ્રાથમિક શાળા મેદાન",
-                locationEn = "Bodla Primary School Ground"
-            ),
-            Event(
-                id = "demo_event_2",
-                titleGu = "[DEMO DATA] વિનામૂલ્યે આરોગ્ય તપાસ કેમ્પ",
-                titleEn = "[DEMO DATA] Free Medical Health Camp",
-                descriptionGu = "આ ડેમો કાર્યક્રમ છે. તમામ ગ્રામજનો માટે નિઃશુલ્ક બ્લડ પ્રેશર અને ડાયાબિટીસ તપાસ.",
-                descriptionEn = "This is demo data. Free health checkup camp for blood pressure and diabetes.",
-                startAt = "2026-10-12 09:00",
-                locationGu = "પ્રાથમિક આરોગ્ય કેન્દ્ર",
-                locationEn = "Primary Health Center"
-            )
-        )
+        val displayEvents = events
 
         LazyColumn(
             modifier = Modifier
@@ -66,11 +45,13 @@ fun EventListScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (displayEvents.isEmpty()) {
+                item { EmptyStateView(if (lang == AppLanguage.GUJARATI) "હાલમાં કોઈ કાર્યક્રમ નથી." else "There are no upcoming events.") }
+            }
             items(displayEvents) { event ->
                 BodlaCard(
                     onClick = { onNavigate(Screen.EventDetail(event.id)) }
                 ) {
-                    DemoDataBadge()
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = if (lang == AppLanguage.GUJARATI) event.titleGu else event.titleEn,
@@ -98,22 +79,35 @@ fun EventListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventDetailScreen(
-    eventId: String,
     onBack: () -> Unit,
     event: Event? = null,
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
-    val currentEvent = event ?: Event(
-        id = eventId,
-        titleGu = "[DEMO DATA] વાર્ષિક સાંસ્કૃતિક ઉત્સવ",
-        titleEn = "[DEMO DATA] Annual Cultural Celebration",
-        descriptionGu = "આ ડેમો કાર્યક્રમ છે. બોદલા પરિવારના સર્વે ભાઈઓ અને બહેનોને જણાવવાનું કે આગામી તારીખે પ્રાથમિક શાળાના મેદાન ખાતે ભવ્ય સાંસ્કૃતિક કાર્યક્રમ અને સમૂહ ભોજનનું આયોજન કરવામાં આવ્યું છે.",
-        descriptionEn = "This is demo data. Notice to all Bodla Parivar members regarding the annual cultural evening and community dinner at the primary school ground.",
-        startAt = "2026-10-05 18:00",
-        locationGu = "બોદલા પ્રાથમિક શાળા મેદાન",
-        locationEn = "Bodla Primary School Ground"
-    )
+    if (event == null) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(text = Strings.navEvents(lang), style = BodlaPageTitle) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Text(text = "←", fontSize = 22.sp, color = TextPrimary)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
+                )
+            },
+            containerColor = CreamBackground,
+            modifier = modifier
+        ) { padding ->
+            EmptyStateView(
+                message = if (lang == AppLanguage.GUJARATI) "આ કાર્યક્રમ હવે ઉપલબ્ધ નથી." else "This event is no longer available.",
+                modifier = Modifier.fillMaxSize().padding(padding)
+            )
+        }
+        return
+    }
+    val currentEvent = event
 
     Scaffold(
         topBar = {
@@ -137,7 +131,6 @@ fun EventDetailScreen(
                 .padding(16.dp)
         ) {
             BodlaCard {
-                DemoDataBadge()
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = if (lang == AppLanguage.GUJARATI) currentEvent.titleGu else currentEvent.titleEn,
@@ -163,7 +156,7 @@ fun EventDetailScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Divider(color = BorderStroke)
+                HorizontalDivider(color = BorderStroke)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = (if (lang == AppLanguage.GUJARATI) currentEvent.descriptionGu else currentEvent.descriptionEn).orEmpty(),

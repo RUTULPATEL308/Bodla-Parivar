@@ -17,6 +17,8 @@ export interface Notice {
   title_en: string;
   description_gu?: string;
   description_en?: string;
+  image_url?: string | null;
+  attachment_url?: string | null;
   status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'EXPIRED' | 'ARCHIVED';
   is_pinned: boolean;
   publish_at?: string;

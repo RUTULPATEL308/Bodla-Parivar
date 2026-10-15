@@ -6,4 +6,5 @@ import android.content.Context
 @SuppressLint("StaticFieldLeak")
 object AndroidPlatform {
     var appContext: Context? = null
+    var pendingNoticeId: String? = null
 }

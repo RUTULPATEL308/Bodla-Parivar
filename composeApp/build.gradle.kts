@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.sqlDelight)
+    alias(libs.plugins.googleServices)
 }
 
 kotlin {
@@ -33,6 +34,8 @@ kotlin {
             implementation(compose.material3)
             implementation(compose.ui)
             implementation(compose.components.resources)
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor2)
 
             // Coroutines & Serialization
             implementation(libs.kotlinx.coroutines.core)
@@ -70,6 +73,8 @@ kotlin {
             implementation("androidx.compose.ui:ui-text-google-fonts:1.6.7")
             // Splash Screen API (Android 12+, backwards compat to API 23)
             implementation("androidx.core:core-splashscreen:1.0.1")
+            // Firebase Cloud Messaging
+            implementation(libs.firebase.messaging)
         }
 
         iosMain.dependencies {
@@ -89,7 +94,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.bodla.parivar.app"
+        applicationId = "com.bodla.parivar"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

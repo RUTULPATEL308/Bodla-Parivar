@@ -1,6 +1,7 @@
 package com.bodla.parivar.features.notifications
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +45,9 @@ data class AppNotification(
     @SerialName("title_en") val titleEn: String? = null,
     @SerialName("body_gu") val bodyGu: String? = null,
     @SerialName("body_en") val bodyEn: String? = null,
-    @SerialName("created_at") val createdAt: String? = null
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("reference_id") val referenceId: String? = null,
+    val type: String? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +55,7 @@ data class AppNotification(
 fun NotificationCenterScreen(
     notifications: List<AppNotification>,
     onBack: () -> Unit,
+    onNotificationClick: (AppNotification) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
@@ -138,7 +142,7 @@ fun NotificationCenterScreen(
                     else notification.bodyEn ?: notification.bodyGu.orEmpty()
 
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().clickable { onNotificationClick(notification) },
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
                         border = CardDefaults.outlinedCardBorder().copy(

@@ -20,11 +20,15 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: admin/package.json
+          cache-dependency-path: admin/package-lock.json
 
       - name: Install dependencies
         working-directory: admin
         run: npm ci
+
+      - name: Lint Next.js Admin
+        working-directory: admin
+        run: npm run lint
 
       - name: Build Next.js Admin
         working-directory: admin

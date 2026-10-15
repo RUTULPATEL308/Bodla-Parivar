@@ -1,19 +1,15 @@
 package com.bodla.parivar.features.main
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,7 +34,6 @@ import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
-import com.bodla.parivar.core.ui.BodlaButton
 import com.bodla.parivar.core.ui.BodlaOutlinedButton
 import com.bodla.parivar.domain.model.Notice
 import com.bodla.parivar.domain.model.Offering
@@ -63,9 +58,21 @@ fun AdminHomeScreen(
     val activeOfferingCount = offerings.count { it.status == "ACTIVE" }
     val pendingOfferings = offerings.filter { it.status == "PENDING_APPROVAL" || it.status == "PENDING" }
     val isGujarati = lang == AppLanguage.GUJARATI
+    val roles = profile?.roles.orEmpty().map { it.uppercase() }.toSet()
+    val isSuperAdmin = "SUPER_ADMIN" in roles
+    val isAdmin = profile?.isAdmin == true || "ADMIN" in roles || isSuperAdmin
+    val isModerator = "MODERATOR" in roles
+    val isContentManager = "CONTENT_MANAGER" in roles
+    val roleLabel = when {
+        isSuperAdmin -> if (isGujarati) "સુપર એડમિન" else "Super Administrator"
+        isAdmin -> if (isGujarati) "એડમિન" else "Administrator"
+        isModerator -> if (isGujarati) "મોડરેટર" else "Moderator"
+        isContentManager -> if (isGujarati) "કન્ટેન્ટ મેનેજર" else "Content Manager"
+        else -> if (isGujarati) "સ્ટાફ" else "Staff"
+    }
 
-    LaunchedEffect(profile?.id, profile?.isAdmin) {
-        if (profile?.isAdmin == true) {
+    LaunchedEffect(profile?.id, isAdmin) {
+        if (isAdmin) {
             authRepository.getRegisteredUsers()
                 .onSuccess { memberCount = it.size }
                 .onFailure { memberLoadFailed = true }
@@ -75,7 +82,7 @@ fun AdminHomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isGujarati) "ડેશબોર્ડ" else "Dashboard", style = BodlaPageTitle) },
+                title = { Text(if (isGujarati) "ડેશબોર્ડ" else if (isSuperAdmin) "Super Admin Dashboard" else "$roleLabel Dashboard", style = BodlaPageTitle) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
             )
         },
@@ -100,7 +107,7 @@ fun AdminHomeScreen(
                         color = TextPrimary
                     )
                     Text(
-                        text = if (isGujarati) "આજનું સમુદાય સંચાલન" else "Village community overview",
+                        text = roleLabel,
                         style = BodlaBody,
                         color = TextSecondary
                     )
@@ -108,55 +115,65 @@ fun AdminHomeScreen(
             }
 
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (profile?.isAdmin == true) {
-                            DashboardAction(
-                                title = if (isGujarati) "સભ્યો" else "Members",
-                                onClick = { onNavigate(Screen.AdminUsers) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        DashboardAction(
-                            title = if (isGujarati) "સૂચનાઓ" else "Notices",
-                            onClick = { onNavigate(Screen.Notices) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        DashboardAction(
-                            title = if (isGujarati) "ચઢાવો" else "Offerings",
-                            onClick = { onNavigate(Screen.Offerings) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (profile?.isAdmin == true) {
-                        BodlaButton(
-                            text = if (isGujarati) "નવો ચઢાવો ઉમેરો" else "Add an offering",
-                            onClick = { onNavigate(Screen.AddOffering) }
-                        )
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (isAdmin) DashboardAction(
+                        title = if (isSuperAdmin) "Users & roles" else if (isGujarati) "સભ્યો" else "Members",
+                        icon = "👥",
+                        onClick = { onNavigate(Screen.AdminUsers) }
+                    )
+                    if (isAdmin || isContentManager) DashboardAction(
+                        title = if (isGujarati) "સૂચનાઓ" else "Notices",
+                        icon = "📢",
+                        onClick = { onNavigate(Screen.Notices) }
+                    )
+                    if (isAdmin || isModerator) DashboardAction(
+                        title = if (isGujarati) "ચઢાવો" else "Offerings",
+                        icon = "🙏",
+                        onClick = { onNavigate(Screen.Offerings) }
+                    )
+                    if (isAdmin) DashboardAction(
+                        title = if (isGujarati) "નવો ચઢાવો ઉમેરો" else "Add an offering",
+                        icon = "＋",
+                        onClick = { onNavigate(Screen.AddOffering) }
+                    )
+                    if (isAdmin || isContentManager) DashboardAction(
+                        title = if (isGujarati) "નવરાત્રી વ્યવસ્થાપન" else "Navratri management",
+                        icon = "✨",
+                        onClick = { onNavigate(Screen.Navratri) }
+                    )
+                    if (isAdmin || isModerator) DashboardAction(
+                        title = if (isGujarati) "ફરિયાદો" else "Complaints",
+                        icon = "✍️",
+                        onClick = { onNavigate(Screen.Complaints) }
+                    )
+                    BodlaOutlinedButton(
+                        text = if (isGujarati) "રહેવાસી હોમ જુઓ" else "Open resident home",
+                        onClick = { onNavigate(Screen.Home) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)
+                    )
                 }
             }
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = if (isGujarati) "ઝાંખી" else "OVERVIEW",
-                        style = BodlaCaption.copy(fontWeight = FontWeight.Bold),
+                        text = if (isGujarati) "ઝાંખી" else "Overview",
+                        style = BodlaSection,
                         color = TextSecondary
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        DashboardMetric(
+                        if (isAdmin) DashboardMetric(
                             title = if (isGujarati) "નોંધાયેલા સભ્યો" else "Registered members",
                             value = if (memberLoadFailed) "—" else memberCount?.toString() ?: "…",
                             modifier = Modifier.weight(1f)
                         )
-                        DashboardMetric(
+                        if (isAdmin || isContentManager) DashboardMetric(
                             title = if (isGujarati) "પ્રકાશિત સૂચનાઓ" else "Published notices",
                             value = publishedNoticeCount.toString(),
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (isAdmin || isModerator) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         DashboardMetric(
                             title = if (isGujarati) "સક્રિય ચઢાવો" else "Active offerings",
                             value = activeOfferingCount.toString(),
@@ -172,7 +189,7 @@ fun AdminHomeScreen(
                 }
             }
 
-            item {
+            if (isAdmin || isModerator) item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -181,12 +198,12 @@ fun AdminHomeScreen(
                     Column {
                         Text(
                             text = if (isGujarati) "મંજૂરી માટે બાકી" else "Pending approvals",
-                            style = BodlaCardTitle,
+                            style = BodlaSection,
                             color = TextPrimary
                         )
                         Text(
                             text = if (isGujarati) "ચઢાવાની વિનંતીઓ તપાસો" else "Review offering requests",
-                            style = BodlaCaption,
+                            style = BodlaBody,
                             color = TextSecondary
                         )
                     }
@@ -197,47 +214,49 @@ fun AdminHomeScreen(
                 }
             }
 
-            if (pendingOfferings.isEmpty()) {
-                item {
-                    Text(
-                        text = if (isGujarati) "હાલમાં કોઈ ચઢાવાની મંજૂરી બાકી નથી." else "There are no offering requests awaiting review.",
-                        style = BodlaBody,
-                        color = TextSecondary,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                    )
-                }
-            } else {
-                items(pendingOfferings.take(5), key = { it.id }) { offering ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { onNavigate(Screen.Offerings) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
-                        border = CardDefaults.outlinedCardBorder().copy(
-                            brush = androidx.compose.ui.graphics.SolidColor(BorderStroke)
+            if (isAdmin || isModerator) {
+                if (pendingOfferings.isEmpty()) {
+                    item {
+                        Text(
+                            text = if (isGujarati) "હાલમાં કોઈ ચઢાવાની મંજૂરી બાકી નથી." else "There are no offering requests awaiting review.",
+                            style = BodlaBody,
+                            color = TextSecondary,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    }
+                } else {
+                    items(pendingOfferings.take(5), key = { it.id }) { offering ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onNavigate(Screen.Offerings) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
+                            border = CardDefaults.outlinedCardBorder().copy(
+                                brush = androidx.compose.ui.graphics.SolidColor(BorderStroke)
+                            )
                         ) {
-                            Text(text = "🙏", fontSize = 22.sp)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isGujarati) offering.titleGu else offering.titleEn,
-                                    style = BodlaCardTitle,
-                                    color = TextPrimary,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = if (isGujarati) "ચઢાવાની વિનંતી" else "Offering request",
-                                    style = BodlaCaption,
-                                    color = TextSecondary
-                                )
+                            Row(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(18.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "🙏", fontSize = 22.sp)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isGujarati) offering.titleGu else offering.titleEn,
+                                        style = BodlaBody.copy(fontWeight = FontWeight.SemiBold),
+                                        color = TextPrimary,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (isGujarati) "ચઢાવાની વિનંતી" else "Offering request",
+                                        style = BodlaBody.copy(fontSize = 14.sp),
+                                        color = TextSecondary
+                                    )
+                                }
+                                Text(text = "→", fontSize = 20.sp, color = SaffronPrimary)
                             }
-                            Text(text = "→", fontSize = 20.sp, color = SaffronPrimary)
                         }
                     }
                 }
@@ -247,7 +266,7 @@ fun AdminHomeScreen(
                 BodlaOutlinedButton(
                     text = if (isGujarati) "સાઇન આઉટ" else "Sign out",
                     onClick = onLogout,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)
                 )
             }
         }
@@ -257,20 +276,34 @@ fun AdminHomeScreen(
 @Composable
 private fun DashboardAction(
     title: String,
+    icon: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(52.dp),
-        shape = RoundedCornerShape(10.dp),
+        modifier = modifier.heightIn(min = 76.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(BorderStroke)
         )
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-            Text(text = title, style = BodlaCaption.copy(fontWeight = FontWeight.SemiBold), color = TextPrimary, maxLines = 1)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = icon, fontSize = 26.sp)
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = BodlaBody.copy(fontWeight = FontWeight.SemiBold),
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(text = "›", fontSize = 28.sp, color = SaffronPrimary)
         }
     }
 }
@@ -283,7 +316,7 @@ private fun DashboardMetric(
     accent: Boolean = false
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 112.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
         border = CardDefaults.outlinedCardBorder().copy(
@@ -294,8 +327,8 @@ private fun DashboardMetric(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(text = title, style = BodlaCaption, color = TextSecondary, maxLines = 2)
-            Text(text = value, style = BodlaPageTitle.copy(fontSize = 26.sp), color = if (accent) SaffronPrimary else TextPrimary)
+            Text(text = title, style = BodlaBody.copy(fontSize = 15.sp), color = TextSecondary, maxLines = 2)
+            Text(text = value, style = BodlaPageTitle.copy(fontSize = 30.sp), color = if (accent) SaffronPrimary else TextPrimary)
         }
     }
 }

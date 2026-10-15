@@ -1,87 +1,81 @@
 'use client';
 
-import React, { useState } from 'react';
-import { History, ShieldAlert } from 'lucide-react';
-import { AuditLog } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { History, LoaderCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+type AuditEntry = {
+  id: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  old_data: unknown;
+  new_data: unknown;
+  created_at: string;
+};
+
+function printable(value: unknown) {
+  if (value == null) return '—';
+  try { return JSON.stringify(value); } catch { return String(value); }
+}
 
 export default function AdminAuditLogsPage() {
-  const [logs] = useState<AuditLog[]>([
-    {
-      id: 'log_1',
-      action: 'ADMIN_APPROVED_OFFERING',
-      entity_type: 'OFFERING',
-      entity_id: 'off_1',
-      old_data: { status: 'PENDING_APPROVAL' },
-      new_data: { status: 'APPROVED' },
-      created_at: '2026-09-28 14:15:00'
-    },
-    {
-      id: 'log_2',
-      action: 'ADMIN_PUBLISHED_NOTICE',
-      entity_type: 'NOTICE',
-      entity_id: 'not_1',
-      old_data: { status: 'DRAFT' },
-      new_data: { status: 'PUBLISHED', is_pinned: true },
-      created_at: '2026-09-28 11:30:00'
-    },
-    {
-      id: 'log_3',
-      action: 'ADMIN_VERIFIED_BUSINESS',
-      entity_type: 'BUSINESS',
-      entity_id: 'biz_1',
-      old_data: { is_verified: false },
-      new_data: { is_verified: true, status: 'APPROVED' },
-      created_at: '2026-09-27 16:45:00'
-    },
-    {
-      id: 'log_4',
-      action: 'ADMIN_RESOLVED_COMPLAINT',
-      entity_type: 'COMPLAINT',
-      entity_id: 'comp_1',
-      old_data: { status: 'IN_PROGRESS' },
-      new_data: { status: 'RESOLVED', resolution_note: 'Completed' },
-      created_at: '2026-09-27 09:12:00'
-    }
-  ]);
+  const [logs, setLogs] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    void supabase
+      .from('audit_logs')
+      .select('id,action,entity_type,entity_id,old_data,new_data,created_at')
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(({ data, error: queryError }) => {
+        if (!active) return;
+        if (queryError) setError(queryError.message);
+        else setLogs((data ?? []) as AuditEntry[]);
+        setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-text font-gujarati flex items-center gap-2">
-          <History className="w-7 h-7 text-saffron" />
-          <span>ઓડિટ લોગ્સ (Immutable Administrative Audit Trail)</span>
+    <main className="mx-auto max-w-6xl space-y-6">
+      <header>
+        <h1 className="flex items-center gap-3 text-2xl font-bold text-brand-text sm:text-3xl">
+          <History aria-hidden="true" className="h-7 w-7 text-saffron" /> Audit logs
         </h1>
-        <p className="text-xs text-brand-muted mt-1">
-          Cryptographically recorded actions taken by administrators and moderators
-        </p>
-      </div>
+        <p className="mt-2 text-base text-brand-muted">Recent recorded changes made by village staff.</p>
+      </header>
 
-      <div className="bg-cream-surface border border-brand-border rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-left text-sm text-brand-text">
-          <thead className="bg-cream text-xs text-brand-muted uppercase border-b border-brand-border">
-            <tr>
-              <th className="py-3 px-4">ક્રિયા / Action</th>
-              <th className="py-3 px-4">પ્રકાર / Entity</th>
-              <th className="py-3 px-4">ફેરફાર / Changes</th>
-              <th className="py-3 px-4 text-right">સમય / Timestamp</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-brand-border font-mono text-xs">
-            {logs.map(log => (
-              <tr key={log.id} className="hover:bg-cream/40 transition">
-                <td className="py-3.5 px-4 font-bold text-saffron">{log.action}</td>
-                <td className="py-3.5 px-4 text-brand-text font-semibold">{log.entity_type}</td>
-                <td className="py-3.5 px-4 text-brand-muted">
-                  <span className="text-rose-600 font-semibold">{JSON.stringify(log.old_data)}</span>
-                  <span className="mx-2 text-stone-400">→</span>
-                  <span className="text-emerald-700 font-semibold">{JSON.stringify(log.new_data)}</span>
-                </td>
-                <td className="py-3.5 px-4 text-right text-brand-muted">{log.created_at}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-base text-rose-800">Could not load audit logs: {error}</p>}
+      {loading ? (
+        <p role="status" className="flex items-center gap-3 py-10 text-base text-brand-muted"><LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" /> Loading audit history…</p>
+      ) : logs.length === 0 ? (
+        <p className="rounded-2xl border border-brand-border bg-cream-surface p-6 text-base text-brand-muted">No audit entries have been recorded yet.</p>
+      ) : (
+        <ol aria-label="Audit history" className="space-y-3">
+          {logs.map((log) => (
+            <li key={log.id} className="rounded-2xl border border-brand-border bg-cream-surface p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <h2 className="break-words text-base font-bold text-brand-text">{log.action.replaceAll('_', ' ')}</h2>
+                <time className="shrink-0 text-sm text-brand-muted" dateTime={log.created_at}>{new Date(log.created_at).toLocaleString()}</time>
+              </div>
+              <p className="mt-2 text-sm text-brand-muted">{log.entity_type || 'Record'}{log.entity_id ? ` · ${log.entity_id}` : ''}</p>
+              {(log.old_data != null || log.new_data != null) && (
+                <details className="mt-3">
+                  <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-saffron">View changes</summary>
+                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-cream p-3 text-sm text-brand-text">Before: {printable(log.old_data)}</pre>
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-xl bg-cream p-3 text-sm text-brand-text">After: {printable(log.new_data)}</pre>
+                  </div>
+                </details>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </main>
   );
 }
