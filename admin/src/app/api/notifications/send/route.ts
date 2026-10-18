@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getFirebaseAdminApp, getMessaging } from '@/lib/firebaseAdmin';
+import { isNotificationValidationFailure, readNotificationJson, validateNotificationInput } from '@/lib/notificationValidation';
 import type { SendResponse } from 'firebase-admin/messaging';
 
 export async function POST(request: NextRequest) {
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
       .from('profiles')
       .select('id')
       .eq('auth_user_id', user.id)
+      .eq('status', 'ACTIVE')
       .maybeSingle();
     if (profileError || !profile) return NextResponse.json({ error: 'Staff profile was not found.' }, { status: 403 });
 
@@ -57,38 +59,16 @@ export async function POST(request: NextRequest) {
       if (!grant) return NextResponse.json({ error: 'Notification feature access is required.' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { target = 'topic' } = body;
+    const bodyResult = await readNotificationJson(request);
+    if (isNotificationValidationFailure(bodyResult)) {
+      return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+    }
+    const body = bodyResult;
+    const validated = validateNotificationInput(body);
+    if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: validated.status });
+    const { target, title_gu, title_en, body_gu, body_en, type, reference_id } = validated.value;
     if (!isStaff && target === 'tokens') {
       return NextResponse.json({ error: 'Only staff can send direct token notifications.' }, { status: 403 });
-    }
-
-    const {
-      title_gu,
-      title_en,
-      body_gu,
-      body_en,
-      type = 'NOTICE',
-      reference_id,
-    } = body;
-
-    const supportedTypes = ['NOTICE', 'EVENT', 'COMPLAINT', 'OFFERING', 'BUSINESS', 'JOB', 'SYSTEM_BROADCAST', 'BID_CALL', 'BID_APPROVED'];
-    if (typeof type !== 'string' || !supportedTypes.includes(type)) {
-      return NextResponse.json({ error: 'Unsupported notification type.' }, { status: 400 });
-    }
-    if (target !== 'topic' && target !== 'tokens') {
-      return NextResponse.json({ error: 'Unsupported notification target.' }, { status: 400 });
-    }
-
-    if (typeof title_gu !== 'string' || !title_gu.trim() || typeof body_gu !== 'string' || !body_gu.trim()) {
-      return NextResponse.json(
-        { error: 'Title and Body in Gujarati are required.' },
-        { status: 400 }
-      );
-    }
-
-    if (reference_id !== undefined && (typeof reference_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(reference_id))) {
-      return NextResponse.json({ error: 'Invalid notification reference.' }, { status: 400 });
     }
 
     // Save to the in-app history before contacting Firebase so history survives push outages.
@@ -207,10 +187,10 @@ export async function POST(request: NextRequest) {
       notification: notification || null,
       fcm: fcmResult,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error dispatching notification:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to dispatch notification.' },
+      { error: 'Failed to dispatch notification.' },
       { status: 500 }
     );
   }

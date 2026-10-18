@@ -2,15 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --font-plus-jakarta: var(--font-inter);
+}
+
 @layer base {
   :root {
     color-scheme: light;
-    --bodla-canvas: #fff8e7;
-    --bodla-surface: #fffcf5;
-    --bodla-text: #292524;
-    --bodla-muted: #625b53;
-    --bodla-accent: #173b78;
-    --bodla-border: #e7e5e4;
+    --bodla-canvas: #f8fafc;
+    --bodla-surface: #ffffff;
+    --bodla-text: #0f172a;
+    --bodla-muted: #64748b;
+    --bodla-accent: #0f2744;
+    --bodla-gold: #d97706;
+    --bodla-border: #e2e8f0;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --bodla-canvas: #090e17;
+    --bodla-surface: #0f172a;
+    --bodla-text: #f1f5f9;
+    --bodla-muted: #94a3b8;
+    --bodla-accent: #38bdf8;
+    --bodla-gold: #fbbf24;
+    --bodla-border: #1e293b;
   }
 
   html {
@@ -18,10 +34,17 @@
   }
 
   body {
+    font-family: var(--font-inter), var(--font-anek-gujarati), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background-color: var(--bodla-canvas);
     color: var(--bodla-text);
-    font-size: 1rem;
+    font-size: 0.9375rem;
     line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-plus-jakarta), var(--font-anek-gujarati), sans-serif;
+    letter-spacing: -0.015em;
   }
 
   button,
@@ -31,77 +54,304 @@
     font: inherit;
   }
 
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
   button {
-    min-height: 2.75rem;
     cursor: pointer;
   }
 
-  input,
-  select,
-  textarea {
-    min-height: 3rem;
-    border-radius: 0.75rem;
-  }
-
   :focus-visible {
-    outline: 3px solid var(--bodla-accent);
-    outline-offset: 3px;
+    outline: 2px solid var(--bodla-accent);
+    outline-offset: 2px;
   }
 
   ::selection {
     background: #fde68a;
-    color: var(--bodla-text);
+    color: #0f172a;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Executive Professional Document Printing & Export Styling
+   ───────────────────────────────────────────────────────────── */
+#admin-print-root {
+  display: none;
+}
+
+/* Print letterhead & document styles */
+.admin-document {
+  color: #0f172a;
+  font-family: var(--font-inter), var(--font-anek-gujarati), sans-serif;
+  line-height: 1.45;
+  background: #ffffff;
+}
+
+.document-heading {
+  border-bottom: 2.5px solid #0f2744;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
 }
 
 @media print {
-  @page { margin: 12mm; }
-  body * { visibility: hidden !important; }
-  .no-print { display: none !important; }
-  html[data-print-all='true'] [data-print-area],
-  html[data-print-all='true'] [data-print-area] * { visibility: visible !important; }
-  html[data-print-all='true'] [data-print-area] {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+  @page {
+    margin: 5mm 6mm;
+    size: A4 portrait;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 7pt;
+      color: #64748b;
+    }
+  }
+
+  @page landscape {
+    margin: 5mm 6mm;
+    size: A4 landscape;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 7pt;
+      color: #64748b;
+    }
+  }
+
+  body > *:not(#admin-print-root) {
+    display: none !important;
+  }
+
+  #admin-print-root {
     display: block !important;
     width: 100% !important;
-    max-width: none !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-family: var(--font-inter), var(--font-anek-gujarati), sans-serif !important;
+    font-size: 8pt !important;
+    line-height: 1.25 !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] {
+    page: landscape;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] .document-heading {
+    border-bottom: 2pt solid #f58216 !important;
+    padding-bottom: 3mm !important;
+    margin-bottom: 4mm !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] .document-heading > div:first-child > div:first-child {
+    font-size: 17pt !important;
+    color: #123d6a !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] .document-heading > div:first-child > div:nth-child(2) {
+    font-size: 11pt !important;
+    color: #123d6a !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] .document-heading > div:first-child > div:nth-child(3) {
+    font-size: 14pt !important;
+    color: #f58216 !important;
+    margin-top: 2mm !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] .document-heading > div:last-child {
+    font-size: 10pt !important;
+    color: #123d6a !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] table thead th {
+    font-size: 10pt !important;
+    padding: 3mm 4mm !important;
+    background-color: #123d6a !important;
+    border: 0.5pt solid #31577d !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] table {
+    display: table !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    margin: 0 !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] table th,
+  #admin-print-root[data-print-orientation='landscape'] table td {
+    font-size: 10pt !important;
+    padding: 3.5mm 4mm !important;
+    border-bottom: 0.5pt solid #d6e0ea !important;
+  }
+
+  #admin-print-root[data-print-orientation='landscape'] table colgroup col:nth-child(1) { width: 24% !important; }
+  #admin-print-root[data-print-orientation='landscape'] table colgroup col:nth-child(2) { width: 19% !important; }
+  #admin-print-root[data-print-orientation='landscape'] table colgroup col:nth-child(3) { width: 17% !important; }
+  #admin-print-root[data-print-orientation='landscape'] table colgroup col:nth-child(4) { width: 21% !important; }
+  #admin-print-root[data-print-orientation='landscape'] table colgroup col:nth-child(5) { width: 19% !important; }
+
+  #admin-print-root * {
+    box-sizing: border-box;
+    max-width: 100% !important;
     min-width: 0 !important;
     overflow: visible !important;
-    background: white !important;
-    color: black !important;
+    box-shadow: none !important;
   }
-  html[data-print-all='true'] [data-print-area] table { width: 100% !important; min-width: 0 !important; border-collapse: collapse !important; }
-  html[data-print-all='true'] [data-print-area] tr { break-inside: avoid; }
-  html[data-print-all='true'] [data-print-area] button,
-  html[data-print-all='true'] [data-print-area] select { display: none !important; }
-  html[data-print-all='true'] [data-print-area] th,
-  html[data-print-all='true'] [data-print-area] td { color: black !important; border-color: #aaa !important; }
-  html[data-print-language='gu'] [data-print-lang='en'],
-  html[data-print-language='en'] [data-print-lang='gu'] { display: none !important; }
-  html[data-print-language='both'] [data-print-lang] { display: initial !important; }
-  main, section, article { break-inside: avoid; }
-  a { color: inherit !important; text-decoration: none !important; }
+
+  #admin-print-root [data-print-area] {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    break-inside: auto;
+  }
+
+  #admin-print-root table {
+    display: table !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+    margin-top: 2px;
+  }
+
+  #admin-print-root thead {
+    display: table-header-group !important;
+    background: #0f2744 !important;
+    color: #ffffff !important;
+  }
+
+  #admin-print-root thead th {
+    padding: 1.2mm 2mm !important;
+    color: #ffffff !important;
+    background-color: #0f2744 !important;
+    font-weight: 700 !important;
+    font-size: 7.5pt !important;
+    border-bottom: 1pt solid #d97706 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.03em !important;
+  }
+
+  #admin-print-root tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #admin-print-root tbody tr:nth-child(even) {
+    background-color: #f8fafc !important;
+  }
+
+  #admin-print-root th,
+  #admin-print-root td {
+    padding: 1.5mm 2.5mm !important;
+    border-bottom: 0.4pt solid #cbd5e1 !important;
+    white-space: normal !important;
+    font-size: 7.5pt !important;
+    color: #0f172a !important;
+    vertical-align: middle !important;
+    line-height: 1.25 !important;
+    background: transparent !important;
+  }
+
+  /* Professional text formatting: Remove badge boxes, outlines, and chip borders */
+  #admin-print-root td span,
+  #admin-print-root td div,
+  #admin-print-root td .border,
+  #admin-print-root [data-print-area] span {
+    border: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: #0f172a !important;
+    font-weight: 500 !important;
+    display: inline !important;
+  }
+
+  /* Role chips: separate with commas in print view instead of boxed chips */
+  #admin-print-root td .flex-wrap {
+    display: inline !important;
+    gap: 0 !important;
+  }
+
+  #admin-print-root td .flex-wrap > span:not(:last-child)::after {
+    content: ", ";
+    color: #475569;
+  }
+
+  /* Status text in print */
+  #admin-print-root td span[class*="emerald"] {
+    color: #047857 !important;
+    font-weight: 600 !important;
+  }
+
+  #admin-print-root td span[class*="amber"] {
+    color: #b45309 !important;
+    font-weight: 600 !important;
+  }
+
+  #admin-print-root td span[class*="rose"] {
+    color: #be123c !important;
+    font-weight: 600 !important;
+  }
+
+  #admin-print-root td span[data-print-status] {
+    display: inline-block !important;
+    padding: 1.5mm 4mm !important;
+    border: none !important;
+    border-radius: 999px !important;
+    background: #dcfce7 !important;
+    color: #07804b !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+  }
+
+  #admin-print-root td span[data-print-status] > span {
+    display: none !important;
+  }
+
+  #admin-print-root .no-print,
+  #admin-print-root button,
+  #admin-print-root input,
+  #admin-print-root select {
+    display: none !important;
+  }
+
+  html[data-print-language='gu'] #admin-print-root [data-print-lang='en'],
+  html[data-print-language='en'] #admin-print-root [data-print-lang='gu'] {
+    display: none !important;
+  }
+
+  #admin-print-root a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
 }
 
-/* Custom scrollbars matching warm aesthetic */
+/* Custom sleek scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #FFF8E7;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #E7E5E4;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #173B78;
+  background: #0f2744;
 }
 
 @media (prefers-reduced-motion: reduce) {

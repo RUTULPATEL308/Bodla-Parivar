@@ -11,6 +11,7 @@ import { Offering, OfferingBid } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAdminLanguage } from '@/components/AdminLanguageContext';
 import PrintControls from '@/components/PrintControls';
+import { GujlishInput, GujlishTextarea } from '@/components/GujlishInput';
 import { translateText, type TranslationLanguage } from '@/lib/translation';
 
 // ---------------------------------------------------------------------------
@@ -167,6 +168,12 @@ export default function AdminOfferingsPage() {
     let bidsConnected = false;
 
     async function refreshSnapshot() {
+      if (!isSupabaseConfigured) {
+        setIsLiveConnected(false);
+        setRealtimeUnavailable(true);
+        setRealtimeError('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+        return;
+      }
       const eventVersionAtStart = realtimeEventVersionRef.current;
       const [offeringsResult, bidsResult, winnerResult] = await Promise.all([
         supabase.from('offerings').select('*').order('created_at', { ascending: false }),
@@ -183,7 +190,7 @@ export default function AdminOfferingsPage() {
 
       const offeringsData = (offeringsResult.data ?? []) as Offering[];
       const bidsData = (bidsResult.data ?? []) as OfferingBid[];
-      const winnerRows = ((winnerResult.data ?? []) as Array<{ offering_id: string; bidder_name: string | null; profile_full_name: string | null }>) ?? [];
+      const winnerRows = (winnerResult.data ?? []) as Array<{ offering_id: string; bidder_name: string | null; profile_full_name: string | null }>;
       const winnerMap = new Map<string, { winner_profile_name: string | null }>();
       winnerRows.forEach(row => {
         winnerMap.set(row.offering_id, {
@@ -218,7 +225,12 @@ export default function AdminOfferingsPage() {
     refreshSnapshotRef.current = refreshSnapshot;
 
     async function loadRealtimeData() {
-      if (!isSupabaseConfigured) { setIsLiveConnected(false); return; }
+      if (!isSupabaseConfigured) {
+        setIsLiveConnected(false);
+        setRealtimeUnavailable(true);
+        setRealtimeError('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+        return;
+      }
       setIsLoading(true);
       try {
         await refreshSnapshot();
@@ -257,7 +269,9 @@ export default function AdminOfferingsPage() {
             realtimeEventVersionRef.current += 1;
             if (payload.eventType === 'INSERT') {
               const newBid = payload.new as OfferingBid;
-              resetBidCallCount(newBid.offering_id);
+              // Refresh server-derived offering fields and the complete bid list as
+              // well as applying the incoming row, so the admin view stays current.
+              void refreshSnapshotRef.current?.();
               // Find the offering title from current state
               const title = offeringsRef.current.find(o => o.id === newBid.offering_id)?.title_en;
               const liveEntry: LiveBidEntry = { ...newBid, isNew: true, offeringTitle: title };
@@ -278,6 +292,7 @@ export default function AdminOfferingsPage() {
                 const existing = prev[updated.offering_id] || [];
                 return { ...prev, [updated.offering_id]: existing.map(b => b.id === updated.id ? updated : b) };
               });
+              void refreshSnapshotRef.current?.();
             } else if (payload.eventType === 'DELETE') {
               const deletedId = (payload.old as Pick<OfferingBid, 'id'>).id;
               setBids(prev => Object.fromEntries(
@@ -287,6 +302,7 @@ export default function AdminOfferingsPage() {
                 ])
               ));
               setRecentLiveBids(prev => prev.filter(bid => bid.id !== deletedId));
+              void refreshSnapshotRef.current?.();
             }
           })
           .subscribe(status => {
@@ -303,6 +319,8 @@ export default function AdminOfferingsPage() {
 
       } catch (err) {
         console.error('Realtime error:', err);
+        setRealtimeUnavailable(true);
+        setRealtimeError(err instanceof Error ? err.message : 'Could not connect to the offering feed.');
       } finally {
         setIsLoading(false);
       }
@@ -326,22 +344,39 @@ export default function AdminOfferingsPage() {
   // Actions
   // -------------------------------------------------------------------------
   const handleStatusChange = async (id: string, newStatus: Offering['status']) => {
-    setOfferings(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
-    if (isSupabaseConfigured) {
-      await supabase.from('offerings').update({ status: newStatus }).eq('id', id);
+    if (!isSupabaseConfigured) {
+      alert('Offering status was not saved because Supabase is not configured.');
+      return;
     }
+    const { data, error } = await supabase.from('offerings').update({ status: newStatus }).eq('id', id).select('id').maybeSingle();
+    if (error) {
+      alert('Offering status could not be saved: ' + error.message);
+      return;
+    }
+    if (!data) {
+      alert('No offering was updated. Check your access and refresh the feed.');
+      return;
+    }
+    setOfferings(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
   };
 
   const handleBidAction = async (
     bidId: string, offeringId: string, newStatus: OfferingBid['status']
   ) => {
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.from('offering_bids').update({ status: newStatus }).eq('id', bidId);
-      if (error) {
-        alert('Bid status could not be saved: ' + error.message);
-        return;
-      }
-      if (newStatus === 'APPROVED') {
+    if (!isSupabaseConfigured) {
+      alert('Bid status was not saved because Supabase is not configured.');
+      return;
+    }
+    const { data, error } = await supabase.from('offering_bids').update({ status: newStatus }).eq('id', bidId).select('id').maybeSingle();
+    if (error) {
+      alert('Bid status could not be saved: ' + error.message);
+      return;
+    }
+    if (!data) {
+      alert('No bid was updated. Check your access and refresh the feed.');
+      return;
+    }
+    if (newStatus === 'APPROVED') {
         const approvedBid = bids[offeringId]?.find(b => b.id === bidId);
         const offering = offerings.find(o => o.id === offeringId);
         if (approvedBid) {
@@ -358,7 +393,6 @@ export default function AdminOfferingsPage() {
           });
           if (notificationError) alert('Bid was approved, but the notification could not be sent: ' + notificationError.message);
         }
-      }
     }
     setBids(prev => {
       const existing = prev[offeringId] || [];
@@ -368,7 +402,10 @@ export default function AdminOfferingsPage() {
 
 
   const handleDeleteBid = async (bidId: string, offeringId: string) => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      alert('Bid deletion is unavailable because Supabase is not configured.');
+      return;
+    }
     if (!window.confirm('Delete this bid permanently?')) return;
     
     // Optimistically calculate new top bid and update offerings state
@@ -432,7 +469,10 @@ export default function AdminOfferingsPage() {
   };
 
   const handleDeleteOffering = async (offering: Offering) => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      alert('Offering deletion is unavailable because Supabase is not configured.');
+      return;
+    }
     if (!window.confirm(`Delete "${offering.title_en}" and all of its bids permanently?`)) return;
 
     const { count, error } = await supabase
@@ -461,6 +501,10 @@ export default function AdminOfferingsPage() {
   const handleAddInPersonBid = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedOffering) return;
+    if (!isSupabaseConfigured) {
+      alert('The bid was not saved because Supabase is not configured.');
+      return;
+    }
     const amount = Number(manualBidAmount);
     if (!manualBidderName.trim() || !Number.isFinite(amount) || amount <= 0) return;
 
@@ -558,6 +602,10 @@ export default function AdminOfferingsPage() {
   const handleCreateOffering = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title_gu && !formData.title_en) return;
+    if (!isSupabaseConfigured) {
+      alert('The offering was not saved because Supabase is not configured.');
+      return;
+    }
     if (isSupabaseConfigured) {
       const { error } = await supabase.from('offerings').insert([{
         title_gu:       formData.title_gu || formData.title_en,
@@ -659,13 +707,13 @@ export default function AdminOfferingsPage() {
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden">
+    <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-hidden pb-6">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="no-print flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="no-print flex flex-col rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-7 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-brand-text font-gujarati flex items-center gap-2">
-              <HeartHandshake className="w-6 h-6 text-saffron" />
+            <h1 className="text-2xl font-bold text-brand-text font-gujarati flex items-center gap-2 sm:text-3xl">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy-50"><HeartHandshake className="w-6 h-6 text-navy-700" /></span>
               <span>ચઢાવો – લાઇવ બોલી (Live Bidding)</span>
             </h1>
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${
@@ -674,11 +722,13 @@ export default function AdminOfferingsPage() {
                 : 'bg-amber-50 text-amber-800 border-amber-300'
             }`}>
               <Radio className={`w-3.5 h-3.5 ${isLiveConnected ? 'animate-pulse text-emerald-600' : 'text-amber-600'}`} />
-              {isLiveConnected ? 'LIVE' : 'Connecting…'}
+              {isLiveConnected ? 'LIVE' : realtimeUnavailable ? (isSupabaseConfigured ? 'POLLING' : 'OFFLINE') : 'Connecting…'}
             </span>
           </div>
-          <p className="text-xs text-brand-muted mt-1">
-            {isLiveConnected
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-brand-muted">
+            {!isSupabaseConfigured
+              ? 'Database not configured'
+              : isLiveConnected
               ? 'Realtime connected'
               : realtimeUnavailable
                 ? `Realtime unavailable · polling every 5s${lastSnapshotAt ? ` · Snapshot ${lastSnapshotAt}` : ''}`
@@ -689,7 +739,7 @@ export default function AdminOfferingsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <PrintControls />
+          <PrintControls orientation="landscape" />
           <button
             type="button"
             onClick={() => void refreshSnapshotRef.current?.()}
@@ -708,15 +758,15 @@ export default function AdminOfferingsPage() {
       </div>
 
       {/* ── Stat Cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           { label: 'Active Offerings', labelGu: 'સક્રિય ચઢાવો', value: activeCount, icon: <Activity className="w-5 h-5 text-emerald-600" />, color: 'bg-emerald-50 border-emerald-200' },
           { label: 'Total Bids', labelGu: 'કુલ બોલીઓ', value: totalBidsCount, icon: <Gavel className="w-5 h-5 text-saffron" />, color: 'bg-amber-50 border-amber-200' },
           { label: 'Pending Review', labelGu: 'સમીક્ષા બાકી', value: pendingBidsCount, icon: <Hourglass className="w-5 h-5 text-rose-500" />, color: 'bg-rose-50 border-rose-200' },
           { label: 'Live Feed', labelGu: 'તાજા ફેરફારો', value: recentLiveBids.length, icon: <Bell className="w-5 h-5 text-purple-600" />, color: 'bg-purple-50 border-purple-200' },
         ].map(stat => (
-          <div key={stat.label} className={`${stat.color} border rounded-lg p-2.5 flex items-center gap-2.5`}>
-            <div className="p-1.5 bg-white rounded-md shadow-sm">{stat.icon}</div>
+          <div key={stat.label} className={`${stat.color} border rounded-2xl p-4 flex items-center gap-3 shadow-sm`}>
+            <div className="p-2.5 bg-white rounded-xl shadow-sm">{stat.icon}</div>
             <div>
               <div className="text-xl font-bold text-brand-text">{stat.value}</div>
               <div className="text-[11px] text-brand-muted font-gujarati leading-tight">{stat.labelGu}</div>
@@ -733,7 +783,7 @@ export default function AdminOfferingsPage() {
       )}
 
       {/* ── Search + Filter ─────────────────────────────────────────────── */}
-      <div className="min-w-0 bg-cream-surface border border-brand-border rounded-lg p-2.5 flex flex-col md:flex-row items-center gap-2">
+      <div className="min-w-0 bg-white border border-slate-200/80 rounded-2xl p-3 flex flex-col md:flex-row md:items-center gap-3 shadow-sm dark:bg-slate-900 dark:border-slate-800">
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 text-brand-muted absolute left-3 top-2.5" />
           <input
@@ -741,7 +791,7 @@ export default function AdminOfferingsPage() {
             placeholder="ચઢાવો શોધો / Search offerings..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
           />
         </div>
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
@@ -919,7 +969,7 @@ export default function AdminOfferingsPage() {
             const pending = offeringBids.filter(bid => bid.status === 'PENDING').length;
             const topBid = offeringBids.length > 0 ? Math.max(...offeringBids.map(bid => bid.amount)) : null;
             return (
-              <article key={item.id} className="min-w-0 space-y-2 border border-brand-border bg-white p-2.5">
+          <article key={item.id} className="min-w-0 space-y-4 rounded-2xl border border-brand-border bg-white p-4 shadow-sm">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="break-words text-sm font-semibold text-brand-text">{item.title_gu}</h2>
@@ -1267,23 +1317,12 @@ export default function AdminOfferingsPage() {
 
             <form onSubmit={handleCreateOffering} className="space-y-3.5 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-brand-text mb-1">ચઢાવાનું નામ (ગુજ.) *</label>
-                <input type="text" required
-                  placeholder="શ્રી રામ મંદિર મહાઆરતી ચઢાવો"
+                <GujlishInput
+                  label="ચઢાવાનું નામ (Offering Title) *"
+                  required
+                  placeholder="અહીં નામ ટાઇપ કરો (દા.ત. shri ram aarti chadhava)..."
                   value={formData.title_gu}
-                  onChange={e => setFormData({ ...formData, title_gu: e.target.value })}
-                  onBlur={() => { if (!formData.title_en.trim()) void translateOfferingField('title_gu', 'title_en', 'gu'); }}
-                  className="w-full px-3 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-brand-text mb-1">Title (English)</label>
-                <input type="text"
-                  placeholder="Shri Ram Temple Maha Aarti Offering"
-                  value={formData.title_en}
-                  onChange={e => setFormData({ ...formData, title_en: e.target.value })}
-                  onBlur={() => { if (!formData.title_gu.trim()) void translateOfferingField('title_en', 'title_gu', 'en'); }}
-                  className="w-full px-3 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
+                  onValueChange={val => setFormData({ ...formData, title_gu: val, title_en: val })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1307,21 +1346,20 @@ export default function AdminOfferingsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-brand-text mb-1">Location (ગુજ.)</label>
-                <input type="text" placeholder="બોદલા મંદિર સંકુલ"
+                <GujlishInput
+                  label="Location (ગુજ.)"
+                  placeholder="ગુજલિશમાં લખો (દા.ત. bodla mandir sankul)..."
                   value={formData.location_gu}
-                  onChange={e => setFormData({ ...formData, location_gu: e.target.value })}
-                  onBlur={() => { if (!formData.location_en.trim()) void translateOfferingField('location_gu', 'location_en', 'gu'); }}
-                  className="w-full px-3 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
+                  onValueChange={val => setFormData({ ...formData, location_gu: val })}
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-brand-text mb-1">Description</label>
-                <textarea rows={2} placeholder="ચઢાવાની વિગતો…"
+                <GujlishTextarea
+                  label="Description (ગુજ.)"
+                  rows={2}
+                  placeholder="ચઢાવાની વિગતો ગુજલિશમાં લખો..."
                   value={formData.description_gu}
-                  onChange={e => setFormData({ ...formData, description_gu: e.target.value })}
-                  onBlur={() => { if (!formData.description_en.trim()) void translateOfferingField('description_gu', 'description_en', 'gu'); }}
-                  className="w-full px-3 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
+                  onValueChange={val => setFormData({ ...formData, description_gu: val })}
                 />
               </div>
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-brand-border">

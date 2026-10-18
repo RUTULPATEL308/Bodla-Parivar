@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
@@ -7,6 +7,7 @@ import { Notice } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { translateText } from '@/lib/translation';
 import PrintControls from '@/components/PrintControls';
+import { GujlishInput, GujlishTextarea } from '@/components/GujlishInput';
 
 const MAX_MEDIA_SIZE = 100 * 1024 * 1024;
 const MEDIA_ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -144,11 +145,11 @@ export default function AdminNoticesPage() {
     event.preventDefault();
     setError('');
     if (!titleGu.trim() || !bodyGu.trim()) {
-      setError('àª—à«àªœàª°àª¾àª¤à«€ àª¶à«€àª°à«àª·àª• àª…àª¨à«‡ àª¸àª‚àª¦à«‡àª¶ àªœàª°à«‚àª°à«€ àª›à«‡.');
+      setError('ગુજરાતી શીર્ષક અને સંદેશ જરૂરી છે.');
       return;
     }
     if (media && media.size > MAX_MEDIA_SIZE) {
-      setError('àª«àª¾àª‡àª² 100 MB àª•àª°àª¤àª¾àª‚ àª¨àª¾àª¨à«€ àª¹à«‹àªµà«€ àªœà«‹àªˆàª.');
+      setError('ફાઇલ 100 MB કરતાં નાની હોવી જોઈએ.');
       return;
     }
 
@@ -227,14 +228,14 @@ export default function AdminNoticesPage() {
       await loadNotices();
     } catch (submitError) {
       if (uploadedPath) await supabase.storage.from('notices').remove([uploadedPath]);
-      setError(submitError instanceof Error ? submitError.message : 'àª¸à«‚àªšàª¨àª¾ àªªà«àª°àª•àª¾àª¶àª¿àª¤ àª¥àªˆ àª¶àª•à«€ àª¨àª¥à«€.');
+      setError(submitError instanceof Error ? submitError.message : 'સૂચના પ્રકાશિત થઈ શકી નથી.');
     } finally {
       setSaving(false);
     }
   }
 
   async function deleteNotice(notice: Notice) {
-    if (!window.confirm(`Permanently delete â€œ${notice.title_en || notice.title_gu}â€ and its uploaded media?`)) return;
+    if (!window.confirm(`Permanently delete “${notice.title_en || notice.title_gu}” and its uploaded media?`)) return;
     setError('');
     const { data: deletedRow, error: deleteError } = await supabase
       .from('notices')
@@ -266,7 +267,7 @@ export default function AdminNoticesPage() {
     await loadNotices();
   }
 
-  const toolbarButton = (label: string, marker: string, icon: React.ReactNode, input: React.RefObject<HTMLTextAreaElement>, value: string, setValue: (value: string) => void) => (
+  const toolbarButton = (label: string, marker: string, icon: React.ReactNode, input: React.RefObject<HTMLTextAreaElement | null>, value: string, setValue: (value: string) => void) => (
     <button
       key={label}
       type="button"
@@ -285,7 +286,7 @@ export default function AdminNoticesPage() {
         <div>
           <h1 className="flex items-center gap-2 font-gujarati text-2xl font-bold text-brand-text">
             <Bell className="h-7 w-7 text-saffron" />
-            <span>àª—à«àª°àª¾àª® àª¸à«‚àªšàª¨àª¾àª“ (Notices)</span>
+            <span>ગ્રામ સૂચનાઓ (Notices)</span>
           </h1>
           <p className="mt-1 text-sm text-brand-muted">Publish community updates with photos, videos, documents, and formatted text.</p>
         </div>
@@ -295,7 +296,7 @@ export default function AdminNoticesPage() {
           className="inline-flex items-center justify-center gap-2 bg-saffron px-4 py-2.5 text-sm font-semibold text-white hover:bg-saffron-dark"
         >
           {showComposer ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showComposer ? 'àª¬àª‚àª§ àª•àª°à«‹' : 'àª¨àªµà«€ àªªà«‹àª¸à«àªŸ'}
+          {showComposer ? 'બંધ કરો' : 'નવી પોસ્ટ'}
         </button></div>
       </header>
 
@@ -303,48 +304,40 @@ export default function AdminNoticesPage() {
 
       {showComposer && (
         <form onSubmit={handleSubmit} className="space-y-5 border border-brand-border bg-cream-surface p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1 text-sm font-semibold text-brand-text">
-              àª—à«àªœàª°àª¾àª¤à«€ àª¶à«€àª°à«àª·àª• *
-              <input required value={titleGu} onChange={(event) => setTitleGu(event.target.value)} className="w-full border border-brand-border bg-white px-3 py-2 font-normal outline-none focus:border-saffron" />
-            </label>
-            <label className="space-y-1 text-sm font-semibold text-brand-text">
-              English title
-              <input value={titleEn} onChange={(event) => setTitleEn(event.target.value)} onBlur={() => void translateTitleToGujarati()} className="w-full border border-brand-border bg-white px-3 py-2 font-normal outline-none focus:border-saffron" />
-              <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => void translateTitleToGujarati()} disabled={translating || !titleEn.trim()} className="mt-1 inline-flex items-center gap-1.5 rounded border border-brand-border px-2 py-1 text-xs font-semibold disabled:opacity-50"><Languages className="h-3.5 w-3.5" /> Translate title to Gujarati</button>
-            </label>
-          </div>
+          <div className="space-y-4">
+            <GujlishInput
+              label="સૂચનાનું શીર્ષક (Notice Title)"
+              value={titleGu}
+              onValueChange={setTitleGu}
+              placeholder="અહીં શીર્ષક ટાઇપ કરો (દા.ત. navratri mahotsav aayojan લખીને Space દબાવો)..."
+              required
+            />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1 text-sm font-semibold text-brand-text">
-              àª—à«àªœàª°àª¾àª¤à«€ àª¸àª‚àª¦à«‡àª¶ *
-              <div className="flex border border-brand-border bg-white">
-                {toolbarButton('Bold', '*', <Bold className="h-4 w-4" />, guInput, bodyGu, setBodyGu)}
-                {toolbarButton('Italic', '_', <Italic className="h-4 w-4" />, guInput, bodyGu, setBodyGu)}
-                {toolbarButton('Strikethrough', '~', <Strikethrough className="h-4 w-4" />, guInput, bodyGu, setBodyGu)}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">ફોર્મેટિંગ:</span>
+                <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                  {toolbarButton('Bold', '*', <Bold className="h-3.5 w-3.5" />, guInput, bodyGu, setBodyGu)}
+                  {toolbarButton('Italic', '_', <Italic className="h-3.5 w-3.5" />, guInput, bodyGu, setBodyGu)}
+                  {toolbarButton('Strikethrough', '~', <Strikethrough className="h-3.5 w-3.5" />, guInput, bodyGu, setBodyGu)}
+                </div>
               </div>
-              <textarea ref={guInput} required rows={6} value={bodyGu} onChange={(event) => setBodyGu(event.target.value)} placeholder="àª²àª–àª¾àª£ àªªàª¸àª‚àª¦ àª•àª°à«‹ àª…àª¨à«‡ àª‰àªªàª°àª¨àª¾ àª¬àªŸàª¨àª¥à«€ àª«à«‹àª°à«àª®à«‡àªŸ àª•àª°à«‹" className="w-full resize-y border border-brand-border bg-white px-3 py-2 font-normal outline-none focus:border-saffron" />
-            </label>
-            <label className="space-y-1 text-sm font-semibold text-brand-text">
-              English message
-              <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => void translateEnglishToGujarati()} disabled={translating || !bodyEn.trim()} className="mb-1 inline-flex items-center gap-1.5 rounded border border-brand-border px-2 py-1 text-xs font-semibold disabled:opacity-50">
-                {translating ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
-                {translating ? 'Translatingâ€¦' : 'Translate to Gujarati'}
-              </button>
-              <div className="flex border border-brand-border bg-white">
-                {toolbarButton('Bold', '*', <Bold className="h-4 w-4" />, enInput, bodyEn, setBodyEn)}
-                {toolbarButton('Italic', '_', <Italic className="h-4 w-4" />, enInput, bodyEn, setBodyEn)}
-                {toolbarButton('Strikethrough', '~', <Strikethrough className="h-4 w-4" />, enInput, bodyEn, setBodyEn)}
-              </div>
-              <textarea ref={enInput} rows={6} value={bodyEn} onChange={(event) => setBodyEn(event.target.value)} onBlur={() => void translateEnglishToGujarati()} placeholder="English message (Gujarati is translated when you leave this field)" className="w-full resize-y border border-brand-border bg-white px-3 py-2 font-normal outline-none focus:border-saffron" />
-            </label>
+              <GujlishTextarea
+                label="સૂચના સંદેશ (Notice Message)"
+                value={bodyGu}
+                onValueChange={setBodyGu}
+                rows={5}
+                placeholder="સંપૂર્ણ સંદેશ ગુજલિશમાં ટાઇપ કરો (દા.ત. badha bhaiyo ane baheno e hajar rahevu), Space આપતા જ ગુજરાતી થઈ જશે..."
+                required
+              />
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-brand-border pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">
               <label className="inline-flex cursor-pointer items-center gap-2 border border-brand-border bg-white px-3 py-2 text-sm font-medium text-brand-text hover:bg-cream">
                 <ImagePlus className="h-4 w-4 text-leaf" />
-                <span>{media ? media.name : 'àª®à«€àª¡àª¿àª¯àª¾ àªœà«‹àª¡à«‹'}</span>
+                <span>{media ? media.name : 'મીડિયા જોડો'}</span>
                 <input type="file" accept={MEDIA_ACCEPT} className="sr-only" onChange={async (event) => {
                   const selected = event.target.files?.[0];
                   if (!selected) return;
@@ -355,7 +348,7 @@ export default function AdminNoticesPage() {
                 }} />
               </label>
               {media && <button type="button" onClick={() => setMedia(null)} aria-label="Remove attachment" className="p-2 text-brand-muted hover:text-rose-700"><X className="h-4 w-4" /></button>}
-              <span className="text-xs text-brand-muted">{optimizing ? 'Optimizing imageâ€¦' : 'Image, video, PDF or Word document Â· max 100 MB. Large images are resized and optimized as WebP.'}</span>
+              <span className="text-xs text-brand-muted">{optimizing ? 'Optimizing image…' : 'Image, video, PDF or Word document · max 100 MB. Large images are resized and optimized as WebP.'}</span>
             </div>
             <label className="inline-flex items-center gap-2 text-sm text-brand-text">
               <input type="checkbox" checked={isPinned} onChange={(event) => setIsPinned(event.target.checked)} className="h-4 w-4 accent-amber-600" />
@@ -366,7 +359,7 @@ export default function AdminNoticesPage() {
           <div className="flex justify-end border-t border-brand-border pt-4">
             <button type="submit" disabled={saving} className="inline-flex items-center gap-2 bg-saffron px-5 py-2.5 text-sm font-semibold text-white hover:bg-saffron-dark disabled:cursor-wait disabled:opacity-60">
               {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
-              {saving ? 'àªªà«àª°àª•àª¾àª¶àª¿àª¤ àª¥àªˆ àª°àª¹à«àª¯à«àª‚ àª›à«‡â€¦' : 'àªªà«àª°àª•àª¾àª¶àª¿àª¤ àª•àª°à«‹'}
+              {saving ? 'પ્રકાશિત થઈ રહ્યું છે…' : 'પ્રકાશિત કરો'}
             </button>
           </div>
         </form>
@@ -374,11 +367,11 @@ export default function AdminNoticesPage() {
 
       <section data-print-area className="border-y border-brand-border">
         <div className="no-print flex items-center justify-between border-b border-brand-border py-3">
-          <h2 className="font-semibold text-brand-text">àªªà«àª°àª•àª¾àª¶àª¿àª¤ àª…àª¨à«‡ àª…àª—àª¾àª‰àª¨à«€ àª¸à«‚àªšàª¨àª¾àª“</h2>
+          <h2 className="font-semibold text-brand-text">પ્રકાશિત અને અગાઉની સૂચનાઓ</h2>
           <span className="text-xs text-brand-muted">{notices.length} total</span>
         </div>
-        {loading ? <p className="py-8 text-center text-sm text-brand-muted">Loading noticesâ€¦</p> : notices.length === 0 ? (
-          <p className="py-8 text-center text-sm text-brand-muted">àª¹àªœà« àª•à«‹àªˆ àª¸à«‚àªšàª¨àª¾ àª¨àª¥à«€.</p>
+        {loading ? <p className="py-8 text-center text-sm text-brand-muted">Loading notices…</p> : notices.length === 0 ? (
+          <p className="py-8 text-center text-sm text-brand-muted">હજુ કોઈ સૂચના નથી.</p>
         ) : (
           <ul className="divide-y divide-brand-border">
             {notices.map((notice) => (

@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.bodla.parivar.core.di.AppContainer
@@ -219,7 +220,11 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
         topBar = {
             TopAppBar(
                 title = { Text(if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri") },
-                navigationIcon = { TextButton(onClick = { if (selected != null) selected = null else onBack() }) { Text(if (lang == AppLanguage.GUJARATI) "પાછા" else "Back") } },
+                navigationIcon = {
+                    IconButton(onClick = { if (selected != null) selected = null else onBack() }) {
+                        Text("←", fontSize = 22.sp, color = TextPrimary)
+                    }
+                },
                 actions = {
                     if (canManage && adminView && selected == null) {
                         val guBookingReport = bookings.joinToString("\n\n") { booking ->
@@ -369,24 +374,40 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                     Card(colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (lang == AppLanguage.GUJARATI) option.titleGu else option.titleEn, style = BodlaCardTitle, color = TextPrimary)
-                            OutlinedTextField(customerName, { customerName = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "નામ" else "Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            com.bodla.parivar.core.ui.GujlishTextField(
+                                value = customerName,
+                                onValueChange = { customerName = it },
+                                label = { Text(if (lang == AppLanguage.GUJARATI) "નામ (ગુજલિશ / ગુજરાતી)" else "Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
                             option.formFields.forEach { field ->
                                 val label = if (lang == AppLanguage.GUJARATI) field.labelGu else field.labelEn
                                 val value = formValues[field.key].orEmpty()
-                                OutlinedTextField(
-                                    value = value,
-                                    onValueChange = { newValue -> formValues = formValues + (field.key to newValue) },
-                                    label = { Text(label + if (field.required) " *" else "") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = field.type != "NOTES",
-                                    minLines = if (field.type == "NOTES") 3 else 1,
-                                    keyboardOptions = KeyboardOptions(keyboardType = when (field.type) {
-                                        "PHONE" -> KeyboardType.Phone
-                                        "NUMBER" -> KeyboardType.Number
-                                        "AMOUNT" -> KeyboardType.Decimal
-                                        else -> KeyboardType.Text
-                                    })
-                                )
+                                if (field.type == "PHONE" || field.type == "NUMBER" || field.type == "AMOUNT") {
+                                    OutlinedTextField(
+                                        value = value,
+                                        onValueChange = { newValue -> formValues = formValues + (field.key to newValue) },
+                                        label = { Text(label + if (field.required) " *" else "") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = when (field.type) {
+                                            "PHONE" -> KeyboardType.Phone
+                                            "NUMBER" -> KeyboardType.Number
+                                            "AMOUNT" -> KeyboardType.Decimal
+                                            else -> KeyboardType.Text
+                                        })
+                                    )
+                                } else {
+                                    com.bodla.parivar.core.ui.GujlishTextField(
+                                        value = value,
+                                        onValueChange = { newValue -> formValues = formValues + (field.key to newValue) },
+                                        label = { Text(label + if (field.required) " *" else "") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = field.type != "NOTES",
+                                        minLines = if (field.type == "NOTES") 3 else 1
+                                    )
+                                }
                             }
                             if (option.cashOnly) Text(if (lang == AppLanguage.GUJARATI) "ચુકવણી રોકડમાં જ સ્વીકારવામાં આવશે." else "Payment is cash only.", style = BodlaCaption, color = SaffronPrimary)
                             Button(onClick = submitBooking, enabled = !submitting, modifier = Modifier.fillMaxWidth()) {

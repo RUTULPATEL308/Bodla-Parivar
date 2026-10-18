@@ -70,6 +70,7 @@ private fun formatNoticeText(value: String): AnnotatedString = buildAnnotatedStr
 fun NoticeListScreen(
     onNavigate: (Screen) -> Unit,
     notices: List<Notice> = emptyList(),
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
@@ -78,6 +79,13 @@ fun NoticeListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(text = Strings.navNotices(lang), style = BodlaPageTitle) },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Text(text = "←", fontSize = 22.sp, color = TextPrimary)
+                        }
+                    }
+                },
                 actions = {
                     PrintAction(title = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Notices",
                         content = notices.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.createdAt}" },

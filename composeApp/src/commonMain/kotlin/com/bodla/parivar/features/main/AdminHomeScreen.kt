@@ -81,8 +81,9 @@ fun AdminHomeScreen(
         if (isAdmin || canAccess("members")) add(Triple(if (isGujarati) "સભ્યો" else "My member access", "👤", Screen.AdminUsers))
         if (profile?.isStaff == true || canAccess("notices")) add(Triple(if (isGujarati) "સૂચનાઓ" else "Notices", "📢", Screen.Notices))
         if (profile?.isStaff == true || canAccess("offerings")) add(Triple(if (isGujarati) "ચઢાવો" else "Offerings", "🙏", Screen.Offerings))
-        if (isAdmin || isModerator || canAccess("offerings")) add(Triple(if (isGujarati) "ચઢાવો ઉમેરો" else "Add offering", "＋", Screen.AddOffering))
-        if (profile?.isStaff == true || canAccess("navratri")) add(Triple(if (isGujarati) "નવરાત્રી" else "Navratri", "✨", Screen.Navratri))
+        if (profile?.isStaff == true || canAccess("navratri")) {
+            add(Triple(if (isGujarati) "નવરાત્રી" else "Navratri", "✨", Screen.Navratri))
+        }
         if (profile?.isStaff == true || canAccess("complaints")) add(Triple(if (isGujarati) "ફરિયાદો" else "Complaints", "✍️", Screen.Complaints))
         if (profile?.isStaff == true || canAccess("emergency_contacts")) add(Triple(if (isGujarati) "તાત્કાલિક સંપર્ક" else "Emergency contacts", "🚨", Screen.Emergency))
         if (profile?.isStaff == true || canAccess("village_history")) add(Triple(if (isGujarati) "ગામનો ઇતિહાસ" else "Village history", "📖", Screen.VillageHistory))
@@ -137,12 +138,12 @@ fun AdminHomeScreen(
             }
 
             item {
-                OutlinedTextField(
+                com.bodla.parivar.core.ui.GujlishTextField(
                     value = dashboardSearch,
                     onValueChange = { dashboardSearch = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text(if (isGujarati) "સુવિધા શોધો" else "Search dashboard features") },
+                    placeholder = { Text(if (isGujarati) "સુવિધા શોધો (ગુજલિશ / ગુજરાતી)" else "Search dashboard features") },
                     shape = RoundedCornerShape(12.dp)
                 )
             }

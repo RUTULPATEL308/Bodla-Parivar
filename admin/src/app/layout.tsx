@@ -5,16 +5,16 @@ import AdminShell from '@/components/AdminShell';
 
 const gujaratiFont = localFont({
   src: '../../public/fonts/AnekGujarati-Gujarati.woff2',
-  weight: '400 700',
+  weight: '400 600 700',
   display: 'swap',
   variable: '--font-anek-gujarati',
 });
 
-const englishFont = localFont({
+const latinFont = localFont({
   src: '../../public/fonts/DMSans-Latin.woff2',
-  weight: '400 700',
   display: 'swap',
-  variable: '--font-dm-sans',
+  variable: '--font-inter',
+  weight: '400 500 600 700 800',
 });
 
 export const metadata: Metadata = {
@@ -28,8 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="gu">
-      <body className={`${gujaratiFont.variable} ${englishFont.variable} bg-cream min-h-screen text-brand-text flex font-english antialiased`}>
+    <html lang="gu" className={`${gujaratiFont.variable} ${latinFont.variable}`}>
+      <body className="bg-slate-50 min-h-screen text-slate-900 flex font-sans antialiased selection:bg-amber-100 selection:text-amber-900">
         <AdminShell>{children}</AdminShell>
       </body>
     </html>

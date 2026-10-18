@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, Users, X, Shield, Filter, CheckCircle2, UserCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import PrintControls from '@/components/PrintControls';
+import StatusBadge from '@/components/StatusBadge';
+import ConfirmationModal from '@/components/ConfirmationModal';
+import EmptyState from '@/components/EmptyState';
+import LoadingState from '@/components/LoadingState';
 import type { UserFeature, UserRole } from '@/lib/types';
 
 interface ManagedUser {
@@ -29,23 +33,23 @@ interface UserForm {
 }
 
 const featureOptions: { value: UserFeature; label: string; labelGu: string }[] = [
-  { value: 'members', label: 'Members & roles', labelGu: 'સભ્યો અને ભૂમિકાઓ' },
-  { value: 'notices', label: 'Notice management', labelGu: 'સૂચના વ્યવસ્થાપન' },
-  { value: 'offerings', label: 'Offering management', labelGu: 'ચઢાવા વ્યવસ્થાપન' },
-  { value: 'navratri', label: 'Navratri management', labelGu: 'નવરાત્રી વ્યવસ્થાપન' },
+  { value: 'members', label: 'Members & Roles', labelGu: 'સભ્યો અને ભૂમિકાઓ' },
+  { value: 'notices', label: 'Notice Management', labelGu: 'સૂચના વ્યવસ્થાપન' },
+  { value: 'offerings', label: 'Offering Management', labelGu: 'ચઢાવા વ્યવસ્થાપન' },
+  { value: 'navratri', label: 'Navratri Management', labelGu: 'નવરાત્રી વ્યવસ્થાપન' },
   { value: 'complaints', label: 'Complaints', labelGu: 'ફરિયાદો' },
-  { value: 'emergency_contacts', label: 'Emergency contacts', labelGu: 'તાત્કાલિક સંપર્ક' },
-  { value: 'village_history', label: 'Village history', labelGu: 'ગામનો ઇતિહાસ' },
+  { value: 'emergency_contacts', label: 'Emergency Contacts', labelGu: 'તાત્કાલિક સંપર્ક' },
+  { value: 'village_history', label: 'Village History', labelGu: 'ગામનો ઇતિહાસ' },
   { value: 'notifications', label: 'Notifications', labelGu: 'સૂચનાઓ' },
 ];
 
-const roleOptions: { value: UserRole; label: string; labelGu: string }[] = [
-  { value: 'USER', label: 'Member', labelGu: 'સભ્ય' },
-  { value: 'BUSINESS_OWNER', label: 'Business owner', labelGu: 'વ્યવસાય માલિક' },
-  { value: 'CONTENT_MANAGER', label: 'Content manager', labelGu: 'કન્ટેન્ટ મેનેજર' },
-  { value: 'MODERATOR', label: 'Moderator', labelGu: 'મોડરેટર' },
-  { value: 'ADMIN', label: 'Administrator', labelGu: 'એડમિન' },
-  { value: 'SUPER_ADMIN', label: 'Super administrator', labelGu: 'સુપર એડમિન' },
+const roleOptions: { value: UserRole; label: string; labelGu: string; description: string }[] = [
+  { value: 'USER', label: 'Resident Member', labelGu: 'સભ્ય', description: 'Standard community member' },
+  { value: 'BUSINESS_OWNER', label: 'Business Owner', labelGu: 'વ્યવસાય માલિક', description: 'Can register and edit directory listings' },
+  { value: 'CONTENT_MANAGER', label: 'Content Manager', labelGu: 'કન્ટેન્ટ મેનેજર', description: 'Can draft and edit announcements' },
+  { value: 'MODERATOR', label: 'Moderator', labelGu: 'મોડરેટર', description: 'Reviews submissions and grievances' },
+  { value: 'ADMIN', label: 'Administrator', labelGu: 'એડમિન', description: 'Manages members, features, and settings' },
+  { value: 'SUPER_ADMIN', label: 'Super Administrator', labelGu: 'સુપર એડમિન', description: 'Full system and authorization control' },
 ];
 
 const emptyForm: UserForm = {
@@ -88,6 +92,8 @@ async function callUsersApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: 
 export default function UserManagement() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,12 +137,17 @@ export default function UserManagement() {
   }, []);
 
   const normalizedSearch = search.trim().toLowerCase();
-  const filteredUsers = users.filter((user) =>
-    [user.full_name, user.email ?? '', user.phone ?? '', ...user.roles]
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch = [user.full_name, user.email ?? '', user.phone ?? '', ...user.roles]
       .join(' ')
       .toLowerCase()
-      .includes(normalizedSearch)
-  );
+      .includes(normalizedSearch);
+
+    const matchesRole = roleFilter === 'ALL' || user.roles.includes(roleFilter as UserRole);
+    const matchesStatus = statusFilter === 'ALL' || user.status === statusFilter;
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   function openCreate() {
     setForm(emptyForm);
@@ -228,7 +239,7 @@ export default function UserManagement() {
   }
 
   if (isLoading && !users.length) {
-    return <p className="text-sm text-brand-muted">Loading registered users…</p>;
+    return <LoadingState message="Loading registered citizens & staff accounts…" />;
   }
 
   if (!isAdmin && error) {
@@ -236,216 +247,391 @@ export default function UserManagement() {
       || error?.includes('SUPABASE_SERVICE_ROLE_KEY')
       || false;
     return (
-      <section className="border border-brand-border bg-cream-surface p-5">
-        <h1 className="text-lg font-bold text-brand-text">
-          {hasServerKeyError ? 'Server API key configuration required' : 'Administrator access required'}
-        </h1>
-        <p className="mt-2 text-sm text-brand-muted">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center gap-3 text-rose-600">
+          <AlertTriangle className="h-6 w-6" />
+          <h1 className="text-lg font-bold text-slate-900 dark:text-white">
+            {hasServerKeyError ? 'Server API Key Configuration Required' : 'Administrator Access Required'}
+          </h1>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
           {hasServerKeyError
-            ? 'Create a secret key under Project Settings → API Keys, save it as SUPABASE_SERVICE_ROLE_KEY, and restart the web server. The publishable key cannot manage users.'
-            : 'Only ADMIN and SUPER_ADMIN accounts can manage members and roles.'}
+            ? 'Create a secret key under Supabase Project Settings → API Keys, save it as SUPABASE_SERVICE_ROLE_KEY, and restart the web server.'
+            : 'Only ADMIN and SUPER_ADMIN accounts can manage registered members and assign role-based permissions.'}
         </p>
-        {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
+        {error && <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-xs text-rose-800 dark:bg-rose-950 dark:text-rose-300">{error}</p>}
       </section>
     );
   }
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 border-b border-brand-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+      {/* Top Header */}
+      <header className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-slate-800">
         <div>
-          <div className="flex items-center gap-2 text-saffron">
+          <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
             <Users className="h-5 w-5" />
-            <span className="text-xs font-semibold uppercase">Member registry</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Citizen & Staff Directory</span>
           </div>
-          <h1 className="mt-2 text-2xl font-bold text-brand-text">User management</h1>
-          <p className="mt-1 text-sm text-brand-muted">{users.length} registered profiles</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            User & Role Management
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Create, edit, suspend accounts and configure granular permission access across the portal.
+          </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <label className="relative block w-full sm:w-64">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-muted" />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search users or roles"
-              className="w-full border border-brand-border bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-saffron"
-            />
-          </label>
-          {isAdmin && <button
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="no-print">
+            <PrintControls />
+          </div>
+          <button
             type="button"
             onClick={openCreate}
-            className="inline-flex min-h-10 items-center justify-center gap-2 bg-saffron px-4 text-sm font-semibold text-white hover:bg-saffron-dark"
+            className="inline-flex items-center gap-2 rounded-xl bg-navy-900 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-800 dark:bg-sky-600 dark:hover:bg-sky-500 active:scale-95"
           >
-            <Plus className="h-4 w-4" /> Add user
-          </button>}
+            <Plus className="h-4 w-4" />
+            Add New Member
+          </button>
         </div>
       </header>
 
-      {error && <p role="alert" className="border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+      {/* Filter and Search Bar */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {/* Search */}
+        <div className="relative sm:col-span-1">
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, phone, role…"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-sky-400"
+          />
+        </div>
 
-      <div className="overflow-x-auto border-y border-brand-border">
-        <div className="no-print flex justify-end border-b border-brand-border p-3"><PrintControls /></div>
-        <table data-print-area className="w-full min-w-[880px] text-left text-sm">
-          <thead className="bg-cream text-xs uppercase text-brand-muted">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Name</th>
-              <th className="px-4 py-3 font-semibold">Email / Phone</th>
-              <th className="px-4 py-3 font-semibold">Roles</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Registered</th>
-              {isAdmin && <th className="no-print px-4 py-3 text-right font-semibold">Actions</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-brand-border">
-            {filteredUsers.map((user) => (
-              <tr key={user.id} className="bg-cream-surface hover:bg-white">
-                <td className="px-4 py-3 font-medium text-brand-text">{user.full_name}</td>
-                <td className="px-4 py-3 text-brand-muted">
-                  <span className="block">{user.email || '—'}</span>
-                  <span className="mt-1 block text-xs">{user.phone || '—'}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex max-w-72 flex-wrap gap-1.5">
-                    {user.roles.map((role) => (
-                      <span key={role} className="border border-brand-border px-2 py-1 text-[11px] text-brand-text">{role}</span>
-                    ))}
-                    {!user.roles.length && <span className="text-xs text-rose-700">No role assigned</span>}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`border px-2 py-1 text-xs ${user.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-800' : 'border-amber-200 text-amber-800'}`}>
-                    {user.status}
-                  </span>
-                  {!user.auth_exists && <span className="mt-1 block text-xs text-rose-700">Auth account missing</span>}
-                </td>
-                <td className="px-4 py-3 text-brand-muted">{new Date(user.created_at).toLocaleDateString()}</td>
-                {isAdmin && <td className="no-print px-4 py-3">
-                  <div className="flex justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(user)}
-                      title="Edit user and roles"
-                      aria-label={`Edit ${user.full_name}`}
-                      className="inline-flex h-9 w-9 items-center justify-center text-brand-muted hover:bg-saffron-container hover:text-brand-text"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setDeletingUser(user); setError(null); }}
-                      title="Delete user"
-                      aria-label={`Delete ${user.full_name}`}
-                      className="inline-flex h-9 w-9 items-center justify-center text-rose-700 hover:bg-rose-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>}
-              </tr>
-            ))}
-            {!filteredUsers.length && (
-              <tr>
-                <td colSpan={isAdmin ? 6 : 5} className="px-4 py-10 text-center text-brand-muted">
-                  {users.length ? 'No users match this search.' : 'No registered user profiles found.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {/* Role Filter */}
+        <div className="relative">
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="ALL">All Roles ({users.length})</option>
+            <option value="SUPER_ADMIN">Super Admins</option>
+            <option value="ADMIN">Administrators</option>
+            <option value="MODERATOR">Moderators</option>
+            <option value="CONTENT_MANAGER">Content Managers</option>
+            <option value="BUSINESS_OWNER">Business Owners</option>
+            <option value="USER">Resident Members</option>
+          </select>
+        </div>
+
+        {/* Status Filter */}
+        <div className="relative">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="ACTIVE">Active Only</option>
+            <option value="SUSPENDED">Suspended Only</option>
+          </select>
+        </div>
       </div>
 
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
+          {error}
+        </div>
+      )}
+
+      {/* Users Table Card */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="overflow-x-auto">
+          <table data-print-area className="w-full text-left text-xs text-slate-800 dark:text-slate-200">
+            <thead className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-850 dark:text-slate-400">
+              <tr>
+                <th className="px-5 py-3.5">Member Name / Contact</th>
+                <th className="px-5 py-3.5">Assigned Roles</th>
+                <th className="px-5 py-3.5">Feature Grants</th>
+                <th className="px-5 py-3.5">Account Status</th>
+                <th className="px-5 py-3.5">Registered</th>
+                <th className="no-print px-5 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    No matching users found.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr
+                    key={user.id}
+                    className="transition hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 dark:text-white">{user.full_name}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {user.email || 'No email registered'}
+                          </div>
+                          {user.phone && (
+                            <div className="text-[10px] text-slate-400">{user.phone}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles.map((r) => (
+                          <StatusBadge key={r} status={r} />
+                        ))}
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {user.feature_permissions.length > 0 ? (
+                          user.feature_permissions.map((f) => (
+                            <span
+                              key={f}
+                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                            >
+                              {f}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-slate-400">Standard user access</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <StatusBadge status={user.status} />
+                    </td>
+
+                    <td className="px-5 py-4 text-slate-500 text-[11px] dark:text-slate-400">
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </td>
+
+                    <td className="no-print px-5 py-4 text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(user)}
+                          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition"
+                          title="Edit member"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingUser(user)}
+                          className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/60 dark:hover:text-rose-400 transition"
+                          title="Delete member"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Create / Edit Drawer Modal */}
       {(isCreating || editingUser) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-          <section role="dialog" aria-modal="true" aria-labelledby="user-form-title" className="my-auto w-full max-w-xl border border-brand-border bg-cream-surface shadow-xl">
-            <header className="flex items-center justify-between border-b border-brand-border px-5 py-4">
-              <h2 id="user-form-title" className="text-lg font-bold text-brand-text">{editingUser ? 'Edit user' : 'Invite user'}</h2>
-              <button type="button" onClick={closeForm} aria-label="Close" className="inline-flex h-9 w-9 items-center justify-center text-brand-muted hover:bg-cream">
-                <X className="h-4 w-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  {editingUser ? 'Edit Member & Permissions' : 'Register New Member'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {editingUser ? `Updating access for ${editingUser.full_name}` : 'Create account with custom roles'}
+                </p>
+              </div>
+              <button
+                onClick={closeForm}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+              >
+                <X className="h-5 w-5" />
               </button>
-            </header>
-            <form onSubmit={saveUser} className="space-y-5 p-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-sm font-medium text-brand-text">
-                  Full name
-                  <input required maxLength={120} value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 outline-none focus:border-saffron" />
-                </label>
-                <label className="text-sm font-medium text-brand-text">
-                  Email
-                  <input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 outline-none focus:border-saffron" />
-                </label>
-                <label className="text-sm font-medium text-brand-text">
-                  Phone
-                  <input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 outline-none focus:border-saffron" />
-                </label>
-                {editingUser && (
-                  <label className="text-sm font-medium text-brand-text">
-                    Account status
-                    <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as UserForm['status'] })} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 outline-none focus:border-saffron">
-                      <option value="ACTIVE">Active</option>
-                      <option value="SUSPENDED">Suspended</option>
-                    </select>
+            </div>
+
+            <form onSubmit={saveUser} className="mt-5 space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
+                    Full Name
                   </label>
-                )}
+                  <input
+                    type="text"
+                    required
+                    value={form.full_name}
+                    onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                  />
+                </div>
               </div>
 
-              <fieldset>
-                <legend className="text-sm font-semibold text-brand-text">Assigned roles</legend>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {roleOptions.map((role) => (
-                    <label key={role.value} className="flex min-h-11 items-center gap-2 border border-brand-border bg-white px-3 py-2 text-sm text-brand-text">
-                      <input type="checkbox" checked={form.roles.includes(role.value)} onChange={() => toggleRole(role.value)} className="h-4 w-4 accent-amber-600" />
-                      <span>{role.label}</span>
-                      <span className="ml-auto text-xs text-brand-muted">{role.labelGu}</span>
-                    </label>
-                  ))}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+91..."
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                  />
                 </div>
-              </fieldset>
 
-              <fieldset>
-                <legend className="text-sm font-semibold text-brand-text">Extra feature access</legend>
-                <p className="mt-1 text-xs leading-5 text-brand-muted">Members keep the standard resident features by default. Select only the additional modules this member should access; elevated admin actions remain limited to assigned staff roles.</p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {featureOptions.map((feature) => (
-                    <label key={feature.value} className="flex min-h-11 items-center gap-2 border border-brand-border bg-white px-3 py-2 text-sm text-brand-text">
-                      <input type="checkbox" checked={form.feature_permissions.includes(feature.value)} onChange={() => toggleFeature(feature.value)} className="h-4 w-4 accent-amber-600" />
-                      <span>{feature.label}</span>
-                      <span className="ml-auto text-xs text-brand-muted">{feature.labelGu}</span>
-                    </label>
-                  ))}
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
+                    Account Status
+                  </label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value as any })}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="SUSPENDED">SUSPENDED</option>
+                  </select>
                 </div>
-              </fieldset>
+              </div>
 
-              {isCreating && <p className="text-xs leading-5 text-brand-muted">An invitation email will be sent. The account becomes active after the user accepts it.</p>}
-              {error && <p role="alert" className="border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-              <footer className="flex justify-end gap-2 border-t border-brand-border pt-4">
-                <button type="button" disabled={isSaving} onClick={closeForm} className="min-h-10 border border-brand-border px-4 text-sm font-medium text-brand-text hover:bg-cream disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={isSaving || !form.roles.length} className="min-h-10 bg-saffron px-4 text-sm font-semibold text-white hover:bg-saffron-dark disabled:opacity-50">
-                  {isSaving ? 'Saving…' : editingUser ? 'Save changes' : 'Send invitation'}
+              {/* Roles selection */}
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300 mb-2">
+                  Assigned Roles
+                </label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {roleOptions.map((role) => {
+                    const isChecked = form.roles.includes(role.value);
+                    return (
+                      <button
+                        type="button"
+                        key={role.value}
+                        onClick={() => toggleRole(role.value)}
+                        className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition ${
+                          isChecked
+                            ? 'border-navy-900 bg-navy-50/60 dark:border-sky-400 dark:bg-sky-950/40'
+                            : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-750'
+                        }`}
+                      >
+                        <div
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                            isChecked
+                              ? 'border-navy-900 bg-navy-900 text-white dark:border-sky-400 dark:bg-sky-400 dark:text-slate-950'
+                              : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-700'
+                          }`}
+                        >
+                          {isChecked && <CheckCircle2 className="h-3 w-3" />}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 dark:text-white">
+                            {role.label} <span className="font-normal text-slate-400">({role.labelGu})</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {role.description}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Feature grants */}
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300 mb-2">
+                  Granular Feature Grants
+                </label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {featureOptions.map((feature) => {
+                    const isChecked = form.feature_permissions.includes(feature.value);
+                    return (
+                      <button
+                        type="button"
+                        key={feature.value}
+                        onClick={() => toggleFeature(feature.value)}
+                        className={`rounded-xl border p-2 text-center text-xs font-semibold transition ${
+                          isChecked
+                            ? 'border-sky-500 bg-sky-50 text-sky-800 dark:border-sky-400 dark:bg-sky-950/60 dark:text-sky-300'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        {feature.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  disabled={isSaving}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  Cancel
                 </button>
-              </footer>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-navy-900 px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-800 disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
+                >
+                  {isSaving ? 'Saving…' : editingUser ? 'Update Member' : 'Register Member'}
+                </button>
+              </div>
             </form>
-          </section>
+          </div>
         </div>
       )}
 
-      {deletingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <section role="alertdialog" aria-modal="true" aria-labelledby="delete-user-title" className="w-full max-w-md border border-brand-border bg-cream-surface p-5 shadow-xl">
-            <h2 id="delete-user-title" className="text-lg font-bold text-brand-text">Delete user account?</h2>
-            <p className="mt-2 text-sm leading-6 text-brand-muted">
-              This permanently deletes <span className="font-semibold text-brand-text">{deletingUser.full_name}</span> from Supabase Auth and removes their profile and role assignments. This cannot be undone.
-            </p>
-            {error && <p role="alert" className="mt-3 border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-            <footer className="mt-5 flex justify-end gap-2">
-              <button type="button" disabled={isSaving} onClick={() => setDeletingUser(null)} className="min-h-10 border border-brand-border px-4 text-sm font-medium text-brand-text hover:bg-cream disabled:opacity-50">Cancel</button>
-              <button type="button" disabled={isSaving} onClick={() => void deleteUser()} className="min-h-10 bg-rose-700 px-4 text-sm font-semibold text-white hover:bg-rose-800 disabled:opacity-50">
-                {isSaving ? 'Deleting…' : 'Delete account'}
-              </button>
-            </footer>
-          </section>
-        </div>
-      )}
+      {/* Confirmation Modal for Delete */}
+      <ConfirmationModal
+        isOpen={Boolean(deletingUser)}
+        onClose={() => setDeletingUser(null)}
+        onConfirm={deleteUser}
+        title="Delete Member Account"
+        description={`Are you sure you want to delete ${deletingUser?.full_name}? This action revokes all system and portal access.`}
+        confirmText="Delete Account"
+        isDestructive
+        isLoading={isSaving}
+      />
     </div>
   );
 }

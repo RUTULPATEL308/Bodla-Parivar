@@ -605,7 +605,8 @@ class BusinessRepositoryImpl(
 class OfferingRepositoryImpl(
     private val database: AppDatabase,
     private val httpClient: HttpClient,
-    private val syncEngine: SyncEngine
+    private val syncEngine: SyncEngine,
+    private val tokenStorage: TokenStorage
 ) : OfferingRepository {
 
     private suspend fun canManageOfferings(): Boolean = try {
@@ -870,8 +871,9 @@ class OfferingRepositoryImpl(
     override suspend fun getOfferingBids(offeringId: String): Result<List<OfferingBid>> = withContext(Dispatchers.IO) {
         try {
             val url = Endpoints.offeringBidsForOffering(offeringId)
+            val requestToken = tokenStorage.getToken()
             var response = httpClient.get(url)
-            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessTokenIfStale(requestToken) != null) {
                 response = httpClient.get(url)
             }
             if (response.status.isSuccess()) {
@@ -879,7 +881,10 @@ class OfferingRepositoryImpl(
                 Result.success(bids)
             } else {
                 val errorBody = response.body<String>()
-                Result.failure(Exception("HTTP ${response.status.value}: $errorBody"))
+                val message = if (response.status == HttpStatusCode.Unauthorized && "jwt expired" in errorBody.lowercase()) {
+                    "Your session expired. Sign out and sign in again to load bid history."
+                } else "HTTP ${response.status.value}: $errorBody"
+                Result.failure(Exception(message))
             }
         } catch (e: Exception) {
             Napier.w("OfferingRepository: Error fetching offering bids", e)
@@ -1046,8 +1051,9 @@ class OfferingRepositoryImpl(
     }
 
     private suspend fun authorizedRequest(request: suspend () -> HttpResponse): HttpResponse {
+        val requestToken = tokenStorage.getToken()
         var response = request()
-        if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+        if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessTokenIfStale(requestToken) != null) {
             response = request()
         }
         return response
@@ -1059,11 +1065,12 @@ class OfferingRepositoryImpl(
                 put("p_offering_id", offeringId)
             }.toString()
 
+            val requestToken = tokenStorage.getToken()
             var response = httpClient.post(Endpoints.RPC_IS_CURRENT_USER_OFFERING_WINNER) {
                 contentType(ContentType.Application.Json)
                 setBody(payload)
             }
-            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessTokenIfStale(requestToken) != null) {
                 response = httpClient.post(Endpoints.RPC_IS_CURRENT_USER_OFFERING_WINNER) {
                     contentType(ContentType.Application.Json)
                     setBody(payload)
@@ -1092,12 +1099,13 @@ class OfferingRepositoryImpl(
                 put("p_name", name.trim())
             }.toString()
 
+            val requestToken = tokenStorage.getToken()
             var response = httpClient.post(Endpoints.RPC_SUBMIT_WINNER_DISPLAY_NAME) {
                 contentType(ContentType.Application.Json)
                 setBody(payload)
             }
 
-            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessToken() != null) {
+            if (response.status == HttpStatusCode.Unauthorized && syncEngine.refreshAccessTokenIfStale(requestToken) != null) {
                 response = httpClient.post(Endpoints.RPC_SUBMIT_WINNER_DISPLAY_NAME) {
                     contentType(ContentType.Application.Json)
                     setBody(payload)

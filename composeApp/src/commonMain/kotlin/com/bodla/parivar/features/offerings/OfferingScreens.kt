@@ -82,6 +82,7 @@ fun OfferingListScreen(
     LaunchedEffect(canManageOfferings) {
         if (!canManageOfferings) return@LaunchedEffect
         while (true) {
+            AppContainer.offeringRepository.refreshOfferings()
             AppContainer.offeringRepository.getAllOfferingBids()
                 .onSuccess { allBids = it }
             delay(5000)
@@ -1290,19 +1291,25 @@ fun OfferingDetailScreen(
                                 "🎉 Your bid of ₹${amount.toInt().toLocaleString()} was placed! (Pending Approval)"
                         }.onFailure { error ->
                             val rawMessage = error.message.orEmpty()
-                            val requiredMinimum = Regex("₹\\s*([0-9,]+)").find(rawMessage)
-                                ?.groupValues?.getOrNull(1)?.replace(",", "")
                             val currentAmount = topBid ?: currentOffering.amount
+                            val isStaleBid = rawMessage.contains("BID_TOO_LOW", ignoreCase = true) ||
+                                rawMessage.contains("higher than the current amount", ignoreCase = true) ||
+                                rawMessage.contains("bid is too low", ignoreCase = true)
                             bidSubmitErrorMessage = when {
+                                isStaleBid -> if (lang == AppLanguage.GUJARATI)
+                                    "બીજા સભ્યે વધુ બોલી મૂકી છે. ઓફર ફરી તપાસો અને વધુ રકમ દાખલ કરો."
+                                else "Another member placed a higher bid. Refresh the offering and enter a higher amount."
                                 rawMessage.contains("at least", ignoreCase = true) -> if (lang == AppLanguage.GUJARATI) {
-                                    val minimum = requiredMinimum ?: calculateMinimumBidAmount(currentOffering.amount, topBid).toInt().toString()
+                                    val minimum = Regex("₹\\s*([0-9,]+)").find(rawMessage)?.groupValues?.getOrNull(1)?.replace(",", "")
+                                        ?: calculateMinimumBidAmount(currentOffering.amount, topBid).toInt().toString()
                                     "બોલી ઓછામાં ઓછી ₹$minimum હોવી જોઈએ. હાલમાં સૌથી વધુ બોલી ₹${currentAmount?.toInt() ?: 0} છે."
                                 } else {
-                                    val minimum = requiredMinimum ?: calculateMinimumBidAmount(currentOffering.amount, topBid).toInt().toString()
+                                    val minimum = Regex("₹\\s*([0-9,]+)").find(rawMessage)?.groupValues?.getOrNull(1)?.replace(",", "")
+                                        ?: calculateMinimumBidAmount(currentOffering.amount, topBid).toInt().toString()
                                     "Bid must be at least ₹$minimum. The current highest bid is ₹${currentAmount?.toInt() ?: 0}."
                                 }
                                 lang == AppLanguage.GUJARATI -> "બોલી નોંધાઈ શકી નથી. કૃપા કરીને ફરી પ્રયાસ કરો."
-                                else -> rawMessage.ifBlank { "Bid could not be submitted. Please try again." }
+                                else -> "Bid could not be submitted. Please try again."
                             }
                         }
                     }
@@ -1793,19 +1800,16 @@ fun AddOfferingScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(
+            com.bodla.parivar.core.ui.GujlishTextField(
                 value = titleGu,
-                onValueChange = { titleGu = it },
-                label = { Text(if (lang == AppLanguage.GUJARATI) "ચઢાવાનું નામ (ગુજરાતી) *" else "Gujarati title *") },
+                onValueChange = { 
+                    titleGu = it
+                    titleEn = it
+                },
+                label = { Text(if (lang == AppLanguage.GUJARATI) "ચઢાવાનું નામ (ગુજલિશ / ગુજરાતી) *" else "Offering title (Gujlish) *") },
+                placeholder = { Text(if (lang == AppLanguage.GUJARATI) "અહીં ટાઇપ કરો (દા.ત. shri ram aarti)..." else "Type here in English/Gujlish...") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            OutlinedTextField(
-                value = titleEn,
-                onValueChange = { titleEn = it },
-                label = { Text(if (lang == AppLanguage.GUJARATI) "શીર્ષક (અંગ્રેજી)" else "Title (English)") },
-                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
 
@@ -1816,38 +1820,31 @@ fun AddOfferingScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
                 prefix = { Text("₹") }
             )
 
-            OutlinedTextField(
+            com.bodla.parivar.core.ui.GujlishTextField(
                 value = locationGu,
-                onValueChange = { locationGu = it },
-                label = { Text(if (lang == AppLanguage.GUJARATI) "સ્થળ (ગુજરાતી)" else "Location (Gujarati)") },
+                onValueChange = { 
+                    locationGu = it
+                    locationEn = it
+                },
+                label = { Text(if (lang == AppLanguage.GUJARATI) "સ્થળ (ગુજલિશ / ગુજરાતી)" else "Location (Gujlish)") },
+                placeholder = { Text(if (lang == AppLanguage.GUJARATI) "દા.ત. bodla mandir sankul..." else "e.g. bodla mandir...") },
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
 
-            OutlinedTextField(
-                value = locationEn,
-                onValueChange = { locationEn = it },
-                label = { Text(if (lang == AppLanguage.GUJARATI) "સ્થળ (અંગ્રેજી)" else "Location (English)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            OutlinedTextField(
+            com.bodla.parivar.core.ui.GujlishTextField(
                 value = descriptionGu,
-                onValueChange = { descriptionGu = it },
-                label = { Text(if (lang == AppLanguage.GUJARATI) "વર્ણન (ગુજરાતી)" else "Description (Gujarati)") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3,
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            OutlinedTextField(
-                value = descriptionEn,
-                onValueChange = { descriptionEn = it },
-                label = { Text(if (lang == AppLanguage.GUJARATI) "વર્ણન (અંગ્રેજી)" else "Description (English)") },
+                onValueChange = { 
+                    descriptionGu = it
+                    descriptionEn = it
+                },
+                label = { Text(if (lang == AppLanguage.GUJARATI) "વર્ણન (ગુજલિશ / ગુજરાતી)" else "Description (Gujlish)") },
+                placeholder = { Text(if (lang == AppLanguage.GUJARATI) "ચઢાવાની વિગતો અહીં ટાઇપ કરો..." else "Type details here...") },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 shape = RoundedCornerShape(12.dp)

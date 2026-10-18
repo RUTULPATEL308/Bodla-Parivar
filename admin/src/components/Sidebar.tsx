@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useAdminFeatures } from '@/components/AdminLanguageContext';
+import { useAdminFeatures, useAdminLanguage } from '@/components/AdminLanguageContext';
 import {
   LayoutDashboard,
   Users,
@@ -17,7 +17,8 @@ import {
   ClipboardList,
   PhoneCall,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  ChevronRight
 } from 'lucide-react';
 
 interface NavItem {
@@ -29,26 +30,36 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: 'Dashboard', nameGu: 'ડેશબોર્ડ', href: '/', icon: LayoutDashboard },
-  { name: 'Users', nameGu: 'વપરાશકર્તાઓ', href: '/users', icon: Users },
+  { name: 'Users & Roles', nameGu: 'વપરાશકર્તાઓ', href: '/users', icon: Users },
   { name: 'Notices', nameGu: 'સૂચનાઓ', href: '/notices', icon: Bell },
   { name: 'Offerings', nameGu: 'ચઢાવો', href: '/offerings', icon: WalletCards },
   { name: 'Navratri', nameGu: 'નવરાત્રી', href: '/navratri', icon: Sparkles },
   { name: 'Notifications', nameGu: 'સૂચના પ્રસારણ', href: '/notifications', icon: Send },
-  { name: 'Complaints', nameGu: '', href: '/complaints', icon: AlertCircle },
-  { name: 'Emergency contacts', nameGu: '', href: '/emergency', icon: PhoneCall },
-  { name: 'Village history', nameGu: '', href: '/history', icon: BookOpen },
-  { name: 'Roles', nameGu: '', href: '/roles', icon: ShieldCheck },
-  { name: 'Audit logs', nameGu: '', href: '/audit-logs', icon: ClipboardList },
-  { name: 'Settings', nameGu: '', href: '/settings', icon: Settings },
+  { name: 'Complaints', nameGu: 'ફરિયાદો', href: '/complaints', icon: AlertCircle },
+  { name: 'Emergency Contacts', nameGu: 'કટોકટી સંપર્ક', href: '/emergency', icon: PhoneCall },
+  { name: 'Village History', nameGu: 'ગામનો ઇતિહાસ', href: '/history', icon: BookOpen },
+  { name: 'Roles & Permissions', nameGu: 'પરવાનગીઓ', href: '/roles', icon: ShieldCheck },
+  { name: 'Audit Logs', nameGu: 'ઓડિટ લોગ', href: '/audit-logs', icon: ClipboardList },
+  { name: 'Village Settings', nameGu: 'સેટિંગ્સ', href: '/settings', icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { lang } = useAdminLanguage();
   const { features, isFullStaff } = useAdminFeatures();
+  const isGujarati = lang === 'gu';
+
   const featureByPath: Record<string, string> = {
-    '/users': 'members', '/notices': 'notices', '/offerings': 'offerings', '/navratri': 'navratri',
-    '/notifications': 'notifications', '/complaints': 'complaints', '/emergency': 'emergency_contacts', '/history': 'village_history',
+    '/users': 'members',
+    '/notices': 'notices',
+    '/offerings': 'offerings',
+    '/navratri': 'navratri',
+    '/notifications': 'notifications',
+    '/complaints': 'complaints',
+    '/emergency': 'emergency_contacts',
+    '/history': 'village_history',
   };
+
   const visibleItems = navItems.filter((item) => {
     if (isFullStaff) return true;
     if (item.href === '/') return true;
@@ -58,23 +69,27 @@ export default function Sidebar() {
   });
 
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-brand-border bg-cream-surface md:flex md:min-h-screen md:flex-col">
+    <aside className="hidden w-72 shrink-0 border-r border-slate-200/80 bg-white md:flex md:min-h-screen md:flex-col shadow-sm dark:border-slate-800/80 dark:bg-slate-900 transition-colors">
       {/* Brand Header */}
-      <div className="p-5 border-b border-brand-border">
+      <div className="p-5 border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white dark:border-slate-800 dark:from-slate-850 dark:to-slate-900">
         <div className="flex flex-col items-center gap-2">
           <NextImage
             src="/bodla_parivar_logo.png"
             alt="બોદલા પરિવાર"
             width={1069}
             height={258}
-            className="h-auto w-full object-contain"
+            className="h-auto w-full object-contain drop-shadow-sm dark:brightness-110"
+            priority
           />
-          <p className="text-xs text-brand-muted">Admin Console</p>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-navy-50 text-navy-800 text-[11px] font-bold tracking-wide dark:bg-sky-950/80 dark:text-sky-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            {isFullStaff ? 'ADMIN SUITE' : 'COMMUNITY TOOLS'}
+          </div>
         </div>
       </div>
 
       {/* Navigation Links */}
-      <nav aria-label="Main administration" className="flex-1 space-y-1 overflow-y-auto p-3">
+      <nav aria-label={isFullStaff ? 'Main administration' : 'My assigned community tools'} className="flex-1 space-y-1 overflow-y-auto p-3">
         {visibleItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -83,26 +98,39 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              aria-current={isActive ? 'page' : undefined}
-              className={`flex min-h-14 items-center gap-3 rounded-xl px-3 py-3 text-base font-semibold transition-all ${
+              className={`group flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-200 ${
                 isActive
-                  ? 'bg-saffron text-white shadow-sm'
-                  : 'text-brand-text hover:bg-saffron-container hover:text-saffron'
+                  ? 'bg-navy-900 text-white shadow-sm dark:bg-sky-600 dark:text-white'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'
               }`}
             >
-              <Icon className="w-5 h-5 shrink-0" />
-              <div className="truncate">
-                <span className="block leading-none">{item.name}</span>
-                {item.nameGu && <span className={`mt-1 block text-xs ${isActive ? 'text-white/90' : 'text-brand-muted'}`}>{item.nameGu}</span>}
+              <div className="flex items-center gap-3">
+                <Icon
+                  className={`h-4 w-4 transition-colors ${
+                    isActive ? 'text-white' : 'text-slate-500 group-hover:text-navy-900 dark:text-slate-400 dark:group-hover:text-sky-400'
+                  }`}
+                />
+                <span>{isGujarati ? item.nameGu : item.name}</span>
               </div>
+              <ChevronRight
+                className={`h-3.5 w-3.5 opacity-0 transition-opacity ${
+                  isActive ? 'opacity-100 text-white' : 'group-hover:opacity-60'
+                }`}
+              />
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer Info */}
-      <div className="p-4 border-t border-brand-border text-xs text-brand-muted text-center">
-        બોદલા, મહેસાણા, ગુજરાત
+      {/* Footer System Status */}
+      <div className="p-4 border-t border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-850">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-slate-500 font-medium dark:text-slate-400">System Status</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Operational
+          </span>
+        </div>
+        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Bodla Parivar Console v2.0</p>
       </div>
     </aside>
   );

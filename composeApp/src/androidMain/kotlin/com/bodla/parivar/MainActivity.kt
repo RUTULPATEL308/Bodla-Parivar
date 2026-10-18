@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         AndroidPlatform.appContext = applicationContext
+        AndroidPlatform.currentActivityRef = java.lang.ref.WeakReference(this)
         AndroidPlatform.pendingNoticeId = intent?.getStringExtra("reference_id")
             ?.takeIf { it.isNotBlank() }
         createVillageNotificationChannel()
@@ -59,6 +60,18 @@ class MainActivity : ComponentActivity() {
         AndroidPlatform.pendingNoticeId = intent.getStringExtra("reference_id")
             ?.takeIf { it.isNotBlank() }
         if (AndroidPlatform.pendingNoticeId != null) recreate()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AndroidPlatform.currentActivityRef = java.lang.ref.WeakReference(this)
+    }
+
+    override fun onDestroy() {
+        if (AndroidPlatform.currentActivityRef?.get() === this) {
+            AndroidPlatform.currentActivityRef = null
+        }
+        super.onDestroy()
     }
 
     private fun requestNotificationPermissionIfNeeded() {

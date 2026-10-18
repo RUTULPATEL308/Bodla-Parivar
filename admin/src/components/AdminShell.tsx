@@ -5,14 +5,15 @@ import type { Session } from '@supabase/supabase-js';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, Bell, BookOpen, HeartHandshake, Home, PhoneCall, Send, Sparkles, Users, LogIn, LogOut } from 'lucide-react';
+import { AlertCircle, Bell, BookOpen, HeartHandshake, Home, PhoneCall, Send, Sparkles, Users, LogIn, LogOut, Sun, Moon } from 'lucide-react';
 import Header from '@/components/Header';
 import { AdminLanguageProvider, useAdminFeatures, useAdminLanguage, type AdminFeature } from '@/components/AdminLanguageContext';
+import { ThemeProvider, useTheme } from '@/components/ThemeContext';
 import MemberPortal from '@/components/MemberPortal';
 import Sidebar from '@/components/Sidebar';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
-type AccessState = 'checking' | 'signed-out' | 'staff' | 'member' | 'unauthorized' | 'password-recovery';
+type AccessState = 'checking' | 'signed-out' | 'staff' | 'feature-member' | 'member' | 'unauthorized' | 'password-recovery';
 type AuthMode = 'login' | 'signup' | 'recover' | 'update-password';
 
 const mobileAdminLinks = [
@@ -23,9 +24,21 @@ const mobileAdminLinks = [
   { label: 'Navratri', href: '/navratri', icon: Sparkles, feature: 'navratri' as AdminFeature },
   { label: 'Complaints', href: '/complaints', icon: AlertCircle, feature: 'complaints' as AdminFeature },
   { label: 'Emergency', href: '/emergency', icon: PhoneCall, feature: 'emergency_contacts' as AdminFeature },
-  { label: 'History', href: '/history', icon: BookOpen, feature: 'village_history' as AdminFeature },
   { label: 'Notifications', href: '/notifications', icon: Send, feature: 'notifications' as AdminFeature },
 ];
+
+const featureByPath: Record<string, AdminFeature | null> = {
+  '/': null,
+  '/users': 'members', '/notices': 'notices', '/offerings': 'offerings', '/navratri': 'navratri',
+  '/notifications': 'notifications', '/complaints': 'complaints', '/emergency': 'emergency_contacts', '/history': 'village_history',
+};
+
+function featureForPath(pathname: string) {
+  const matchingPath = Object.keys(featureByPath)
+    .sort((left, right) => right.length - left.length)
+    .find((path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)));
+  return matchingPath ? featureByPath[matchingPath] : undefined;
+}
 
 function MobileAdminFooter() {
   const pathname = usePathname();
@@ -34,11 +47,11 @@ function MobileAdminFooter() {
   const links = mobileAdminLinks.filter((link) => link.href === '/' || isFullStaff || (link.feature != null && features.includes(link.feature)));
 
   return (
-    <nav aria-label="Admin menu" style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-50 grid border-t border-brand-border bg-cream-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+    <nav aria-label="Admin menu" style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-50 grid border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
       {links.map(({ label, href, icon: Icon }) => {
         const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
         return (
-          <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-semibold ${active ? 'text-saffron' : 'text-brand-muted'}`}>
+          <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-semibold ${active ? 'text-sky-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'}`}>
             <Icon aria-hidden="true" className="h-6 w-6" />
             <span className="truncate leading-5">{lang === 'gu' ? ({ Home: 'હોમ', Users: 'સભ્યો', Notices: 'સૂચનાઓ', Offerings: 'ચઢાવો', Navratri: 'નવરાત્રી', Complaints: 'ફરિયાદો', Emergency: 'કટોકટી', History: 'ઇતિહાસ', Notifications: 'પ્રસારણ' }[label] ?? label) : label}</span>
           </Link>
@@ -76,6 +89,17 @@ function readableAuthError(error: unknown) {
 }
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <AdminLanguageProvider>
+        <AdminShellInner>{children}</AdminShellInner>
+      </AdminLanguageProvider>
+    </ThemeProvider>
+  );
+}
+
+function AdminShellInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [accessState, setAccessState] = useState<AccessState>(isSupabaseConfigured ? 'checking' : 'signed-out');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
@@ -89,6 +113,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const authEventVersion = useRef(0);
   const [grantedFeatures, setGrantedFeatures] = useState<AdminFeature[]>([]);
   const [isFullStaff, setIsFullStaff] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   async function resolveAccess(session: Session | null) {
     if (!session) {
@@ -135,23 +160,31 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       setGrantedFeatures(Array.isArray(featurePermissions) ? featurePermissions as AdminFeature[] : []);
       const { data, error } = await supabase.rpc('is_staff');
       if (error) throw error;
-      setIsFullStaff(data === true);
-      if (data !== true && Array.isArray(featurePermissions) && window.location.pathname !== '/') {
-        const pathFeature: Record<string, AdminFeature | null> = {
-          '/': null,
-          '/users': 'members', '/notices': 'notices', '/offerings': 'offerings', '/navratri': 'navratri',
-          '/notifications': 'notifications', '/complaints': 'complaints', '/emergency': 'emergency_contacts', '/history': 'village_history',
-        };
-        const requested = window.location.pathname;
-        const key = Object.keys(pathFeature).sort((a, b) => b.length - a.length).find((path) => requested === path || (path !== '/' && requested.startsWith(`${path}/`)));
-        const feature = key ? pathFeature[key] : undefined;
+      // This SECURITY DEFINER RPC reads assignments through RLS and avoids
+      // querying user_roles directly from the client, which can return no rows.
+      const { data: roles, error: rolesError } = await supabase.rpc('current_user_roles');
+      if (rolesError) throw rolesError;
+      const normalizedRoles = Array.isArray(roles)
+        ? roles.map((role) => String(role).trim().toUpperCase())
+        : [];
+      const hasAdministratorRole = normalizedRoles.some((role) => role === 'ADMIN' || role === 'SUPER_ADMIN');
+      const isStaff = data === true || hasAdministratorRole;
+      setIsFullStaff(isStaff);
+      // Offerings are resident-facing: opening /offerings must render the
+      // member bidding view even when no staff feature grant is assigned.
+      if (!isStaff && Array.isArray(featurePermissions) && !['/', '/offerings'].includes(window.location.pathname)) {
+        const feature = featureForPath(window.location.pathname);
         if (!feature || !featurePermissions.includes(feature)) {
-          setAuthError('This administration module requires an explicit feature grant or a staff role.');
-          setAccessState('unauthorized');
+          if (featurePermissions.length > 0) {
+            setAccessState('feature-member');
+          } else {
+            setAuthError('This administration module requires an explicit feature grant or a staff role.');
+            setAccessState('unauthorized');
+          }
           return;
         }
       }
-      setAccessState(data === true || (Array.isArray(featurePermissions) && featurePermissions.length > 0) ? 'staff' : 'member');
+      setAccessState(isStaff ? 'staff' : window.location.pathname === '/offerings' ? 'member' : Array.isArray(featurePermissions) && featurePermissions.length > 0 ? 'feature-member' : 'member');
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
       if (message.includes('auth session missing')) {
@@ -260,26 +293,44 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   };
 
   if (accessState === 'checking') {
-    return <main className="flex min-h-screen flex-1 items-center justify-center text-sm text-brand-muted">Checking account access…</main>;
+    return (
+      <main className="flex min-h-screen flex-1 items-center justify-center text-sm text-slate-500 dark:text-slate-400 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-navy-900 border-t-transparent dark:border-sky-400" />
+          <span>Checking account access…</span>
+        </div>
+      </main>
+    );
   }
 
-  if (accessState === 'unauthorized') {
+  const currentFeature = featureForPath(pathname);
+  const routeNotGranted = accessState === 'feature-member'
+    && pathname !== '/'
+    && (!currentFeature || !grantedFeatures.includes(currentFeature));
+
+  if (accessState === 'unauthorized' || routeNotGranted) {
     return (
-      <main className="flex min-h-screen flex-1 items-center justify-center bg-cream px-5 py-10">
-        <section className="w-full max-w-md rounded-3xl border border-brand-border bg-cream-surface p-6 shadow-lg sm:p-8">
-          <p className="text-xs font-semibold uppercase text-saffron">Bodla Parivar Admin</p>
-          <h1 className="mt-2 text-xl font-bold text-brand-text">Staff access required</h1>
-          <p className="mt-2 text-sm text-brand-muted">{authError || 'This account is signed in, but it does not have an admin or staff role.'}</p>
-          <button onClick={handleSignOut} className="mt-6 inline-flex items-center gap-2 bg-saffron px-4 py-2.5 text-sm font-semibold text-white hover:bg-saffron-dark">
-            <LogOut className="h-4 w-4" /> Sign out
-          </button>
+      <main className="flex min-h-screen flex-1 items-center justify-center bg-slate-50 px-5 py-10 dark:bg-slate-950">
+        <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs font-semibold uppercase text-sky-600 dark:text-sky-400">Bodla Parivar Console</p>
+          <h1 className="mt-2 text-xl font-bold text-slate-900 dark:text-white">{routeNotGranted ? 'Feature access required' : 'Staff access required'}</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{authError || (routeNotGranted ? 'This feature is not assigned to your account.' : 'This account is signed in, but it does not have an admin or staff role.')}</p>
+          {routeNotGranted ? (
+            <Link href="/" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy-800 dark:bg-sky-600 dark:hover:bg-sky-500">
+              <Home className="h-4 w-4" /> Back to your dashboard
+            </Link>
+          ) : (
+            <button onClick={handleSignOut} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-navy-800 dark:bg-sky-600 dark:hover:bg-sky-500">
+              <LogOut className="h-4 w-4" /> Sign out
+            </button>
+          )}
         </section>
       </main>
     );
   }
 
-  if (accessState === 'member') {
-    return <MemberPortal email={signedInEmail} fullName={signedInName} onSignOut={handleSignOut} />;
+  if (accessState === 'member' || (accessState === 'feature-member' && (pathname === '/' || pathname === '/offerings'))) {
+    return <MemberPortal email={signedInEmail} fullName={signedInName} onSignOut={handleSignOut} features={grantedFeatures} />;
   }
 
   if (accessState === 'signed-out' || accessState === 'password-recovery') {
@@ -288,25 +339,35 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const isRecoveryRequest = authMode === 'recover';
     const isPasswordUpdate = authMode === 'update-password';
     return (
-      <main className="flex min-h-screen flex-1 items-center justify-center bg-cream px-5 py-10">
-        <section className="w-full max-w-md rounded-3xl border border-brand-border bg-cream-surface p-6 shadow-lg sm:p-8">
+      <main className="flex min-h-screen flex-1 items-center justify-center bg-slate-50 px-5 py-10 dark:bg-slate-950 transition-colors">
+        <section className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xl sm:p-8 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={toggleTheme}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
+            </button>
+          </div>
+
           <Image
             src="/bodla_parivar_logo.png"
             alt="Bodla Parivar"
             width={1069}
             height={258}
             priority
-            className="mx-auto mb-3 h-auto w-full max-w-xs object-contain"
+            className="mx-auto mb-3 h-auto w-full max-w-xs object-contain dark:brightness-110"
           />
-          <div className="mb-7">
-            <h1 className="text-center text-xl font-bold text-brand-text">Admin Console</h1>
-            <p className="mt-1 text-sm text-brand-muted">
-              {isLogin ? 'Sign in with your community account.' : isSignup ? 'Create a community account.' : isRecoveryRequest ? 'Request a password reset message.' : 'Choose a new password.'}
+          <div className="mb-7 text-center">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Village Community Portal</h1>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {isLogin ? 'Sign in with your community account.' : isSignup ? 'Create a resident community account.' : isRecoveryRequest ? 'Request a password reset message.' : 'Choose a new password.'}
             </p>
           </div>
 
           {(isLogin || isSignup) ? (
-            <div className="mb-5 grid grid-cols-2 border-b border-brand-border" role="tablist" aria-label="Authentication">
+            <div className="mb-5 grid grid-cols-2 border-b border-slate-200 dark:border-slate-800" role="tablist" aria-label="Authentication">
               {(['login', 'signup'] as const).map((mode) => (
                 <button
                   key={mode}
@@ -314,71 +375,69 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                   role="tab"
                   aria-selected={authMode === mode}
                   onClick={() => { setAuthMode(mode); setAuthError(null); setAuthNotice(null); }}
-                  className={`border-b-2 px-3 py-2.5 text-sm font-semibold ${authMode === mode ? 'border-saffron text-saffron' : 'border-transparent text-brand-muted hover:text-brand-text'}`}
+                  className={`border-b-2 px-3 py-2.5 text-xs font-semibold transition ${authMode === mode ? 'border-navy-900 text-navy-900 dark:border-sky-400 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}
                 >
                   {mode === 'login' ? 'Sign in' : 'Create account'}
                 </button>
               ))}
             </div>
           ) : (
-            <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); setAuthNotice(null); }} className="mb-5 text-sm font-semibold text-saffron hover:text-saffron-dark">
+            <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); setAuthNotice(null); }} className="mb-5 text-xs font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400">
               Back to sign in
             </button>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignup && (
-              <label className="block text-sm font-medium text-brand-text">
+              <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                 Full name
-                <input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 text-sm outline-none focus:border-saffron" />
+                <input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400" />
               </label>
             )}
             {!isPasswordUpdate && (
-              <label className="block text-sm font-medium text-brand-text">
+              <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                 Email
-                <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 text-sm outline-none focus:border-saffron" />
+                <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400" />
               </label>
             )}
             {!isRecoveryRequest && (
-              <label className="block text-sm font-medium text-brand-text">
+              <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                 {isPasswordUpdate ? 'New password' : 'Password'}
-                <input required type="password" minLength={6} autoComplete={isLogin ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full border border-brand-border bg-white px-3 py-2.5 text-sm outline-none focus:border-saffron" />
+                <input required type="password" minLength={6} autoComplete={isLogin ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400" />
               </label>
             )}
 
-            {!isSupabaseConfigured && <p role="alert" className="text-sm text-rose-700">Supabase is not configured for the admin app.</p>}
-            {authError && <p role="alert" className="text-sm text-rose-700">{authError}</p>}
-            {authNotice && <p role="status" className="border border-leaf/30 bg-leaf/10 p-3 text-sm text-brand-text">{authNotice}</p>}
+            {!isSupabaseConfigured && <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">Supabase is not configured for the admin app.</p>}
+            {authError && <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">{authError}</p>}
+            {authNotice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">{authNotice}</p>}
 
-            <button type="submit" disabled={isSubmitting || !isSupabaseConfigured} className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-saffron px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-saffron-dark disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting || !isSupabaseConfigured} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-navy-900 px-4 py-3 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500">
               <LogIn className="h-4 w-4" />
               {isSubmitting ? 'Please wait…' : isLogin ? 'Sign in' : isSignup ? 'Create account' : isRecoveryRequest ? 'Send recovery email' : 'Update password'}
             </button>
           </form>
           {isLogin && (
-            <button type="button" onClick={() => { setAuthMode('recover'); setAuthError(null); setAuthNotice(null); }} className="mt-4 text-sm font-medium text-saffron hover:text-saffron-dark">
+            <button type="button" onClick={() => { setAuthMode('recover'); setAuthError(null); setAuthNotice(null); }} className="mt-4 text-xs font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400">
               Forgot password?
             </button>
           )}
-          <p className="mt-5 text-xs leading-relaxed text-brand-muted">Creating an account does not grant staff access. An administrator must assign an authorized role or an individual feature grant before the console can be opened.</p>
+          <p className="mt-5 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500 text-center">Creating an account provides immediate access to the Resident Portal. Staff access with elevated administration tools is granted by system administrators.</p>
         </section>
       </main>
     );
   }
 
   return (
-    <AdminLanguageProvider>
-      <AdminFeaturesProvider features={grantedFeatures} isFullStaff={isFullStaff}>
-        <div className="flex min-h-screen flex-1 flex-col md:flex-row">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Header email={signedInEmail} onSignOut={handleSignOut} />
-            <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-28 md:p-8">{children}</main>
-          </div>
-          <MobileAdminFooter />
+    <AdminFeaturesProvider features={grantedFeatures} isFullStaff={isFullStaff}>
+      <div className="flex min-h-screen flex-1 flex-col md:flex-row bg-slate-50 dark:bg-slate-950 transition-colors">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Header email={signedInEmail} onSignOut={handleSignOut} />
+          <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-28 md:p-8">{children}</main>
         </div>
-      </AdminFeaturesProvider>
-    </AdminLanguageProvider>
+        <MobileAdminFooter />
+      </div>
+    </AdminFeaturesProvider>
   );
 }
 

@@ -60,6 +60,7 @@ async function requireAdmin(request: NextRequest, allowMemberFeature: boolean = 
     .from('profiles')
     .select('id')
     .eq('auth_user_id', user.id)
+    .eq('status', 'ACTIVE')
     .maybeSingle();
   if (profileError) return { response: errorResponse(profileError.message, 500) };
   if (!profile) return { response: errorResponse('Administrator profile was not found.', 403) };

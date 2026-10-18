@@ -60,6 +60,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+
+private fun Profile.hasAdminDashboardAccess(): Boolean =
+    isAdmin || roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -67,7 +71,23 @@ fun MainScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     var currentLanguage by remember { mutableStateOf(AppLanguage.GUJARATI) }
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Login) }
+    var currentUser by remember {
+        mutableStateOf(
+            AppContainer.tokenStorage.getUserProfile()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { runCatching { kotlinx.serialization.json.Json.decodeFromString<Profile>(it) }.getOrNull() }
+        )
+    }
+    val cachedAdminAccess = currentUser?.hasAdminDashboardAccess() == true
+    var currentScreen by remember {
+        mutableStateOf<Screen>(
+            when {
+                AppContainer.tokenStorage.getToken().isNullOrBlank() -> Screen.Login
+                cachedAdminAccess -> Screen.AdminHome
+                else -> Screen.Home
+            }
+        )
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     var lastNotifId by remember { mutableStateOf<String?>(null) }
     var pendingNoticeId by remember { mutableStateOf(consumePendingNoticeId()) }
@@ -77,6 +97,39 @@ fun MainScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
     val notificationsStartedAt = remember { Clock.System.now() }
     val pullThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
+
+    // Auto-restore / refresh current user session on app start
+    LaunchedEffect(Unit) {
+        suspend fun refreshCommunityData() {
+            val refreshResults = listOf(
+                AppContainer.noticeRepository.refreshNotices(),
+                AppContainer.eventRepository.refreshEvents(),
+                AppContainer.businessRepository.refreshBusinesses(),
+                AppContainer.offeringRepository.refreshOfferings(),
+                AppContainer.emergencyRepository.refreshEmergencyContacts()
+            )
+            refreshResults.filter { it.isFailure }.forEach { result ->
+                result.exceptionOrNull()?.let { error ->
+                    io.github.aakira.napier.Napier.w("MainScreen: Could not refresh community content", error)
+                }
+            }
+        }
+
+        val user = AppContainer.authRepository.getCurrentUser()
+        if (user != null) {
+            currentUser = user
+            val isAdminUser = user.hasAdminDashboardAccess()
+            // A saved session starts on Home before its roles have loaded.
+            // Always route from the refreshed role data so returning admins
+            // do not remain on the resident dashboard.
+            currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+            refreshCommunityData()
+        } else if (AppContainer.tokenStorage.getToken().isNullOrBlank()) {
+            currentUser = null
+            currentScreen = Screen.Login
+        }
+    }
+
     val pullRefreshConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -104,12 +157,17 @@ fun MainScreen(
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (pullDistance >= pullThresholdPx && !isPullRefreshing) {
                     isPullRefreshing = true
+                    pullDistance = 0f
                     coroutineScope.launch {
                         try {
                             AppContainer.syncEngine.syncAll()
+                            AppContainer.noticeRepository.refreshNotices()
+                            AppContainer.eventRepository.refreshEvents()
+                            AppContainer.businessRepository.refreshBusinesses()
+                            AppContainer.offeringRepository.refreshOfferings()
+                            AppContainer.emergencyRepository.refreshEmergencyContacts()
                         } finally {
                             isPullRefreshing = false
-                            pullDistance = 0f
                         }
                     }
                 } else {
@@ -130,8 +188,6 @@ fun MainScreen(
     val syncStatus by AppContainer.syncEngine.syncState.collectAsState(initial = SyncStatus.IDLE)
     val lastSyncError by AppContainer.syncEngine.lastSyncError.collectAsState(initial = null)
     val isConnectedToInternet by AppContainer.networkObserver.observe().collectAsState(initial = AppContainer.networkObserver.isConnected())
-
-    var currentUser by remember { mutableStateOf<Profile?>(null) }
     var offeringBidsById by remember { mutableStateOf<Map<String, List<OfferingBid>>>(emptyMap()) }
     var offeringBidsError by remember { mutableStateOf<String?>(null) }
     val offeringBidRefreshVersions = remember { mutableMapOf<String, Long>() }
@@ -149,13 +205,28 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(currentScreen) {
+        val screen = currentScreen
+        if (screen is Screen.OfferingDetail) {
+            while (true) {
+                refreshOfferingBids(screen.offeringId)
+                delay(5000)
+            }
+        }
+    }
+
     ProvideAppLanguage(language = currentLanguage) {
         val lang = LocalAppLanguage.current
 
+        val userRoles = currentUser?.roles.orEmpty().map { it.uppercase() }.toSet()
+        val isStrictAdmin = currentUser?.isAdmin == true || "ADMIN" in userRoles || "SUPER_ADMIN" in userRoles
+        val isStaffOrAdmin = isStrictAdmin || currentUser?.isStaff == true || currentUser?.featurePermissions?.isNotEmpty() == true
+        val defaultHome = if (isStrictAdmin) Screen.AdminHome else Screen.Home
+
         val isBottomBarVisible = when (currentScreen) {
-            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Navratri, Screen.Offerings, Screen.AddOffering, Screen.Notifications, Screen.Complaints, Screen.Emergency, Screen.VillageHistory, Screen.Profile -> true
+            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Navratri, Screen.Offerings, Screen.AddOffering, Screen.Notifications, Screen.Complaints, Screen.Emergency, Screen.Profile -> true
             else -> false
-        } || currentUser?.isStaff == true || currentUser?.featurePermissions?.isNotEmpty() == true
+        } || isStaffOrAdmin
 
         Scaffold(
             snackbarHost = {
@@ -206,65 +277,45 @@ fun MainScreen(
                         containerColor = WarmWhiteSurface,
                         tonalElevation = 8.dp
                     ) {
-                        if (currentUser?.isStaff == true || currentUser?.featurePermissions?.isNotEmpty() == true) {
+                        val canSeeMembers = isStrictAdmin || currentUser?.featurePermissions?.contains("members") == true
+                        val canSeeNotices = true // standard resident menu
+                        val canSeeOfferings = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true
+                        val canSeeNavratri = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("navratri") == true
+
+                        if (isStrictAdmin) {
+                            // When user is ADMIN: Only show Admin Dashboard & Admin controls
                             NavigationBarItem(
                                 selected = currentScreen == Screen.AdminHome,
                                 onClick = { currentScreen = Screen.AdminHome },
-                                icon = { Text(text = "🏠", fontSize = 20.sp) },
-                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ડેશબોર્ડ" else "Dashboard", style = BodlaNavigation) },
+                                icon = { Text(text = "⚡", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "વહીવટ" else "Admin", style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                            if (currentUser?.isAdmin == true || currentUser?.featurePermissions?.contains("members") == true) {
-                                NavigationBarItem(
-                                    selected = currentScreen == Screen.AdminUsers,
-                                    onClick = { currentScreen = Screen.AdminUsers },
-                                    icon = { Text(text = "👥", fontSize = 20.sp) },
-                                    label = { Text(text = if (lang == AppLanguage.GUJARATI) "સભ્યો" else "Members", style = BodlaNavigation) },
-                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
-                                )
-                            }
-                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("notices") == true) NavigationBarItem(
+
+                            NavigationBarItem(
+                                selected = currentScreen == Screen.AdminUsers,
+                                onClick = { currentScreen = Screen.AdminUsers },
+                                icon = { Text(text = "👥", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "સભ્યો" else "Members", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
+
+                            NavigationBarItem(
                                 selected = currentScreen == Screen.Notices,
                                 onClick = { currentScreen = Screen.Notices },
                                 icon = { Text(text = "📢", fontSize = 20.sp) },
                                 label = { Text(text = Strings.navNotices(lang), style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true) NavigationBarItem(
+
+                            NavigationBarItem(
                                 selected = currentScreen == Screen.Offerings,
                                 onClick = { currentScreen = Screen.Offerings },
                                 icon = { Text(text = "🙏", fontSize = 20.sp) },
                                 label = { Text(text = if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offerings", style = BodlaNavigation) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("navratri") == true) NavigationBarItem(
-                                selected = currentScreen == Screen.Navratri,
-                                onClick = { currentScreen = Screen.Navratri },
-                                icon = { Text(text = "✨", fontSize = 20.sp) },
-                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", style = BodlaNavigation) },
-                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
-                            )
-                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("complaints") == true) NavigationBarItem(
-                                selected = currentScreen == Screen.Complaints,
-                                onClick = { currentScreen = Screen.Complaints },
-                                icon = { Text(text = "📝", fontSize = 20.sp) },
-                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ફરિયાદો" else "Complaints", style = BodlaNavigation) },
-                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
-                            )
-                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("emergency_contacts") == true) NavigationBarItem(
-                                selected = currentScreen == Screen.Emergency,
-                                onClick = { currentScreen = Screen.Emergency },
-                                icon = { Text(text = "🚨", fontSize = 20.sp) },
-                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "કટોકટી સંપર્ક" else "Emergency", style = BodlaNavigation) },
-                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
-                            )
-                            if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("village_history") == true) NavigationBarItem(
-                                selected = currentScreen == Screen.VillageHistory,
-                                onClick = { currentScreen = Screen.VillageHistory },
-                                icon = { Text(text = "📖", fontSize = 20.sp) },
-                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "ઇતિહાસ" else "History", style = BodlaNavigation) },
-                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
-                            )
+
                             NavigationBarItem(
                                 selected = currentScreen == Screen.Profile,
                                 onClick = { currentScreen = Screen.Profile },
@@ -273,70 +324,70 @@ fun MainScreen(
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
                         } else {
-                        // 1. Home
-                        NavigationBarItem(
-                            selected = currentScreen == Screen.Home,
-                            onClick = { currentScreen = Screen.Home },
-                            icon = { Text(text = "🏠", fontSize = 20.sp) },
-                            label = { Text(text = Strings.navHome(lang), style = BodlaNavigation) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = SaffronPrimary,
-                                selectedTextColor = SaffronPrimary,
-                                indicatorColor = LightIconBg
+                            // Standard Resident Menu
+                            NavigationBarItem(
+                                selected = currentScreen == Screen.Home,
+                                onClick = { currentScreen = Screen.Home },
+                                icon = { Text(text = "🏠", fontSize = 20.sp) },
+                                label = { Text(text = Strings.navHome(lang), style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                        )
 
-                        // 2. Notices
-                        NavigationBarItem(
-                            selected = currentScreen == Screen.Notices,
-                            onClick = { currentScreen = Screen.Notices },
-                            icon = { Text(text = "📢", fontSize = 20.sp) },
-                            label = { Text(text = Strings.navNotices(lang), style = BodlaNavigation) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = SaffronPrimary,
-                                selectedTextColor = SaffronPrimary,
-                                indicatorColor = LightIconBg
-                            )
-                        )
+                            if (canSeeMembers) {
+                                NavigationBarItem(
+                                    selected = currentScreen == Screen.AdminUsers,
+                                    onClick = { currentScreen = Screen.AdminUsers },
+                                    icon = { Text(text = "👥", fontSize = 20.sp) },
+                                    label = { Text(text = if (lang == AppLanguage.GUJARATI) "સભ્યો" else "Members", style = BodlaNavigation) },
+                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                                )
+                            }
 
-                        // 3. Notifications
-                        NavigationBarItem(
-                            selected = currentScreen == Screen.Notifications,
-                            onClick = { currentScreen = Screen.Notifications },
-                            icon = { Text(text = "🔔", fontSize = 20.sp) },
-                            label = { Text(text = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Updates", style = BodlaNavigation) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = SaffronPrimary,
-                                selectedTextColor = SaffronPrimary,
-                                indicatorColor = LightIconBg
-                            )
-                        )
+                            if (canSeeNotices) {
+                                NavigationBarItem(
+                                    selected = currentScreen == Screen.Notices,
+                                    onClick = { currentScreen = Screen.Notices },
+                                    icon = { Text(text = "📢", fontSize = 20.sp) },
+                                    label = { Text(text = Strings.navNotices(lang), style = BodlaNavigation) },
+                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                                )
+                            }
 
-                        // 4. Complaints
-                        NavigationBarItem(
-                            selected = currentScreen == Screen.Complaints,
-                            onClick = { currentScreen = Screen.Complaints },
-                            icon = { Text(text = "✍", fontSize = 20.sp) },
-                            label = { Text(text = Strings.serviceComplaints(lang), style = BodlaNavigation) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = SaffronPrimary,
-                                selectedTextColor = SaffronPrimary,
-                                indicatorColor = LightIconBg
-                            )
-                        )
+                            if (canSeeOfferings) {
+                                NavigationBarItem(
+                                    selected = currentScreen == Screen.Offerings,
+                                    onClick = { currentScreen = Screen.Offerings },
+                                    icon = { Text(text = "🙏", fontSize = 20.sp) },
+                                    label = { Text(text = if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offerings", style = BodlaNavigation) },
+                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                                )
+                            }
 
-                        // 5. Profile
-                        NavigationBarItem(
-                            selected = currentScreen == Screen.Profile,
-                            onClick = { currentScreen = Screen.Profile },
-                            icon = { Text(text = "👤", fontSize = 20.sp) },
-                            label = { Text(text = Strings.navProfile(lang), style = BodlaNavigation) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = SaffronPrimary,
-                                selectedTextColor = SaffronPrimary,
-                                indicatorColor = LightIconBg
+                            if (canSeeNavratri) {
+                                NavigationBarItem(
+                                    selected = currentScreen == Screen.Navratri,
+                                    onClick = { currentScreen = Screen.Navratri },
+                                    icon = { Text(text = "✨", fontSize = 20.sp) },
+                                    label = { Text(text = if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", style = BodlaNavigation) },
+                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                                )
+                            }
+
+                            NavigationBarItem(
+                                selected = currentScreen == Screen.Notifications,
+                                onClick = { currentScreen = Screen.Notifications },
+                                icon = { Text(text = "🔔", fontSize = 20.sp) },
+                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Updates", style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
                             )
-                        )
+
+                            NavigationBarItem(
+                                selected = currentScreen == Screen.Profile,
+                                onClick = { currentScreen = Screen.Profile },
+                                icon = { Text(text = "👤", fontSize = 20.sp) },
+                                label = { Text(text = Strings.navProfile(lang), style = BodlaNavigation) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
+                            )
                         }
                     }
                 }
@@ -396,7 +447,16 @@ fun MainScreen(
                             )
                             TextButton(
                                 enabled = syncStatus != SyncStatus.SYNCING,
-                                onClick = { coroutineScope.launch { AppContainer.syncEngine.syncAll() } }
+                                onClick = {
+                                    coroutineScope.launch {
+                                        AppContainer.syncEngine.syncAll()
+                                        AppContainer.noticeRepository.refreshNotices()
+                                        AppContainer.eventRepository.refreshEvents()
+                                        AppContainer.businessRepository.refreshBusinesses()
+                                        AppContainer.offeringRepository.refreshOfferings()
+                                        AppContainer.emergencyRepository.refreshEmergencyContacts()
+                                    }
+                                }
                             ) {
                                 Text(if (lang == AppLanguage.GUJARATI) "ફરી પ્રયાસ" else "Retry")
                             }
@@ -431,25 +491,26 @@ fun MainScreen(
                         )
 
                         is Screen.VillageHistory -> VillageHistoryScreen(
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = { currentScreen = defaultHome },
                             modifier = contentModifier
                         )
 
                         is Screen.Notices -> NoticeListScreen(
                             onNavigate = { currentScreen = it },
                             notices = notices,
+                            onBack = { currentScreen = defaultHome },
                             modifier = contentModifier
                         )
 
                         is Screen.Navratri -> com.bodla.parivar.features.navratri.NavratriScreen(
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = { currentScreen = defaultHome },
                             canManage = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("navratri") == true,
                             modifier = contentModifier
                         )
 
                         is Screen.Notifications -> NotificationCenterScreen(
                             notifications = latestNotifications,
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = { currentScreen = defaultHome },
                             onNotificationClick = { notification ->
                                 if (notification.type == "NOTICE" && !notification.referenceId.isNullOrBlank()) {
                                     currentScreen = Screen.NoticeDetail(notification.referenceId)
@@ -510,8 +571,16 @@ fun MainScreen(
                             authRepository = AppContainer.authRepository,
                             onLoginSuccess = { profile ->
                                 currentUser = profile
-                                currentScreen = if (profile.isStaff) Screen.AdminHome else Screen.Home
-                                coroutineScope.launch { AppContainer.syncEngine.syncAll() }
+                                val isAdminUser = profile.hasAdminDashboardAccess()
+                                currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                                coroutineScope.launch {
+                                    AppContainer.syncEngine.syncAll()
+                                    AppContainer.noticeRepository.refreshNotices()
+                                    AppContainer.eventRepository.refreshEvents()
+                                    AppContainer.businessRepository.refreshBusinesses()
+                                    AppContainer.offeringRepository.refreshOfferings()
+                                    AppContainer.emergencyRepository.refreshEmergencyContacts()
+                                }
                             },
                             onNavigateRegister = { currentScreen = Screen.Register },
                             modifier = contentModifier
@@ -521,7 +590,7 @@ fun MainScreen(
                             authRepository = AppContainer.authRepository,
                             onRegisterSuccess = { profile ->
                                 currentUser = profile
-                                currentScreen = if (profile.isStaff) Screen.AdminHome else Screen.Home
+                                currentScreen = Screen.Home
                             },
                             onNavigateLogin = { currentScreen = Screen.Login },
                             modifier = contentModifier
@@ -542,7 +611,7 @@ fun MainScreen(
                         is Screen.Offerings -> OfferingListScreen(
                             onNavigate = { currentScreen = it },
                             offerings = offerings,
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = { currentScreen = defaultHome },
                             canManageOfferings = currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true,
                             modifier = contentModifier
                         )
@@ -594,7 +663,7 @@ fun MainScreen(
                             OfferingListScreen(
                                 onNavigate = { currentScreen = it },
                                 offerings = offerings,
-                                onBack = { currentScreen = Screen.Home },
+                                onBack = { currentScreen = defaultHome },
                                 modifier = contentModifier
                             )
                         }
@@ -602,7 +671,7 @@ fun MainScreen(
                         is Screen.Complaints -> ComplaintListScreen(
                             onNavigate = { currentScreen = it },
                             complaints = myComplaints,
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = { currentScreen = defaultHome },
                             modifier = contentModifier
                         )
 
@@ -623,7 +692,7 @@ fun MainScreen(
                         )
 
                         is Screen.Emergency -> EmergencyScreen(
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = { currentScreen = defaultHome },
                             emergencyContacts = emergencyContacts,
                             modifier = contentModifier
                         )
@@ -634,36 +703,16 @@ fun MainScreen(
                         )
                     }
 
-                    if (pullDistance > 0f || isPullRefreshing) {
+                    if (isPullRefreshing) {
                         Surface(
                             modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp),
-                            shape = RoundedCornerShape(20.dp),
+                            shape = CircleShape,
                             color = WarmWhiteSurface,
                             shadowElevation = 6.dp,
                             border = androidx.compose.foundation.BorderStroke(1.dp, BorderStroke)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (isPullRefreshing) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = SaffronPrimary)
-                                } else {
-                                    Text(text = "↓", color = SaffronPrimary, fontSize = 18.sp)
-                                }
-                                Text(
-                                    text = when {
-                                        isPullRefreshing && lang == AppLanguage.GUJARATI -> "રીફ્રેશ થઈ રહ્યું છે…"
-                                        isPullRefreshing -> "Refreshing…"
-                                        pullDistance >= pullThresholdPx && lang == AppLanguage.GUJARATI -> "રીફ્રેશ કરવા છોડો"
-                                        pullDistance >= pullThresholdPx -> "Release to refresh"
-                                        lang == AppLanguage.GUJARATI -> "રીફ્રેશ કરવા નીચે ખેંચો"
-                                        else -> "Pull down to refresh"
-                                    },
-                                    style = BodlaCaption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
-                                    color = TextPrimary
-                                )
+                            Box(modifier = Modifier.padding(10.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = SaffronPrimary)
                             }
                         }
                     }

@@ -156,13 +156,32 @@ fun ProfileScreen(
                 item {
                     BodlaCard {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(text = "⚡", fontSize = 20.sp)
+                                    Text(
+                                        text = if (lang == AppLanguage.GUJARATI) "વહીવટકર્તા સાધનો" else "Administrator Suite",
+                                        style = BodlaCardTitle,
+                                        color = TextPrimary
+                                    )
+                                }
+                                val primaryRole = profile.roles.firstOrNull() ?: if (profile.isAdmin) "ADMIN" else "STAFF"
+                                StatusChip(status = primaryRole)
+                            }
                             Text(
-                                text = if (lang == AppLanguage.GUJARATI) "વહીવટકર્તા સાધનો" else "Administrator tools",
-                                style = BodlaCardTitle,
-                                color = TextPrimary
+                                text = if (lang == AppLanguage.GUJARATI) 
+                                    "તમારી પાસે વહીવટી સ્ટાફના અધિકારો છે. સભ્યોનું સંચાલન, સૂચનાઓ, ચઢાવો અને ફરિયાદો તપાસવા માટે ડેશબોર્ડ ખોલો."
+                                else 
+                                    "Authorized staff account. Open the console to manage members, circulars, offerings, and grievances.",
+                                style = BodlaCaption,
+                                color = TextSecondary
                             )
                             BodlaButton(
-                                text = if (lang == AppLanguage.GUJARATI) "ડેશબોર્ડ ખોલો" else "Open dashboard",
+                                text = if (lang == AppLanguage.GUJARATI) "એડમિન ડેશબોર્ડ ખોલો" else "Open Admin Dashboard",
                                 onClick = { onNavigate(Screen.AdminHome) }
                             )
                         }

@@ -47,6 +47,7 @@ class SyncEngine(
     private val tokenStorage: TokenStorage
 ) {
     private val syncMutex = Mutex()
+    private val tokenRefreshMutex = Mutex()
     private val _syncState = MutableStateFlow(SyncStatus.IDLE)
     val syncState: StateFlow<SyncStatus> = _syncState.asStateFlow()
     private val _lastSyncError = MutableStateFlow<String?>(null)
@@ -84,9 +85,10 @@ class SyncEngine(
                         continue
                     }
 
-                    var response = postMutation(url, item.payloadJson, tokenStorage.getToken())
+                    val requestToken = tokenStorage.getToken()
+                    var response = postMutation(url, item.payloadJson, requestToken)
                     if (response.status == HttpStatusCode.Unauthorized) {
-                        val refreshedToken = refreshAccessToken()
+                        val refreshedToken = refreshAccessTokenIfStale(requestToken)
                         if (refreshedToken != null) {
                             response = postMutation(url, item.payloadJson, refreshedToken)
                         }
@@ -153,7 +155,19 @@ class SyncEngine(
             setBody(payload)
         }
 
-    suspend fun refreshAccessToken(): String? {
+    suspend fun refreshAccessToken(): String? = tokenRefreshMutex.withLock {
+        refreshAccessTokenLocked()
+    }
+
+    suspend fun refreshAccessTokenIfStale(observedAccessToken: String?): String? = tokenRefreshMutex.withLock {
+        val currentToken = tokenStorage.getToken()
+        if (!observedAccessToken.isNullOrBlank() && !currentToken.isNullOrBlank() && currentToken != observedAccessToken) {
+            return@withLock currentToken
+        }
+        refreshAccessTokenLocked()
+    }
+
+    private suspend fun refreshAccessTokenLocked(): String? {
         val refreshToken = tokenStorage.getRefreshToken()
         if (refreshToken.isNullOrBlank()) {
             _lastSyncError.value = "Your session expired. Sign out and sign in again to restore cloud sync."
@@ -188,6 +202,10 @@ class SyncEngine(
         val error = Json.parseToJsonElement(errorBody).jsonObject
         val code = error["code"]?.jsonPrimitive?.contentOrNull
         val message = error["message"]?.jsonPrimitive?.contentOrNull
-        listOfNotNull(code, message).joinToString(": ").ifBlank { errorBody }
-    }.getOrDefault(errorBody)
+        if (code == "23514" && message?.contains("BID_TOO_LOW", ignoreCase = true) == true) {
+            "Bid is too low. Another member placed a higher bid. Refresh the offering and enter a higher amount."
+        } else {
+            message?.takeIf { it.isNotBlank() } ?: "The request could not be completed. Please try again."
+        }
+    }.getOrDefault("The request could not be completed. Please try again.")
 }

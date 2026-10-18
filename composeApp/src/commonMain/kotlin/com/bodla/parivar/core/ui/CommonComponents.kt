@@ -194,32 +194,51 @@ fun DemoDataBadge(modifier: Modifier = Modifier) {
 }
 
 // ------------------------------------------------------------------------------
-// Status Chip
+// Status Chip & Role Badges
 // ------------------------------------------------------------------------------
 @Composable
 fun StatusChip(
     status: String,
     modifier: Modifier = Modifier
 ) {
-    val (bgColor, textColor) = when (status) {
-        "APPROVED", "PUBLISHED", "ACTIVE", "RESOLVED" -> Pair(StatusSuccess.copy(alpha = 0.15f), StatusSuccess)
-        "PENDING", "PENDING_APPROVAL", "UNDER_REVIEW" -> Pair(StatusWarning.copy(alpha = 0.15f), StatusWarning)
-        "REJECTED", "CANCELLED", "EXPIRED" -> Pair(StatusError.copy(alpha = 0.15f), StatusError)
+    val normalized = status.uppercase()
+    val (bgColor, textColor) = when {
+        normalized in listOf("APPROVED", "PUBLISHED", "ACTIVE", "RESOLVED", "SUCCESS", "COMPLETED") -> 
+            Pair(StatusSuccess.copy(alpha = 0.15f), StatusSuccess)
+        normalized in listOf("PENDING", "PENDING_APPROVAL", "UNDER_REVIEW", "DRAFT", "IN_PROGRESS", "ASSIGNED") -> 
+            Pair(StatusWarning.copy(alpha = 0.15f), StatusWarning)
+        normalized in listOf("REJECTED", "CANCELLED", "EXPIRED", "SUSPENDED", "FAILED", "DELETED") -> 
+            Pair(StatusError.copy(alpha = 0.15f), StatusError)
+        normalized in listOf("SUPER_ADMIN", "ADMIN") -> 
+            Pair(SaffronPrimary.copy(alpha = 0.15f), SaffronPrimary)
+        normalized in listOf("MODERATOR", "CONTENT_MANAGER", "STAFF") -> 
+            Pair(GoldenAccent.copy(alpha = 0.18f), GoldenAccent)
         else -> Pair(BorderStroke, TextSecondary)
     }
 
     Surface(
         color = bgColor,
-        shape = RoundedCornerShape(ChipCornerRadius),
+        shape = RoundedCornerShape(100.dp),
         modifier = modifier
     ) {
-        Text(
-            text = status.replace("_", " "),
-            color = textColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(textColor)
+            )
+            Text(
+                text = normalized.replace("_", " "),
+                color = textColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 

@@ -139,15 +139,16 @@ fun CreateComplaintScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(
+            com.bodla.parivar.core.ui.GujlishTextField(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text(Strings.complaintTitle(lang)) },
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
 
-            OutlinedTextField(
+            com.bodla.parivar.core.ui.GujlishTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text(Strings.complaintDescription(lang)) },
