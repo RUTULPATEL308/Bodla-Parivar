@@ -2,61 +2,54 @@ workflows:
   ios-simulator-appetize:
     name: iOS Simulator -> Appetize
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 90
     environment:
       groups:
-        - appetize            # must contain APPETIZE_API_TOKEN (and optionally APPETIZE_IOS_PUBLIC_KEY)
-      node: 20
+        - appetize   # APPETIZE_API_TOKEN (+ optional APPETIZE_IOS_PUBLIC_KEY). Add your Supabase vars here too if the app needs them.
+      java: 17
       xcode: latest
-      cocoapods: default
-      vars:
-        XCODE_WORKSPACE: "YourApp.xcworkspace"   # TODO: change
-        XCODE_SCHEME: "YourApp"                  # TODO: change
     triggering:
       events:
         - push
       branch_patterns:
         - pattern: main
           include: true
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+        - $HOME/.konan
     scripts:
-      - name: Install npm dependencies
-        script: npm ci            # use "yarn install --frozen-lockfile" if you use yarn
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
+      - name: Make gradlew executable
+        script: chmod +x ./gradlew
       - name: Build iOS app for simulator
         script: |
-          cd ios
           xcodebuild build \
-            -workspace "$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
+            -derivedDataPath iosApp/build \
             CODE_SIGNING_ALLOWED=NO
       - name: Zip .app for Appetize
         script: |
-          APP_PATH=$(find ios/build/Build/Products -name "*.app" -path "*Release-iphonesimulator*" | head -n 1)
+          APP_PATH=$(find iosApp/build/Build/Products -name "*.app" -path "*iphonesimulator*" | head -n 1)
           echo "Found app: $APP_PATH"
+          [ -z "$APP_PATH" ] && echo "No .app found" && exit 1
           cd "$(dirname "$APP_PATH")"
           zip -r "$CM_BUILD_DIR/app-simulator.zip" "$(basename "$APP_PATH")"
       - name: Upload to Appetize
         script: |
           if [ -n "$APPETIZE_IOS_PUBLIC_KEY" ]; then
-            # Update existing app (keeps the same public link)
             URL="https://api.appetize.io/v1/apps/$APPETIZE_IOS_PUBLIC_KEY"
           else
-            # Create a new app
             URL="https://api.appetize.io/v1/apps"
           fi
           curl --fail -X POST "$URL" \
             -H "X-API-KEY: $APPETIZE_API_TOKEN" \
             -F "file=@$CM_BUILD_DIR/app-simulator.zip" \
             -F "platform=ios" | tee appetize_response.json
-          echo ""
-          echo "Check appetize_response.json for your publicKey / publicURL"
     artifacts:
       - app-simulator.zip
       - appetize_response.json
@@ -67,8 +60,7 @@ workflows:
     max_build_duration: 60
     environment:
       groups:
-        - appetize            # APPETIZE_API_TOKEN (and optionally APPETIZE_ANDROID_PUBLIC_KEY)
-      node: 20
+        - appetize   # APPETIZE_API_TOKEN (+ optional APPETIZE_ANDROID_PUBLIC_KEY)
       java: 17
     triggering:
       events:
@@ -76,17 +68,19 @@ workflows:
       branch_patterns:
         - pattern: main
           include: true
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
     scripts:
-      - name: Install npm dependencies
-        script: npm ci
-      - name: Build release APK
+      - name: Build debug APK
         script: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
+          chmod +x ./gradlew
+          ./gradlew :composeApp:assembleDebug
       - name: Upload to Appetize
         script: |
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          APK_PATH=$(find composeApp/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          echo "Found APK: $APK_PATH"
           if [ -n "$APPETIZE_ANDROID_PUBLIC_KEY" ]; then
             URL="https://api.appetize.io/v1/apps/$APPETIZE_ANDROID_PUBLIC_KEY"
           else
@@ -97,5 +91,5 @@ workflows:
             -F "file=@$APK_PATH" \
             -F "platform=android" | tee appetize_response.json
     artifacts:
-      - android/app/build/outputs/apk/release/*.apk
+      - composeApp/build/outputs/apk/debug/*.apk
       - appetize_response.json
