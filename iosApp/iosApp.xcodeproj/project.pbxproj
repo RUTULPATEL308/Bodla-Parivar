@@ -9,6 +9,7 @@
 		B10000000000000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* ContentView.swift */; };
 		B10000000000000000000002 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* iOSApp.swift */; };
 		B10000000000000000000003 /* AnekGujarati.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* AnekGujarati.ttf */; };
+		B10000000000000000000004 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -16,6 +17,7 @@
 		C10000000000000000000002 /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
 		C10000000000000000000003 /* iosApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000004 /* AnekGujarati.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Fonts/AnekGujarati.ttf; sourceTree = "<group>"; };
+		C10000000000000000000005 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,6 +44,7 @@
 				C10000000000000000000001 /* ContentView.swift */,
 				C10000000000000000000002 /* iOSApp.swift */,
 				C10000000000000000000004 /* AnekGujarati.ttf */,
+				C10000000000000000000005 /* GoogleService-Info.plist */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -109,6 +112,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000003 /* AnekGujarati.ttf in Resources */,
+				B10000000000000000000004 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
