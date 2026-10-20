@@ -64,6 +64,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A30000000000000000000002 /* Build configuration list for PBXNativeTarget "iosApp" */;
 			buildPhases = (
+				F10000000000000000000002 /* Ensure GoogleService-Info.plist */,
 				F10000000000000000000001 /* Build Kotlin Framework */,
 				D20000000000000000000001 /* Sources */,
 				D10000000000000000000001 /* Frameworks */,
@@ -140,6 +141,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if [ \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" = \"YES\" ]; then\n  echo \"Skipping Gradle build because the IDE already built the Kotlin framework.\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\n";
+		};
+		F10000000000000000000002 /* Ensure GoogleService-Info.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = (
+				"$(SRCROOT)/iosApp/GoogleService-Info.plist.example",
+			);
+			name = "Ensure GoogleService-Info.plist";
+			outputPaths = (
+				"$(SRCROOT)/iosApp/GoogleService-Info.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "PLIST=\"$SRCROOT/iosApp/GoogleService-Info.plist\"\nEXAMPLE=\"$SRCROOT/iosApp/GoogleService-Info.plist.example\"\nif [ -n \"$GOOGLE_SERVICE_INFO_PLIST\" ]; then\n  printf '%s' \"$GOOGLE_SERVICE_INFO_PLIST\" | base64 --decode > \"$PLIST\"\nelif [ ! -f \"$PLIST\" ] && [ -f \"$EXAMPLE\" ]; then\n  cp \"$EXAMPLE\" \"$PLIST\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

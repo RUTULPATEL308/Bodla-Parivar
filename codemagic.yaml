@@ -22,6 +22,15 @@ workflows:
     scripts:
       - name: Make gradlew executable
         script: chmod +x ./gradlew
+      - name: Prepare GoogleService-Info.plist
+        script: |
+          PLIST="iosApp/iosApp/GoogleService-Info.plist"
+          EXAMPLE="iosApp/iosApp/GoogleService-Info.plist.example"
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > "$PLIST"
+          elif [ ! -f "$PLIST" ] && [ -f "$EXAMPLE" ]; then
+            cp "$EXAMPLE" "$PLIST"
+          fi
       - name: Build iOS app for simulator
         script: |
           xcodebuild build \
