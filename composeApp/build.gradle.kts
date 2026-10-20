@@ -28,6 +28,12 @@ kotlin {
     }
 
     sourceSets {
+        matching { it.name.contains("ios", ignoreCase = true) }.configureEach {
+            languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+            languageSettings.optIn("androidx.compose.ui.ExperimentalComposeUiApi")
+            languageSettings.optIn("androidx.compose.ui.text.ExperimentalTextApi")
+        }
+
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
