@@ -40,6 +40,9 @@ workflows:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath iosApp/build \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            EXCLUDED_ARCHS=x86_64 \
             CODE_SIGNING_ALLOWED=NO
       - name: Zip .app for Appetize
         script: |
