@@ -5,7 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, Bell, BookOpen, HeartHandshake, Home, PhoneCall, Send, Sparkles, Users, LogIn, LogOut, Sun, Moon } from 'lucide-react';
+import { AlertCircle, Bell, BookOpen, GraduationCap, HeartHandshake, Home, PhoneCall, Send, Sparkles, Users, LogIn, LogOut, Sun, Moon } from 'lucide-react';
 import Header from '@/components/Header';
 import { AdminLanguageProvider, useAdminFeatures, useAdminLanguage, type AdminFeature } from '@/components/AdminLanguageContext';
 import { ThemeProvider, useTheme } from '@/components/ThemeContext';
@@ -23,15 +23,42 @@ const mobileAdminLinks = [
   { label: 'Offerings', href: '/offerings', icon: HeartHandshake, feature: 'offerings' as AdminFeature },
   { label: 'Navratri', href: '/navratri', icon: Sparkles, feature: 'navratri' as AdminFeature },
   { label: 'Complaints', href: '/complaints', icon: AlertCircle, feature: 'complaints' as AdminFeature },
+  { label: 'Result Uploads', href: '/result-uploads', icon: GraduationCap, feature: 'result_uploads' as AdminFeature },
   { label: 'Emergency', href: '/emergency', icon: PhoneCall, feature: 'emergency_contacts' as AdminFeature },
-  { label: 'Notifications', href: '/notifications', icon: Send, feature: 'notifications' as AdminFeature },
 ];
 
 const featureByPath: Record<string, AdminFeature | null> = {
   '/': null,
   '/users': 'members', '/notices': 'notices', '/offerings': 'offerings', '/navratri': 'navratri',
   '/notifications': 'notifications', '/complaints': 'complaints', '/emergency': 'emergency_contacts', '/history': 'village_history',
+  '/events': 'events', '/directory': 'directory', '/gallery': 'gallery', '/result-uploads': 'result_uploads',
+  '/profile': null, '/notice-design': null, '/besanu-design': null,
 };
+
+const residentMemberPaths = [
+  '/',
+  '/notices',
+  '/notifications',
+  '/events',
+  '/complaints',
+  '/history',
+  '/navratri',
+  '/offerings',
+  '/emergency',
+  '/gallery',
+  '/directory',
+  '/users',
+  '/profile',
+  '/result-uploads',
+  '/notice-design',
+  '/besanu-design',
+];
+
+function isResidentMemberPath(pathname: string) {
+  return residentMemberPaths.some((path) =>
+    pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)),
+  );
+}
 
 function featureForPath(pathname: string) {
   const matchingPath = Object.keys(featureByPath)
@@ -53,7 +80,7 @@ function MobileAdminFooter() {
         return (
           <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-semibold ${active ? 'text-sky-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'}`}>
             <Icon aria-hidden="true" className="h-6 w-6" />
-            <span className="truncate leading-5">{lang === 'gu' ? ({ Home: 'હોમ', Users: 'સભ્યો', Notices: 'સૂચનાઓ', Offerings: 'ચઢાવો', Navratri: 'નવરાત્રી', Complaints: 'ફરિયાદો', Emergency: 'કટોકટી', History: 'ઇતિહાસ', Notifications: 'પ્રસારણ' }[label] ?? label) : label}</span>
+            <span className="truncate leading-5">{lang === 'gu' ? ({ Home: 'હોમ', Users: 'સભ્યો', Notices: 'સૂચનાઓ', Offerings: 'ચઢાવો', Navratri: 'નવરાત્રી', Complaints: 'ફરિયાદો', 'Result Uploads': 'પરિણામ અપલોડ', Emergency: 'કટોકટી', History: 'ઇતિહાસ', Notifications: 'પ્રસારણ' }[label] ?? label) : label}</span>
           </Link>
         );
       })}
@@ -113,12 +140,14 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const authEventVersion = useRef(0);
   const [grantedFeatures, setGrantedFeatures] = useState<AdminFeature[]>([]);
   const [isFullStaff, setIsFullStaff] = useState(false);
+  const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const { theme, toggleTheme } = useTheme();
 
   async function resolveAccess(session: Session | null) {
     if (!session) {
       setGrantedFeatures([]);
       setIsFullStaff(false);
+      setCurrentUserRoles([]);
       setSignedInEmail('');
       setAccessState('signed-out');
       return;
@@ -167,14 +196,20 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       const normalizedRoles = Array.isArray(roles)
         ? roles.map((role) => String(role).trim().toUpperCase())
         : [];
+      setCurrentUserRoles(normalizedRoles);
       const hasAdministratorRole = normalizedRoles.some((role) => role === 'ADMIN' || role === 'SUPER_ADMIN');
       const isStaff = data === true || hasAdministratorRole;
       setIsFullStaff(isStaff);
+      if (!isStaff && isResidentMemberPath(window.location.pathname)) {
+        setAccessState(Array.isArray(featurePermissions) && featurePermissions.length > 0 ? 'feature-member' : 'member');
+        return;
+      }
       // Offerings are resident-facing: opening /offerings must render the
       // member bidding view even when no staff feature grant is assigned.
-      if (!isStaff && Array.isArray(featurePermissions) && !['/', '/offerings'].includes(window.location.pathname)) {
+      if (!isStaff && Array.isArray(featurePermissions) && !['/', '/offerings', '/profile', '/notice-design', '/besanu-design'].includes(window.location.pathname)) {
         const feature = featureForPath(window.location.pathname);
-        if (!feature || !featurePermissions.includes(feature)) {
+        const alternateNoticeAccess = window.location.pathname === '/notifications' && featurePermissions.includes('notices');
+        if (!feature || (!featurePermissions.includes(feature) && !alternateNoticeAccess)) {
           if (featurePermissions.length > 0) {
             setAccessState('feature-member');
           } else {
@@ -306,7 +341,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const currentFeature = featureForPath(pathname);
   const routeNotGranted = accessState === 'feature-member'
     && pathname !== '/'
-    && (!currentFeature || !grantedFeatures.includes(currentFeature));
+    && !isResidentMemberPath(pathname)
+    && !['/offerings', '/profile', '/notice-design', '/besanu-design'].includes(pathname)
+    && (!currentFeature || (!grantedFeatures.includes(currentFeature) && !(pathname === '/notifications' && grantedFeatures.includes('notices'))));
 
   if (accessState === 'unauthorized' || routeNotGranted) {
     return (
@@ -329,8 +366,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (accessState === 'member' || (accessState === 'feature-member' && (pathname === '/' || pathname === '/offerings'))) {
-    return <MemberPortal email={signedInEmail} fullName={signedInName} onSignOut={handleSignOut} features={grantedFeatures} />;
+  if (accessState === 'member' || accessState === 'feature-member') {
+    return <MemberPortal email={signedInEmail} fullName={signedInName} onSignOut={handleSignOut} features={grantedFeatures} roles={currentUserRoles} />;
   }
 
   if (accessState === 'signed-out' || accessState === 'password-recovery') {

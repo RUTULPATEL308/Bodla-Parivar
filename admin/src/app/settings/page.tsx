@@ -113,20 +113,20 @@ export default function AdminSettingsPage() {
           {textField('Contact email', 'contact_email')}
           <label className="block space-y-1.5 text-sm font-semibold text-brand-text">
             Latitude
-            <input type="number" step="0.0000001" value={settings.latitude} onChange={(event) => update('latitude', event.target.value === '' ? '' : Number(event.target.value))} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
+            <input type="number" step="0.0000001" value={settings.latitude ?? ''} onChange={(event) => update('latitude', event.target.value === '' ? '' : Number(event.target.value))} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
           </label>
           <label className="block space-y-1.5 text-sm font-semibold text-brand-text">
             Longitude
-            <input type="number" step="0.0000001" value={settings.longitude} onChange={(event) => update('longitude', event.target.value === '' ? '' : Number(event.target.value))} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
+            <input type="number" step="0.0000001" value={settings.longitude ?? ''} onChange={(event) => update('longitude', event.target.value === '' ? '' : Number(event.target.value))} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
           </label>
         </div>
         <label className="block space-y-1.5 text-sm font-semibold text-brand-text">
           Village description (Gujarati)
-          <textarea rows={4} value={settings.description_gu} onChange={(event) => update('description_gu', event.target.value)} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
+          <textarea rows={4} value={settings.description_gu || ''} onChange={(event) => update('description_gu', event.target.value)} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
         </label>
         <label className="block space-y-1.5 text-sm font-semibold text-brand-text">
           Village description (English)
-          <textarea rows={4} value={settings.description_en} onChange={(event) => update('description_en', event.target.value)} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
+          <textarea rows={4} value={settings.description_en || ''} onChange={(event) => update('description_en', event.target.value)} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />
         </label>
         <button type="submit" disabled={saving} className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-saffron px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-saffron-dark disabled:cursor-wait disabled:opacity-60 sm:w-auto">
           {saving ? <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" /> : <Save aria-hidden="true" className="h-5 w-5" />}

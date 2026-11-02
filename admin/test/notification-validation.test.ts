@@ -31,3 +31,27 @@ test('accepts a bounded topic notification and normalizes text', () => {
     assert.equal(result.value.body_gu, 'સંદેશ');
   }
 });
+
+test('keeps the lock screen title and the notification picture', () => {
+  const result = validateNotificationInput({
+    ...validInput,
+    notification_title_gu: ' અંતિમ યાત્રા / સ્મશાન યાત્રા ',
+    image_url: ' https://demo.supabase.co/storage/v1/object/public/antim-yatra-posters/uid/poster.png ',
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.value.notification_title_gu, 'અંતિમ યાત્રા / સ્મશાન યાત્રા');
+    assert.equal(result.value.image_url, 'https://demo.supabase.co/storage/v1/object/public/antim-yatra-posters/uid/poster.png');
+  }
+});
+
+test('rejects pictures that are not public storage urls', () => {
+  assert.equal(validateNotificationInput({ ...validInput, image_url: 'http://demo.supabase.co/x.png' }).ok, false);
+  assert.equal(validateNotificationInput({ ...validInput, image_url: 'https://evil.test/photo.png' }).ok, false);
+  assert.equal(validateNotificationInput({ ...validInput, image_url: 42 }).ok, false);
+});
+
+test('rejects a lock screen title that is not text', () => {
+  assert.equal(validateNotificationInput({ ...validInput, notification_title_gu: {} }).ok, false);
+  assert.equal(validateNotificationInput({ ...validInput, notification_title_en: [] }).ok, false);
+});

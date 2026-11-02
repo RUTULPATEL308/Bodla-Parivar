@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       .eq('auth_user_id', user.id)
       .eq('status', 'ACTIVE')
       .maybeSingle();
-    if (profileError || !profile) return NextResponse.json({ error: 'Staff profile was not found.' }, { status: 403 });
+    if (profileError || !profile) return NextResponse.json({ error: 'An active resident profile was not found.' }, { status: 403 });
 
     const { data: roleLinks, error: roleLinkError } = await supabase
       .from('user_roles')
@@ -48,16 +48,6 @@ export async function POST(request: NextRequest) {
       : { data: [], error: null };
     if (rolesError) return NextResponse.json({ error: 'Could not verify staff access.' }, { status: 500 });
     const isStaff = (roles ?? []).some((role) => ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'CONTENT_MANAGER'].includes(role.name));
-    if (!isStaff) {
-      const { data: grant, error: grantError } = await supabase
-        .from('profile_feature_permissions')
-        .select('profile_id')
-        .eq('profile_id', profile.id)
-        .eq('feature_key', 'notifications')
-        .maybeSingle();
-      if (grantError) return NextResponse.json({ error: 'Could not verify notification access.' }, { status: 500 });
-      if (!grant) return NextResponse.json({ error: 'Notification feature access is required.' }, { status: 403 });
-    }
 
     const bodyResult = await readNotificationJson(request);
     if (isNotificationValidationFailure(bodyResult)) {
@@ -66,22 +56,81 @@ export async function POST(request: NextRequest) {
     const body = bodyResult;
     const validated = validateNotificationInput(body);
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: validated.status });
-    const { target, title_gu, title_en, body_gu, body_en, type, reference_id } = validated.value;
+    const { target, title_gu, title_en, notification_title_gu, notification_title_en, body_gu, body_en, image_url, attachment_url, type, reference_id } = validated.value;
     if (!isStaff && target === 'tokens') {
       return NextResponse.json({ error: 'Only staff can send direct token notifications.' }, { status: 403 });
+    }
+
+    // The picture must live on this project's storage so the push stays on a
+    // trusted, publicly reachable host.
+    if (image_url) {
+      let imageHost = '';
+      try {
+        imageHost = new URL(image_url).host;
+      } catch {
+        return NextResponse.json({ error: 'The notification image URL is invalid.' }, { status: 400 });
+      }
+      let projectHost = '';
+      try {
+        projectHost = new URL(supabaseUrl).host;
+      } catch {
+        projectHost = '';
+      }
+      if (!projectHost || imageHost !== projectHost) {
+        return NextResponse.json({ error: 'The notification image must be hosted on the project storage.' }, { status: 400 });
+      }
+    }
+    if (attachment_url) {
+      try {
+        const attachmentHost = new URL(attachment_url).host;
+        const projectHost = new URL(supabaseUrl).host;
+        if (attachmentHost !== projectHost) {
+          return NextResponse.json({ error: 'The notification attachment must be hosted on the project storage.' }, { status: 400 });
+        }
+      } catch {
+        return NextResponse.json({ error: 'The notification attachment URL is invalid.' }, { status: 400 });
+      }
+    }
+
+    let noticeId = reference_id || null;
+    if (type === 'NOTICE' && !noticeId) {
+      const { data: notice, error: noticeError } = await supabase
+        .from('notices')
+        .insert({
+          title_gu,
+          title_en: title_en || title_gu,
+          description_gu: body_gu,
+          description_en: body_en || body_gu,
+          status: 'PUBLISHED',
+          is_pinned: false,
+          publish_at: new Date().toISOString(),
+          published_by: profile.id,
+          image_url: image_url || null,
+          attachment_url: attachment_url || null,
+        })
+        .select('id')
+        .single();
+      if (noticeError) {
+        console.error('Supabase notice insert failed:', noticeError);
+        return NextResponse.json({ error: 'The public notice could not be created.' }, { status: 500 });
+      }
+      noticeId = notice.id;
     }
 
     // Save to the in-app history before contacting Firebase so history survives push outages.
     const { data: notification, error: dbError } = await supabase
       .from('notifications')
       .insert({
-        title_gu,
-        title_en: title_en || title_gu,
+        title_gu: notification_title_gu ?? title_gu,
+        title_en: notification_title_en || title_en || title_gu,
         body_gu,
         body_en: body_en || body_gu,
         type,
-        reference_id: reference_id || null,
+        reference_id: noticeId || null,
         created_by: profile.id,
+        image_url: image_url || null,
+        attachment_url: attachment_url || null,
+        payload: { image_url: image_url || null, attachment_url: attachment_url || null },
       })
       .select()
       .single();
@@ -103,15 +152,28 @@ export async function POST(request: NextRequest) {
     } = { success: true, mode: target };
 
     // 3. Dispatch Push Notification via Firebase Cloud Messaging
-    const pushTitleGu = String(title_gu).slice(0, 80);
-    const pushTitleEn = String(title_en || title_gu).slice(0, 120);
+    const pushTitleGu = String(notification_title_gu ?? title_gu).slice(0, 80);
+    const pushTitleEn = String(notification_title_en || title_en || title_gu).slice(0, 120);
     const pushBodyGu = String(body_gu).slice(0, 240);
     const pushBodyEn = String(body_en || body_gu).slice(0, 300);
+    const pushNotification: { title: string; body: string; image?: string } = {
+      title: pushTitleGu,
+      body: pushBodyGu,
+    };
+    const androidNotification: { channelId: string; sound: string; image?: string } = {
+      channelId: 'bodla_parivar_channel',
+      sound: 'default',
+    };
+    const aps: { sound: string; 'mutable-content'?: number } = { sound: 'default' };
+    const apnsFcmOptions: { image?: string } = {};
+    if (image_url) {
+      pushNotification.image = image_url;
+      androidNotification.image = image_url;
+      aps['mutable-content'] = 1;
+      apnsFcmOptions.image = image_url;
+    }
     const payload = {
-      notification: {
-        title: pushTitleGu,
-        body: pushBodyGu,
-      },
+      notification: pushNotification,
       data: {
         title_gu: pushTitleGu,
         title_en: pushTitleEn,
@@ -119,13 +181,17 @@ export async function POST(request: NextRequest) {
         body_en: pushBodyEn,
         type: String(type),
         notification_id: notification?.id ? String(notification.id) : '',
-        reference_id: reference_id ? String(reference_id) : '',
+        reference_id: noticeId ? String(noticeId) : '',
+        image_url: image_url ?? '',
       },
       android: {
         priority: 'high' as const,
-        notification: { channelId: 'bodla_parivar_channel', sound: 'default' },
+        notification: androidNotification,
       },
-      apns: { payload: { aps: { sound: 'default' } } },
+      apns: {
+        payload: { aps },
+        ...(apnsFcmOptions.image ? { fcm_options: apnsFcmOptions } : {}),
+      },
     };
 
     if (target === 'topic') {

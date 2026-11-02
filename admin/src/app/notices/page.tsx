@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Bell, Bold, FileText, ImagePlus, Italic, LoaderCircle, Pin, Plus, Strikethrough, Video, X, Languages, Eye, Trash2 } from 'lucide-react';
+import { Bell, Bold, FileText, ImagePlus, Italic, LoaderCircle, Pin, Plus, Strikethrough, Video, X, Languages, Eye, Trash2, Download } from 'lucide-react';
 import { Notice } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { translateText } from '@/lib/translation';
@@ -53,6 +53,7 @@ export default function AdminNoticesPage() {
   const [titleEn, setTitleEn] = useState('');
   const [bodyGu, setBodyGu] = useState('');
   const [bodyEn, setBodyEn] = useState('');
+  const [notificationTitleGu, setNotificationTitleGu] = useState('');
   const [media, setMedia] = useState<File | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [preview, setPreview] = useState<Notice | null>(null);
@@ -62,10 +63,39 @@ export default function AdminNoticesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [aiImproving, setAiImproving] = useState(false);
   const [error, setError] = useState('');
   const guInput = useRef<HTMLTextAreaElement>(null);
   const enInput = useRef<HTMLTextAreaElement>(null);
 
+  async function improveWithAi() {
+    const currentText = bodyGu.trim();
+    if (!currentText) {
+      setError('Please type text to improve.');
+      return;
+    }
+    setAiImproving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/notifications/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentText, type: 'body' }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        console.warn('AI enhancement unavailable:', json.error || 'AI enhancement failed.');
+      } else {
+        if (json.enhanced_gu) setBodyGu(json.enhanced_gu);
+        if (json.enhanced_en) setBodyEn(json.enhanced_en);
+        if (json.enhanced_gu && !titleGu.trim()) setTitleGu(json.enhanced_gu.slice(0, 60));
+      }
+    } catch {
+      // Keep enhancement optional; the original notice text remains usable.
+    } finally {
+      setAiImproving(false);
+    }
+  }
   async function translateEnglishToGujarati() {
     const text = bodyEn.trim();
     if (!text) return;
@@ -155,6 +185,8 @@ export default function AdminNoticesPage() {
 
     setSaving(true);
     const noticeId = crypto.randomUUID();
+    const autoTitle = titleGu.trim() || bodyGu.trim().split('\n')[0].slice(0, 80) || 'Notice';
+    const autoNotifTitle = notificationTitleGu.trim() || autoTitle;
     let uploadedPath: string | null = null;
     try {
       let imageUrl: string | null = null;
@@ -173,8 +205,8 @@ export default function AdminNoticesPage() {
 
       const { error: insertError } = await supabase.from('notices').insert({
         id: noticeId,
-        title_gu: titleGu.trim(),
-        title_en: titleEn.trim() || titleGu.trim(),
+        title_gu: autoTitle,
+        title_en: titleEn.trim() || autoTitle,
         description_gu: bodyGu.trim(),
         description_en: bodyEn.trim() || bodyGu.trim(),
         image_url: imageUrl,
@@ -199,10 +231,12 @@ export default function AdminNoticesPage() {
               Authorization: `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
-              title_gu: titleGu.trim(),
-              title_en: titleEn.trim() || titleGu.trim(),
+              title_gu: autoTitle,
+              title_en: titleEn.trim() || autoTitle,
+              notification_title_gu: autoNotifTitle,
               body_gu: bodyGu.trim(),
               body_en: bodyEn.trim() || bodyGu.trim(),
+              image_url: imageUrl ?? undefined,
               type: 'NOTICE',
               target: 'topic',
               reference_id: noticeId,
@@ -221,6 +255,7 @@ export default function AdminNoticesPage() {
       setTitleEn('');
       setBodyGu('');
       setBodyEn('');
+      setNotificationTitleGu('');
       setMedia(null);
       setIsPinned(false);
       setShowComposer(false);
@@ -252,16 +287,22 @@ export default function AdminNoticesPage() {
       return;
     }
 
-    const mediaPaths = [notice.image_url, notice.attachment_url]
-      .map((url) => {
-        if (!url) return null;
-        const marker = '/storage/v1/object/public/notices/';
+    const bucketMarkers: Array<{ bucket: string; marker: string }> = [
+      { bucket: 'notices', marker: '/storage/v1/object/public/notices/' },
+      { bucket: 'antim-yatra-posters', marker: '/storage/v1/object/public/antim-yatra-posters/' },
+    ];
+    const mediaPaths: Array<{ bucket: string; path: string }> = [];
+    for (const url of [notice.image_url, notice.attachment_url]) {
+      if (!url) continue;
+      for (const { bucket, marker } of bucketMarkers) {
         const markerIndex = url.indexOf(marker);
-        return markerIndex < 0 ? null : decodeURIComponent(url.slice(markerIndex + marker.length).split('?')[0]);
-      })
-      .filter((path): path is string => Boolean(path));
-    if (mediaPaths.length) {
-      const { error: mediaError } = await supabase.storage.from('notices').remove(mediaPaths);
+        if (markerIndex < 0) continue;
+        mediaPaths.push({ bucket, path: decodeURIComponent(url.slice(markerIndex + marker.length).split('?')[0]) });
+        break;
+      }
+    }
+    for (const { bucket, path } of mediaPaths) {
+      const { error: mediaError } = await supabase.storage.from(bucket).remove([path]);
       if (mediaError) setError(`Notice deleted, but uploaded media could not be removed: ${mediaError.message}`);
     }
     await loadNotices();
@@ -305,14 +346,6 @@ export default function AdminNoticesPage() {
       {showComposer && (
         <form onSubmit={handleSubmit} className="space-y-5 border border-brand-border bg-cream-surface p-5 sm:p-6">
           <div className="space-y-4">
-            <GujlishInput
-              label="સૂચનાનું શીર્ષક (Notice Title)"
-              value={titleGu}
-              onValueChange={setTitleGu}
-              placeholder="અહીં શીર્ષક ટાઇપ કરો (દા.ત. navratri mahotsav aayojan લખીને Space દબાવો)..."
-              required
-            />
-
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-700">ફોર્મેટિંગ:</span>
@@ -327,9 +360,17 @@ export default function AdminNoticesPage() {
                 value={bodyGu}
                 onValueChange={setBodyGu}
                 rows={5}
-                placeholder="સંપૂર્ણ સંદેશ ગુજલિશમાં ટાઇપ કરો (દા.ત. badha bhaiyo ane baheno e hajar rahevu), Space આપતા જ ગુજરાતી થઈ જશે..."
+                placeholder="સંપૂર્ણ સંદેશ ગુજલિશમાં ટાઇપ કરો (દા.ત. badha bhaiyo ane baheno e hajar rahevu), Space આપતા જે ગુજરાતી થાય જશે..."
                 required
               />
+              <button
+                type="button"
+                onClick={improveWithAi}
+                disabled={aiImproving}
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-border bg-cream-surface px-3 py-1.5 text-xs font-semibold text-brand-text hover:bg-saffron-container disabled:opacity-50"
+              >
+                {aiImproving ? 'Enhancing…' : '✨ AI Enhance'}
+              </button>
             </div>
           </div>
 
@@ -375,17 +416,58 @@ export default function AdminNoticesPage() {
         ) : (
           <ul className="divide-y divide-brand-border">
             {notices.map((notice) => (
-              <li key={notice.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+              <li key={notice.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 font-semibold text-brand-text">
                     {notice.is_pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-saffron" />}
                     <span data-print-lang="gu" className="break-words">{notice.title_gu}</span>
                   </p>
                   <p className="mt-1 text-xs text-brand-muted"><span data-print-lang="en">{notice.title_en} · </span>{new Date(notice.created_at).toLocaleDateString()}</p>
                   <p data-print-lang="gu" className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-brand-muted">{formattedPreview(notice.description_gu ?? '')}</p>
-                  <div className="mt-2 flex gap-3 text-xs text-leaf">
-                    {notice.image_url && <a href={notice.image_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1"><ImagePlus className="h-3.5 w-3.5" /> Image</a>}
-                    {notice.attachment_url && <a href={notice.attachment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1">{/\.(mp4|webm|mov)(\?|$)/i.test(notice.attachment_url) ? <Video className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />} Attachment</a>}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                    {notice.image_url && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { setPreviewZoom(1); setPreview(notice); }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-brand-border bg-white px-2.5 py-1 font-medium text-brand-text hover:bg-cream hover:text-saffron transition shadow-sm"
+                        >
+                          <Eye className="h-3.5 w-3.5 text-saffron" />
+                          <span>ફોટો જુઓ (View Image)</span>
+                        </button>
+                        <a
+                          href={notice.image_url + (notice.image_url.includes('?') ? '&download' : '?download')}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-brand-border bg-white px-2.5 py-1 font-medium text-brand-muted hover:text-leaf hover:bg-cream transition shadow-sm"
+                          title="Download Image"
+                        >
+                          <Download className="h-3.5 w-3.5 text-leaf" />
+                          <span>ડાઉનલોડ</span>
+                        </a>
+                      </>
+                    )}
+                    {notice.attachment_url && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { setPreviewZoom(1); setPreview(notice); }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-brand-border bg-white px-2.5 py-1 font-medium text-brand-text hover:bg-cream hover:text-saffron transition shadow-sm"
+                        >
+                          {/\.(mp4|webm|mov)(\?|$)/i.test(notice.attachment_url) ? <Video className="h-3.5 w-3.5 text-leaf" /> : <FileText className="h-3.5 w-3.5 text-leaf" />}
+                          <span>દસ્તાવેજ જુઓ (View)</span>
+                        </button>
+                        <a
+                          href={notice.attachment_url + (notice.attachment_url.includes('?') ? '&download' : '?download')}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-brand-border bg-white px-2.5 py-1 font-medium text-brand-text hover:text-saffron hover:bg-cream transition shadow-sm"
+                        >
+                          <Download className="h-3.5 w-3.5 text-saffron" />
+                          <span>દસ્તાવેજ ડાઉનલોડ</span>
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex self-end sm:self-center">
@@ -412,20 +494,43 @@ export default function AdminNoticesPage() {
                     <Image src={preview.image_url} alt="Notice attachment" width={1280} height={720} unoptimized className="h-auto w-full object-contain" />
                   </div>
                 </div>
-                <div className="mt-2 flex items-center gap-2" role="group" aria-label="Image zoom controls">
-                  <button type="button" onClick={() => setPreviewZoom((zoom) => Math.max(0.5, zoom / 1.25))} className="rounded border border-brand-border px-3 py-1" aria-label="Zoom out">−</button>
-                  <span className="min-w-12 text-center text-sm text-brand-muted">{Math.round(previewZoom * 100)}%</span>
-                  <button type="button" onClick={() => setPreviewZoom((zoom) => Math.min(4, zoom * 1.25))} className="rounded border border-brand-border px-3 py-1" aria-label="Zoom in">+</button>
-                  <button type="button" onClick={() => setPreviewZoom(1)} className="rounded border border-brand-border px-3 py-1 text-sm">Reset</button>
+                  <div className="mt-2 flex items-center justify-between gap-2" role="group" aria-label="Image zoom controls">
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setPreviewZoom((zoom) => Math.max(0.5, zoom / 1.25))} className="rounded border border-brand-border px-3 py-1" aria-label="Zoom out">−</button>
+                      <span className="min-w-12 text-center text-sm text-brand-muted">{Math.round(previewZoom * 100)}%</span>
+                      <button type="button" onClick={() => setPreviewZoom((zoom) => Math.min(4, zoom * 1.25))} className="rounded border border-brand-border px-3 py-1" aria-label="Zoom in">+</button>
+                      <button type="button" onClick={() => setPreviewZoom(1)} className="rounded border border-brand-border px-3 py-1 text-sm">Reset</button>
+                    </div>
+                    <a
+                      href={preview.image_url + (preview.image_url.includes('?') ? '&download' : '?download')}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded border border-brand-border bg-white px-3 py-1 text-sm font-medium text-brand-text hover:bg-cream"
+                    >
+                      <Download className="h-4 w-4 text-saffron" />
+                      <span>Download Image</span>
+                    </a>
+                  </div>
+                </>
+              )}
+              {preview.attachment_url && (/\.(mp4|webm|mov)(\?|$)/i.test(preview.attachment_url)
+                ? <video src={preview.attachment_url} controls playsInline className="mt-5 max-h-[55vh] w-full rounded bg-black" />
+                : /\.pdf(\?|$)/i.test(preview.attachment_url)
+                  ? <iframe src={preview.attachment_url} title="Notice document preview" className="mt-5 h-[55vh] w-full rounded border" />
+                  : <p className="mt-5 text-sm text-brand-muted">Document preview is unavailable for this file type.</p>)}
+              {preview.attachment_url && (
+                <div className="mt-4">
+                  <a
+                    href={preview.attachment_url + (preview.attachment_url.includes('?') ? '&download' : '?download')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded bg-saffron px-4 py-2 font-semibold text-white hover:bg-saffron-dark transition shadow-sm"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download Attachment / Document</span>
+                  </a>
                 </div>
-              </>
-            )}
-            {preview.attachment_url && (/\.(mp4|webm|mov)(\?|$)/i.test(preview.attachment_url)
-              ? <video src={preview.attachment_url} controls playsInline className="mt-5 max-h-[55vh] w-full rounded bg-black" />
-              : /\.pdf(\?|$)/i.test(preview.attachment_url)
-                ? <iframe src={preview.attachment_url} title="Notice document preview" className="mt-5 h-[55vh] w-full rounded border" />
-                : <p className="mt-5 text-sm text-brand-muted">Document preview is unavailable for this file type.</p>)}
-            {preview.attachment_url && <a href={preview.attachment_url + (preview.attachment_url.includes('?') ? '&download' : '?download')} className="mt-4 inline-flex rounded bg-saffron px-4 py-2 font-semibold text-white">Download attachment</a>}
+              )}
           </article>
         </div>
       )}

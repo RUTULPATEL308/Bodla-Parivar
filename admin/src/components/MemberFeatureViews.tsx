@@ -1,11 +1,12 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { AlertCircle, ExternalLink, LoaderCircle, MapPin, Phone } from 'lucide-react';
 import { useAdminLanguage } from '@/components/AdminLanguageContext';
+import { GujlishTextarea } from '@/components/GujlishInput';
 
-export type MemberSection = 'overview' | 'profile' | 'notices' | 'events' | 'complaints' | 'history' | 'settings' | 'navratri' | 'offerings' | 'emergency' | 'gallery' | 'notifications' | 'directory';
+export type MemberSection = 'overview' | 'profile' | 'notices' | 'events' | 'complaints' | 'history' | 'settings' | 'navratri' | 'offerings' | 'emergency' | 'gallery' | 'notifications' | 'directory' | 'result_uploads' | 'notice_design' | 'besanu_design';
 
 type RecordRow = Record<string, any>;
 
@@ -52,6 +53,9 @@ export default function MemberFeatureViews({ section, fullName }: { section: Mem
   if (section === 'notifications') return <NotificationsView />;
   if (section === 'directory') return <DirectoryView />;
   if (section === 'history') return <VillageHistoryView />;
+  if (section === 'result_uploads') return <ResultUploadsView />;
+  if (section === 'notice_design') return <MobileParityFuneralDesignView kind="antim" />;
+  if (section === 'besanu_design') return <MobileParityFuneralDesignView kind="besanu" />;
   return null;
 }
 
@@ -257,8 +261,289 @@ function GalleryView() {
 }
 
 function NotificationsView() {
-  const { rows, loading, error } = useMemberRows('notifications', 'notifications', '*', 'created_at');
-  return <section className="space-y-4"><div><h2 className={titleClass}>Notifications</h2><p className="mt-1 text-sm text-slate-500">Recent updates from Bodla Parivar.</p></div><LoadState loading={loading} error={error}>{rows.length ? rows.map((row) => <article key={row.id} className={cardClass}><div className="flex flex-wrap items-center justify-between gap-2"><h3 className={titleClass}>{row.title_en || row.title_gu}</h3><time className="text-xs text-slate-500">{row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</time></div><p className="mt-1 text-xs text-slate-500">{row.title_gu}</p><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{row.body_en || row.body_gu}</p></article>) : <EmptyMessage>You’re all caught up. New community updates will appear here.</EmptyMessage>}</LoadState></section>;
+  const { rows, loading, error, setRows } = useMemberRows('notifications', 'notifications', '*', 'created_at');
+  const [canBroadcast, setCanBroadcast] = useState(true);
+  const [checkingPermission, setCheckingPermission] = useState(true);
+  const [showCompose, setShowCompose] = useState(false);
+
+  // Form states
+  const [bodyGu, setBodyGu] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [attachmentUrl, setAttachmentUrl] = useState('');
+  const [attachmentName, setAttachmentName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [improvingBody, setImprovingBody] = useState(false);
+  const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          if (active) setCheckingPermission(false);
+          return;
+        }
+        if (!active) return;
+        setCanBroadcast(true);
+      } catch {
+        // ignore
+      } finally {
+        if (active) setCheckingPermission(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const handleEnhance = async (field: 'title' | 'body') => {
+    const text = bodyGu;
+    if (!text.trim()) {
+      setFeedback({ success: false, message: 'લખાણ સુધારવા માટે પહેલા લખાણ દાખલ કરો.' });
+      return;
+    }
+    setImprovingBody(true);
+
+    try {
+      const res = await fetch('/api/notifications/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.trim(), type: field }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI enhancement failed');
+      if (data.enhanced_gu) setBodyGu(data.enhanced_gu);
+      setFeedback({ success: true, message: 'AI દ્વારા લખાણ સુધારી દેવાયું!' });
+    } catch (err: any) {
+      setFeedback({ success: false, message: err.message || 'AI Enhancement failed' });
+    } finally {
+      setImprovingBody(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      setFeedback({ success: false, message: 'ફાઇલનું માપ 25 MB કરતાં ઓછું હોવું જોઈએ.' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadResponse = await fetch('/api/notices/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadData = await uploadResponse.json();
+      if (!uploadResponse.ok) {
+        throw new Error(uploadData.error || 'ફાઇલ અપલોડ થઈ નથી.');
+      }
+      if (uploadData.isImage) {
+        setImageUrl(uploadData.publicUrl);
+        setAttachmentUrl('');
+      } else {
+        setAttachmentUrl(uploadData.publicUrl);
+        setImageUrl('');
+      }
+      setAttachmentName(file.name);
+      setFeedback({ success: true, message: `ફાઇલ "${file.name}" અપલોડ થઈ ગઈ!` });
+    } catch (err: any) {
+      setFeedback({ success: false, message: err.message || 'File upload failed' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSend = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!bodyGu.trim()) {
+      setFeedback({ success: false, message: 'સંદેશ ગુજરાતીમાં જરૂરી છે.' });
+      return;
+    }
+    setSubmitting(true);
+    setFeedback(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+
+      let generatedTitle = bodyGu.trim().replace(/\s+/g, ' ').slice(0, 80);
+      try {
+        const titleResponse = await fetch('/api/notifications/enhance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: bodyGu.trim(), type: 'title' }),
+        });
+        const titleData = await titleResponse.json();
+        if (titleResponse.ok && titleData.enhanced_gu?.trim()) {
+          generatedTitle = titleData.enhanced_gu.trim();
+        }
+      } catch {
+        // Use a concise title derived from the message when AI is unavailable.
+      }
+
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title_gu: generatedTitle,
+          title_en: '',
+          body_gu: bodyGu.trim(),
+          body_en: '',
+          image_url: imageUrl.trim() || undefined,
+          attachment_url: attachmentUrl.trim() || undefined,
+          type: 'NOTICE',
+          target: 'topic',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'સૂચના મોકલવામાં નિષ્ફળ.');
+      setFeedback({ success: true, message: 'સૂચના સફળતાપૂર્વક મોકલાઈ ગઈ છે!' });
+      setBodyGu('');
+      setImageUrl('');
+      setAttachmentUrl('');
+      setAttachmentName('');
+      setShowCompose(false);
+      // Reload notifications
+      const refreshed = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(60);
+      if (refreshed.data) setRows(refreshed.data as RecordRow[]);
+    } catch (err: any) {
+      setFeedback({ success: false, message: err.message || 'Error sending notification' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8dfd2] pb-4">
+        <div>
+          <h2 className={titleClass}>સૂચનાઓ</h2>
+          <p className="mt-1 text-sm text-slate-500">બોદલા પરિવારના તાજેતરના અપડેટ્સ અને સીધી સૂચનાઓ.</p>
+        </div>
+        {canBroadcast && (
+          <button
+            onClick={() => setShowCompose(!showCompose)}
+            className="flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-700 transition"
+          >
+            <span>{showCompose ? 'સૂચનાઓની યાદી જુઓ' : '+ નવી સૂચના મોકલો'}</span>
+          </button>
+        )}
+      </div>
+
+      {feedback && (
+        <div className={`p-3 rounded-xl border text-xs font-semibold ${feedback.success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+          {feedback.message}
+        </div>
+      )}
+
+      {showCompose && canBroadcast ? (
+        <div className={`${cardClass} p-5 space-y-4`}>
+          <div className="border-b pb-3">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">તમામ સભ્યોને સીધી સૂચના મોકલો</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Gujlish ટાઇપિંગ, દસ્તાવેજ/ફોટો અપલોડ અને AI સુધારા સાથે સૂચના મોકલો.</p>
+          </div>
+          <form onSubmit={handleSend} className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-200">સંદેશ (Gujarati Message Body) *</label>
+                <button
+                  type="button"
+                  onClick={() => void handleEnhance('body')}
+                  disabled={improvingBody || !bodyGu.trim()}
+                  className="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {improvingBody ? 'AI સુધારે છે...' : '✨ AI સંદેશ સુધારો'}
+                </button>
+              </div>
+              <GujlishTextarea
+                required
+                rows={3}
+                value={bodyGu}
+                onValueChange={setBodyGu}
+                placeholder="સંદેશ લખો (દા.ત. તમામ ગ્રામજનોને કાલે સવારે હાજર રહેવા વિનંતી...)"
+                className={inputClass}
+              />
+            </div>
+
+            {/* Document/Photo Upload */}
+            <div className="p-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/50">
+              <label className="text-xs font-bold text-amber-900 block mb-1.5">ફોટો અથવા દસ્તાવેજ અપલોડ (Attach Photo/Document)</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer"
+                />
+                {uploading && <span className="text-xs text-amber-700 animate-pulse font-medium">અપલોડ થઈ રહ્યું છે...</span>}
+                {imageUrl && (
+                  <span className="text-xs font-semibold text-emerald-700">✓ {attachmentName || 'Attachment Uploaded'}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCompose(false)}
+                className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                રદ કરો
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || uploading}
+                className="px-5 py-2 rounded-xl bg-amber-600 text-xs font-bold text-white hover:bg-amber-700 transition disabled:opacity-50"
+              >
+                {submitting ? 'મોકલી રહ્યું છે…' : 'સૂચના મોકલો'}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <LoadState loading={loading} error={error}>
+          {rows.length ? (
+            rows.map((row) => (
+              <article key={row.id} className={cardClass}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className={titleClass}>{row.title_en || row.title_gu}</h3>
+                  <time className="text-xs text-slate-500">{row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</time>
+                </div>
+                {row.title_gu && row.title_en && row.title_en !== row.title_gu && (
+                  <p className="mt-1 text-xs text-slate-500">{row.title_gu}</p>
+                )}
+                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{row.body_en || row.body_gu}</p>
+                {row.payload?.image_url && (
+                  <div className="mt-3">
+                    <a
+                      href={row.payload.image_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-sky-700 hover:bg-slate-50 dark:border-slate-700 dark:text-sky-400"
+                    >
+                      <span>📎 ફોટો / દસ્તાવેજ જુઓ (View Attachment)</span>
+                    </a>
+                  </div>
+                )}
+              </article>
+            ))
+          ) : (
+            <EmptyMessage>You're all caught up. New community updates will appear here.</EmptyMessage>
+          )}
+        </LoadState>
+      )}
+    </section>
+  );
 }
 
 function DirectoryView() {
@@ -276,15 +561,377 @@ function DirectoryView() {
   return <section className="space-y-5"><div><h2 className={titleClass}>Community directory</h2><p className="mt-1 text-sm text-slate-500">Businesses, local opportunities, and useful places.</p></div><LoadState loading={loading} error={error}><div><h3 className="mb-2 font-semibold">Businesses</h3>{visibleBusinesses.length ? <div className="grid gap-3 sm:grid-cols-2">{visibleBusinesses.map((item) => <article key={item.id} className={cardClass}><h4 className="font-semibold">{item.name_en || item.name_gu}</h4><p className="mt-1 text-xs text-slate-500">{item.category?.name_en || item.category?.name_gu}</p><p className="mt-2 text-sm">{item.description_en || item.description_gu}</p>{item.address_en && <p className="mt-2 flex items-center gap-1 text-xs text-slate-500"><MapPin className="h-3.5 w-3.5" />{item.address_en}</p>}{item.phone && <a href={`tel:${item.phone}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-blue-700"><Phone className="h-4 w-4" />{item.phone}</a>}</article>)}</div> : <EmptyMessage>No businesses are listed yet.</EmptyMessage>}</div><div><h3 className="mb-2 font-semibold">Jobs and opportunities</h3>{jobs.length ? <div className="space-y-2">{jobs.map((item) => <article key={item.id} className={cardClass}><h4 className="font-semibold">{item.title_en || item.title_gu}</h4><p className="mt-1 text-sm">{item.company_name || item.location_en}</p>{item.contact_phone && <a href={`tel:${item.contact_phone}`} className="mt-2 block text-sm text-blue-700">{item.contact_phone}</a>}</article>)}</div> : <EmptyMessage>No current job listings.</EmptyMessage>}</div><div><h3 className="mb-2 font-semibold">Places</h3>{places.length ? <div className="grid gap-3 sm:grid-cols-2">{places.map((item) => <article key={item.id} className={cardClass}><h4 className="font-semibold">{item.name_en || item.name_gu}</h4><p className="mt-1 text-sm text-slate-500">{item.description_en || item.address_en}</p>{item.phone && <a href={`tel:${item.phone}`} className="mt-2 block text-sm text-blue-700">{item.phone}</a>}</article>)}</div> : <EmptyMessage>No places are listed yet.</EmptyMessage>}</div></LoadState></section>;
 }
 
+function ResultUploadsView() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [studentName, setStudentName] = useState('');
+  const [standard, setStandard] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    void supabase.from('village_settings').select('result_upload_enabled').order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data }) => {
+      if (active) setEnabled(data?.result_upload_enabled === true);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const submitResult = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!file || !enabled || saving) return;
+    if (file.size > 10 * 1024 * 1024) { setMessage('Please choose a file smaller than 10 MB.'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type)) { setMessage('Please upload a JPG, PNG, WebP, or PDF file.'); return; }
+    setSaving(true);
+    setMessage('');
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth.user;
+    if (!user) { setMessage('Please sign in again before submitting.'); setSaving(false); return; }
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${user.id}/${Date.now()}_${safeName}`;
+    const upload = await supabase.storage.from('result-uploads').upload(filePath, file, { contentType: file.type });
+    if (upload.error) { setMessage(upload.error.message); setSaving(false); return; }
+    const insert = await supabase.from('result_uploads').insert({
+      user_id: user.id,
+      student_name: studentName.trim(),
+      standard: standard.trim(),
+      school_name: schoolName.trim(),
+      file_path: filePath,
+      file_name: file.name,
+      content_type: file.type,
+    });
+    if (insert.error) {
+      await supabase.storage.from('result-uploads').remove([filePath]);
+      setMessage(insert.error.message);
+    } else {
+      setStudentName('');
+      setStandard('');
+      setSchoolName('');
+      setFile(null);
+      setMessage('Result submitted successfully.');
+    }
+    setSaving(false);
+  };
+
+  return <section className="space-y-4">
+    <div><h2 className={titleClass}>Result Upload</h2><p className="mt-1 text-sm text-slate-500">Submit a student result document securely.</p></div>
+    {enabled === null ? <div className={cardClass}>Loading result upload settings…</div> : !enabled ? <EmptyMessage>Result upload is currently closed.</EmptyMessage> : (
+      <form className={`${cardClass} space-y-3`} onSubmit={submitResult}>
+        <label className="block text-xs font-semibold text-slate-600">Student name<input required value={studentName} onChange={(event) => setStudentName(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">Standard / Class<input required value={standard} onChange={(event) => setStandard(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">School name<input required value={schoolName} onChange={(event) => setSchoolName(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">Result file<input required type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} className={`${inputClass} mt-1`} /></label>
+        {message && <p role="status" className="text-sm">{message}</p>}
+        <button disabled={saving} type="submit" className="min-h-11 rounded-xl bg-saffron px-4 text-sm font-bold text-white disabled:opacity-60">{saving ? 'Submitting…' : 'Submit Result'}</button>
+      </form>
+    )}
+  </section>;
+}
+
+function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
+  const isBesanu = kind === 'besanu';
+  const [name, setName] = useState('');
+  const [deathDate, setDeathDate] = useState('');
+  const [weekday, setWeekday] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [address, setAddress] = useState('');
+  const [cremationGround, setCremationGround] = useState('');
+  const [familyMembers, setFamilyMembers] = useState(['', '', '', '', '']);
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoName, setPhotoName] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const formatDate = (value: string) => {
+    if (!value) return '';
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const selectDeathDate = (value: string) => {
+    setDeathDate(value);
+    if (!value) {
+      setWeekday('');
+      return;
+    }
+    const date = new Date(`${value}T12:00:00`);
+    const names = ['રવિવાર', 'સોમવાર', 'મંગળવાર', 'બુધવાર', 'ગુરુવાર', 'શુક્રવાર', 'શનિવાર'];
+    setWeekday(names[date.getDay()] || '');
+  };
+
+  const uploadPhoto = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage('કૃપા કરીને ફોટો ફાઇલ પસંદ કરો.');
+      return;
+    }
+    setPublishing(true);
+    setMessage('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `condolence/${user?.id || 'member'}/${Date.now()}-${cleanName}`;
+      const { error } = await supabase.storage.from('notices').upload(path, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+      const { data } = supabase.storage.from('notices').getPublicUrl(path);
+      setPhotoUrl(data.publicUrl);
+      setPhotoName(file.name);
+    } catch (error: any) {
+      setMessage(error.message || 'ફોટો અપલોડ થઈ શક્યો નથી.');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const publish = async () => {
+    if (!name.trim() || !deathDate || !eventDate || !address.trim()) {
+      setMessage(isBesanu
+        ? 'નામ, અવસાનની તારીખ, બેસણું તારીખ અને સ્થાન જરૂરી છે.'
+        : 'નામ, અવસાનની તારીખ, અંતિમ યાત્રા તારીખ અને સરનામું જરૂરી છે.');
+      return;
+    }
+    setPublishing(true);
+    setMessage('');
+    try {
+      const familyText = familyMembers.filter((member) => member.trim()).join(', ');
+      const title = isBesanu ? `${name.trim()} - બેસણું સમાચાર` : `${name.trim()} - અંતિમ યાત્રા સમાચાર`;
+      const description = [
+        `સ્વ. ${name.trim()}`,
+        `અવસાનની તારીખ: ${formatDate(deathDate)}${weekday ? ` (${weekday})` : ''}`,
+        `${isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'} તારીખ: ${formatDate(eventDate)}`,
+        startTime ? (isBesanu ? `સમય: ${startTime}${endTime ? ` - ${endTime}` : ''}` : `સમય: ${startTime}`) : '',
+        `${isBesanu ? 'સ્થળ / સરનામું' : 'અંતિમ યાત્રા સરનામું'}: ${address.trim()}`,
+        !isBesanu && cremationGround.trim() ? `સ્મશાન ઘાટ: ${cremationGround.trim()}` : '',
+        familyText ? `પરિવારના સભ્યો: ${familyText}` : '',
+        mobileNumber.trim() ? `મો.: ${mobileNumber.trim()}` : '',
+      ].filter(Boolean).join('\n');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+      const response = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          target: 'topic',
+          type: 'NOTICE',
+          title_gu: title,
+          title_en: title,
+          notification_title_gu: title,
+          notification_title_en: isBesanu ? 'Besanu' : 'Antim Yatra',
+          body_gu: description,
+          body_en: description,
+          image_url: photoUrl || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'નોટિસ પ્રકાશિત થઈ શકી નથી.');
+      setMessage('નોટિસ પ્રકાશિત થઈ ગઈ છે અને મોબાઇલ સૂચન મોકલવામાં આવ્યું છે.');
+    } catch (error: any) {
+      setMessage(error.message || 'નોટિસ પ્રકાશિત થઈ શકી નથી.');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const posterBackground = isBesanu
+    ? 'linear-gradient(135deg, rgba(224,237,232,.92), rgba(196,214,206,.92)), url(/poster-bg.jpg)'
+    : 'linear-gradient(135deg, rgba(255,253,247,.94), rgba(214,195,161,.88)), url(/poster-bg.jpg)';
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className={titleClass}>{isBesanu ? 'બેસણું પોસ્ટ' : 'અંતિમ યાત્રા પોસ્ટ'}</h2>
+        <p className="mt-1 text-sm text-slate-500">મોબાઇલ એપની જેમ સમગ્ર ગુજરાતી માહિતી સાથે પોસ્ટ બનાવો અને પ્રકાશિત કરો.</p>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(320px,1fr)]">
+        <div className={`${cardClass} space-y-3`}>
+          <label className="block text-xs font-semibold text-slate-600">અહીં નામ લખો *<input value={name} onChange={(event) => setName(event.target.value)} className={`${inputClass} mt-1`} /></label>
+          <label className="block text-xs font-semibold text-slate-600">અવસાનની તારીખ *<input required type="date" value={deathDate} onChange={(event) => selectDeathDate(event.target.value)} className={`${inputClass} mt-1`} /></label>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">વાર: {weekday || 'તારીખ પસંદ કર્યા પછી આપમેળે આવશે'}</div>
+          <label className="block text-xs font-semibold text-slate-600">{isBesanu ? 'બેસણુંની તારીખ *' : 'અંતિમ યાત્રાની તારીખ *'}<input required type="date" value={eventDate} onChange={(event) => setEventDate(event.target.value)} className={`${inputClass} mt-1`} /></label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-semibold text-slate-600">{isBesanu ? 'સમય (શરૂ)' : 'સમય'}<input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className={`${inputClass} mt-1`} /></label>
+            {isBesanu && <label className="text-xs font-semibold text-slate-600">સમય (સુધી)<input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className={`${inputClass} mt-1`} /></label>}
+          </div>
+          <label className="block text-xs font-semibold text-slate-600">{isBesanu ? 'સ્થળ / સરનામું *' : 'અંતિમ યાત્રાનું સરનામું *'}<textarea required value={address} onChange={(event) => setAddress(event.target.value)} className={`${inputClass} mt-1`} rows={2} /></label>
+          {!isBesanu && <label className="block text-xs font-semibold text-slate-600">સ્મશાન ઘાટ<input value={cremationGround} onChange={(event) => setCremationGround(event.target.value)} className={`${inputClass} mt-1`} /></label>}
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-slate-700">પરિવારના સભ્યોના નામ</p>
+            {familyMembers.map((member, index) => (
+              <input key={index} value={member} onChange={(event) => setFamilyMembers((current) => current.map((value, i) => i === index ? event.target.value : value))} placeholder={`સભ્ય ${index + 1}`} className={inputClass} />
+            ))}
+          </div>
+          <label className="block text-xs font-semibold text-slate-600">મોબાઇલ નંબર<input inputMode="numeric" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value.replace(/\D/g, '').slice(0, 15))} className={`${inputClass} mt-1`} /></label>
+          <label className="block text-xs font-semibold text-slate-600">ફોટો અપલોડ કરો<input type="file" accept="image/*" onChange={(event) => void uploadPhoto(event.target.files?.[0])} className={`${inputClass} mt-1`} /></label>
+          {photoName && <p className="text-xs font-semibold text-emerald-700">✓ {photoName}</p>}
+          {message && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">{message}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => window.print()} className="min-h-11 flex-1 rounded-xl border border-amber-300 text-sm font-bold text-amber-800">Print / PDF</button>
+            <button type="button" disabled={publishing} onClick={() => void publish()} className="min-h-11 flex-1 rounded-xl bg-saffron px-4 text-sm font-bold text-white disabled:opacity-60">{publishing ? 'પ્રકાશિત થાય છે...' : 'નોટિસમાં પ્રકાશિત કરો'}</button>
+          </div>
+        </div>
+        <article className="min-h-[620px] overflow-hidden rounded-3xl border border-amber-200 bg-cover bg-center text-center shadow-lg" style={{ backgroundImage: posterBackground }}>
+          <div className="mx-auto flex min-h-[620px] max-w-xl flex-col items-center px-8 py-10">
+            <img src="/bodla-logo.jpg" alt="Bodla Parivar" className="mb-4 h-14 object-contain" />
+            <p className="text-2xl font-bold text-[#9c7a38]">ૐ શાંતિઃ</p>
+            <h3 className="mt-4 text-2xl font-extrabold text-[#4a1220]">{isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'}</h3>
+            <div className={`mt-5 flex h-44 w-44 items-center justify-center overflow-hidden rounded-full border-4 ${isBesanu ? 'border-[#b8860b] bg-[#e0ede8]' : 'border-[#d4af37] bg-[#efe5d0]'}`}>
+              {photoUrl ? <img src={photoUrl} alt={name || 'સ્વર્ગસ્થ વ્યક્તિનો ફોટો'} className="h-full w-full object-cover" /> : <span className="text-sm font-bold text-slate-500">ફોટો</span>}
+            </div>
+            <h4 className="mt-5 text-2xl font-bold text-[#4a1220]">સ્વ. {name || 'અહીં નામ લખો'}</h4>
+            <p className="mt-2 text-sm font-semibold text-[#6e2332]">{deathDate ? `અવસાન: ${formatDate(deathDate)}${weekday ? ` (${weekday})` : ''}` : 'અવસાનની તારીખ અને વાર'}</p>
+            <div className="mt-5 w-full rounded-xl border border-amber-300/70 bg-white/75 px-4 py-3 text-sm leading-7 text-slate-800">
+              <p className="font-bold">{isBesanu ? 'બેસણુંની માહિતી' : 'અંતિમ યાત્રાની માહિતી'}</p>
+              {eventDate && <p>{isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'}: {formatDate(eventDate)}{startTime ? ` | સમય: ${startTime}${isBesanu && endTime ? ` - ${endTime}` : ''}` : ''}</p>}
+              {address && <p>સ્થળ / સરનામું: {address}</p>}
+              {!isBesanu && cremationGround && <p>સ્મશાન ઘાટ: {cremationGround}</p>}
+              {familyMembers.some((member) => member.trim()) && <p>પરિવાર: {familyMembers.filter((member) => member.trim()).join(', ')}</p>}
+              {mobileNumber && <p>મો.: {mobileNumber}</p>}
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function FuneralNoticeDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
+  const [name, setName] = useState('');
+  const isBesanu = kind === 'besanu';
+  const [deathDate, setDeathDate] = useState('');
+  const [weekday, setWeekday] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [time, setTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [place, setPlace] = useState('');
+  const [cremationGround, setCremationGround] = useState('');
+  const [familyMembers, setFamilyMembers] = useState(['', '', '', '', '']);
+  const [mobile, setMobile] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const updateDeathDate = (value: string) => {
+    setDeathDate(value);
+    if (!value) {
+      setWeekday('');
+      return;
+    }
+    const date = new Date(`${value}T12:00:00`);
+    const dayNames = ['રવિવાર', 'સોમવાર', 'મંગળવાર', 'બુધવાર', 'ગુરુવાર', 'શુક્રવાર', 'શનિવાર'];
+    setWeekday(Number.isNaN(date.getTime()) ? '' : dayNames[date.getDay()]);
+  };
+
+  const uploadPhoto = async (file?: File) => {
+    if (!file) return;
+    setPublishing(true);
+    setMessage('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const path = `web/${user?.id || 'member'}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await supabase.storage.from('antim-yatra-posters').upload(path, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+      const { data } = supabase.storage.from('antim-yatra-posters').getPublicUrl(path);
+      setPhotoUrl(data.publicUrl);
+    } catch (error: any) {
+      setMessage(error.message || 'Photo upload failed');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const publish = async () => {
+    if (!name.trim() || !deathDate || !eventDate || !place.trim()) {
+      setMessage(isBesanu ? 'નામ, સ્વર્ગવાસ તારીખ, બેસણું તારીખ અને સ્થાન જરૂરી છે.' : 'નામ, સ્વર્ગવાસ તારીખ, અંતિમ યાત્રા તારીખ અને સ્થાન જરૂરી છે.');
+      return;
+    }
+    setPublishing(true);
+    setMessage('');
+    try {
+      const familyText = familyMembers.filter(Boolean).join(', ');
+      const title = isBesanu ? `${name} - બેસણું સમાચાર` : `${name} - અંતિમ યાત્રા સમાચાર`;
+      const description = [
+        `નામ: ${name}`,
+        `સ્વર્ગવાસ તારીખ: ${deathDate}${weekday ? ` (${weekday})` : ''}`,
+        `${isBesanu ? 'બેસણું તારીખ' : 'અંતિમ યાત્રા તારીખ'}: ${eventDate}`,
+        isBesanu ? `સમય: ${time}${endTime ? ` - ${endTime}` : ''}` : `સમય: ${time}`,
+        `સ્થાન: ${place}`,
+        !isBesanu && cremationGround ? `શમશાન/ચિતાભૂમિ: ${cremationGround}` : '',
+        familyText ? `પરિવારના સભ્યો: ${familyText}` : '',
+        mobile ? `મોબાઇલ: ${mobile}` : '',
+      ].filter(Boolean).join('\n');
+      const { data, error } = await supabase.rpc('publish_antim_yatra_notice', {
+        p_payload: {
+          title_gu: title,
+          title_en: title,
+          body_gu: `${name}${isBesanu ? 'નું બેસણું' : 'ની અંતિમ યાત્રા'}`,
+          body_en: `${name}${isBesanu ? ' Besanu' : ' Antim Yatra'}`,
+          description_gu: description,
+          description_en: description,
+          image_url: photoUrl || undefined,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error('Notice could not be published');
+      setMessage('નોટિસ સફળતાપૂર્વક પ્રકાશિત થઈ ગઈ છે.');
+    } catch (error: any) {
+      setMessage(error.message || 'Notice could not be published');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return <section className="space-y-4">
+    <div><h2 className={titleClass}>{isBesanu ? 'બેસણું પોસ્ટ' : 'અંતિમ યાત્રા પોસ્ટ'}</h2><p className="mt-1 text-sm text-slate-500">મોબાઇલ એન્ડ્રોઇડની સમાન સંપૂર્ણ વિગત સાથે શ્રીમતી/શ્રી આપવાનો સંદેશ બનાવો.</p></div>
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
+      <div className={`${cardClass} space-y-3`}>
+        <label className="block text-xs font-semibold text-slate-600">નામ<input value={name} onChange={(event) => setName(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">સ્વર્ગવાસ તારીખ<input type="date" value={deathDate} onChange={(event) => setDeathDate(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">ગુજરાતી વાર<input value={weekday} onChange={(event) => setWeekday(event.target.value)} placeholder="સોમવાર / મંગળવાર..." className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">{isBesanu ? 'બેસણું તારીખ' : 'અંતિમ યાત્રા તારીખ'}<input type="date" value={eventDate} onChange={(event) => setEventDate(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-xs font-semibold text-slate-600">{isBesanu ? 'શરૂ સમય' : 'સમય'}<input type="time" value={time} onChange={(event) => setTime(event.target.value)} className={`${inputClass} mt-1`} /></label>
+          {isBesanu && <label className="text-xs font-semibold text-slate-600">અંત સમય<input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className={`${inputClass} mt-1`} /></label>}
+        </div>
+        <label className="block text-xs font-semibold text-slate-600">{isBesanu ? 'બેસણું સ્થળ / સરનામું' : 'અંતિમ યાત્રા સ્થળ / સરનામું'}<textarea value={place} onChange={(event) => setPlace(event.target.value)} className={`${inputClass} mt-1`} rows={2} /></label>
+        {!isBesanu && <label className="block text-xs font-semibold text-slate-600">શમશાન/ચિતાભૂમિ<input value={cremationGround} onChange={(event) => setCremationGround(event.target.value)} className={`${inputClass} mt-1`} /></label>}
+        <div className="space-y-2">{familyMembers.map((member, index) => <label key={index} className="block text-xs font-semibold text-slate-600">{`પરિવાર સભ્ય ${index + 1}`}<input value={member} onChange={(event) => setFamilyMembers((current) => current.map((value, i) => i === index ? event.target.value : value))} className={`${inputClass} mt-1`} /></label>)}</div>
+        <label className="block text-xs font-semibold text-slate-600">મોબાઇલ નંબર<input value={mobile} onChange={(event) => setMobile(event.target.value)} className={`${inputClass} mt-1`} /></label>
+        <label className="block text-xs font-semibold text-slate-600">ફોટો<input type="file" accept="image/*" onChange={(event) => void uploadPhoto(event.target.files?.[0])} className={`${inputClass} mt-1`} /></label>
+        {message && <p className="text-xs font-semibold text-slate-700">{message}</p>}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => window.print()} className="min-h-11 flex-1 rounded-xl border border-amber-300 text-sm font-bold text-amber-800">Print / PDF</button>
+          <button type="button" disabled={publishing} onClick={() => void publish()} className="min-h-11 flex-1 rounded-xl bg-saffron px-4 text-sm font-bold text-white disabled:opacity-60">{publishing ? 'પ્રકાશિત થાય છે...' : 'નોટિસમાં પ્રકાશિત કરો'}</button>
+        </div>
+      </div>
+      <article className="min-h-[420px] rounded-3xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+        <p className="text-4xl">ॐ शान्ति</p>
+        <h3 className="mt-8 text-2xl font-bold">{name || 'નામ'}</h3>
+        <p className="mt-4 text-lg">{isBesanu ? 'બેસણું કાર્યક્રમની માહિતી' : 'અંતિમ યાત્રાની માહિતી'}</p>
+        {photoUrl && <img src={photoUrl} alt={name || 'Condolence photo'} className="mx-auto mt-5 h-28 w-28 rounded-full object-cover border-4 border-amber-100" />}
+        <p className="mt-6 text-base">{deathDate && `સ્વર્ગવાસ: ${deathDate}${weekday ? ` (${weekday})` : ''}`}</p>
+        <p className="mt-2 text-base">{eventDate && `${isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'} તારીખ: ${eventDate}`}</p>
+        <p className="mt-2 text-base">{time && `સમય: ${time}`}</p>
+        <p className="mt-2 text-base">{place && `સ્થળ: ${place}`}</p>
+        {!isBesanu && cremationGround && <p className="mt-2 text-base">ચિતાભૂમિ: {cremationGround}</p>}
+        {familyMembers.some(Boolean) && <p className="mt-2 text-base">પરિવાર: {familyMembers.filter(Boolean).join(', ')}</p>}
+        {mobile && <p className="mt-2 text-base">મોબાઇલ: {mobile}</p>}
+      </article>
+    </div>
+  </section>;
+}
+
 const historySections = [
-  ['Families and roots', 'The history of Bodla is woven together with the memories and roots of the families who made their home here. Across generations, families’ work, traditions and connection to the village have helped shape Bodla’s common identity.'],
-  ['Places of worship', 'Bodla’s temples and sacred places express both religious faith and the shared life of the village. Through worship, traditions and community occasions, these places have brought residents together.'],
-  ['Education and public life', 'The village primary school and expanding access to education are an important part of Bodla’s social change. The booklet also records the role of the Gram Panchayat and efforts in public life.'],
-  ['Village development', 'Agriculture has long been an important foundation of life and livelihood for Bodla’s families. Public facilities, community organizations and youth activities have responded to the village’s changing needs.'],
+  ['Families and roots', "The history of Bodla is woven together with the memories and roots of the families who made their home here. Across generations, families' work, traditions and connection to the village have helped shape Bodla's common identity."],
+  ['Places of worship', "Bodla's temples and sacred places express both religious faith and the shared life of the village. Through worship, traditions and community occasions, these places have brought residents together."],
+  ['Education and public life', "The village primary school and expanding access to education are an important part of Bodla's social change. The booklet also records the role of the Gram Panchayat and efforts in public life."],
+  ['Village development', "Agriculture has long been an important foundation of life and livelihood for Bodla's families. Public facilities, community organizations and youth activities have responded to the village's changing needs."],
 ];
 
 function VillageHistoryView() {
-  return <section className="space-y-4"><div><h2 className={titleClass}>Bodla village history</h2><p className="mt-1 text-sm text-slate-500">Memories, roots and a story shared across generations.</p></div><p className={`${cardClass} text-sm leading-7 text-slate-600 dark:text-slate-300`}>This overview connects Bodla’s story with its families and shared village life. Refer to the original Gujarati booklet for names, dates and figures.</p>{historySections.map(([title, text]) => <article key={title} className={cardClass}><h3 className={titleClass}>{title}</h3><p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{text}</p></article>)}</section>;
+  return <section className="space-y-4"><div><h2 className={titleClass}>Bodla village history</h2><p className="mt-1 text-sm text-slate-500">Memories, roots and a story shared across generations.</p></div><p className={`${cardClass} text-sm leading-7 text-slate-600 dark:text-slate-300`}>This overview connects Bodla's story with its families and shared village life. Refer to the original Gujarati booklet for names, dates and figures.</p>{historySections.map(([title, text]) => <article key={title} className={cardClass}><h3 className={titleClass}>{title}</h3><p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{text}</p></article>)}</section>;
 }
-
-

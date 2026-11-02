@@ -1,6 +1,8 @@
 export const MAX_NOTIFICATION_REQUEST_BYTES = 16 * 1024;
 const MAX_TITLE_LENGTH = 200;
 const MAX_BODY_LENGTH = 4_000;
+const MAX_IMAGE_URL_LENGTH = 2_048;
+const STORAGE_PUBLIC_PATH = '/storage/v1/object/public/';
 const supportedTypes = new Set([
   'NOTICE', 'EVENT', 'COMPLAINT', 'OFFERING', 'BUSINESS', 'JOB',
   'SYSTEM_BROADCAST', 'BID_CALL', 'BID_APPROVED',
@@ -11,8 +13,14 @@ export type NotificationInput = {
   target: 'topic' | 'tokens';
   title_gu: string;
   title_en?: string;
+  /** Short title shown on the lock screen, defaults to the notice title. */
+  notification_title_gu?: string;
+  notification_title_en?: string;
   body_gu: string;
   body_en?: string;
+  /** Public picture shown with the push notification. */
+  image_url?: string;
+  attachment_url?: string;
   type: string;
   reference_id?: string;
 };
@@ -78,14 +86,58 @@ export function validateNotificationInput(body: Record<string, unknown>): Valida
     return { ok: false, status: 400, error: 'Invalid notification reference.' };
   }
 
+  const notificationTitleGu = body.notification_title_gu;
+  const notificationTitleEn = body.notification_title_en;
+  if ((notificationTitleGu !== undefined && typeof notificationTitleGu !== 'string')
+    || (notificationTitleEn !== undefined && typeof notificationTitleEn !== 'string')) {
+    return { ok: false, status: 400, error: 'Optional notification title must be text.' };
+  }
+  if ((typeof notificationTitleGu === 'string' && notificationTitleGu.length > MAX_TITLE_LENGTH)
+    || (typeof notificationTitleEn === 'string' && notificationTitleEn.length > MAX_TITLE_LENGTH)) {
+    return { ok: false, status: 400, error: 'Notification title is too long.' };
+  }
+
+  const imageUrl = body.image_url;
+  let normalizedImageUrl: string | undefined;
+  if (imageUrl !== undefined && imageUrl !== null && imageUrl !== '') {
+    if (typeof imageUrl !== 'string') {
+      return { ok: false, status: 400, error: 'Notification image must be a URL.' };
+    }
+    const trimmed = imageUrl.trim();
+    if (trimmed.length > MAX_IMAGE_URL_LENGTH) {
+      return { ok: false, status: 400, error: 'The notification image URL is too long.' };
+    }
+    if (!trimmed.startsWith('https://') || !trimmed.includes(STORAGE_PUBLIC_PATH)) {
+      return { ok: false, status: 400, error: 'The notification image must be a public Supabase Storage URL.' };
+    }
+    normalizedImageUrl = trimmed;
+  }
+
+  const attachmentUrl = body.attachment_url;
+  let normalizedAttachmentUrl: string | undefined;
+  if (attachmentUrl !== undefined && attachmentUrl !== null && attachmentUrl !== '') {
+    if (typeof attachmentUrl !== 'string') {
+      return { ok: false, status: 400, error: 'The notification attachment must be a URL.' };
+    }
+    const trimmed = attachmentUrl.trim();
+    if (!trimmed.startsWith('https://') || !trimmed.includes(STORAGE_PUBLIC_PATH) || trimmed.length > 2048) {
+      return { ok: false, status: 400, error: 'The notification attachment must be a public Supabase Storage URL.' };
+    }
+    normalizedAttachmentUrl = trimmed;
+  }
+
   return {
     ok: true,
     value: {
       target,
       title_gu: titleGu.trim(),
       title_en: typeof titleEn === 'string' && titleEn.trim() ? titleEn.trim() : undefined,
+      notification_title_gu: typeof notificationTitleGu === 'string' && notificationTitleGu.trim() ? notificationTitleGu.trim() : undefined,
+      notification_title_en: typeof notificationTitleEn === 'string' && notificationTitleEn.trim() ? notificationTitleEn.trim() : undefined,
       body_gu: bodyGu.trim(),
       body_en: typeof bodyEn === 'string' && bodyEn.trim() ? bodyEn.trim() : undefined,
+      image_url: normalizedImageUrl,
+      attachment_url: normalizedAttachmentUrl,
       type,
       reference_id: referenceId,
     },

@@ -17,6 +17,7 @@ import {
   ClipboardList,
   PhoneCall,
   Settings,
+  GraduationCap,
   ShieldCheck,
   ChevronRight
 } from 'lucide-react';
@@ -34,8 +35,8 @@ const navItems: NavItem[] = [
   { name: 'Notices', nameGu: 'સૂચનાઓ', href: '/notices', icon: Bell },
   { name: 'Offerings', nameGu: 'ચઢાવો', href: '/offerings', icon: WalletCards },
   { name: 'Navratri', nameGu: 'નવરાત્રી', href: '/navratri', icon: Sparkles },
-  { name: 'Notifications', nameGu: 'સૂચના પ્રસારણ', href: '/notifications', icon: Send },
   { name: 'Complaints', nameGu: 'ફરિયાદો', href: '/complaints', icon: AlertCircle },
+  { name: 'Result Uploads', nameGu: 'પરિણામ અપલોડ', href: '/result-uploads', icon: GraduationCap },
   { name: 'Emergency Contacts', nameGu: 'કટોકટી સંપર્ક', href: '/emergency', icon: PhoneCall },
   { name: 'Village History', nameGu: 'ગામનો ઇતિહાસ', href: '/history', icon: BookOpen },
   { name: 'Roles & Permissions', nameGu: 'પરવાનગીઓ', href: '/roles', icon: ShieldCheck },
@@ -56,6 +57,7 @@ export default function Sidebar() {
     '/navratri': 'navratri',
     '/notifications': 'notifications',
     '/complaints': 'complaints',
+    '/result-uploads': 'result_uploads',
     '/emergency': 'emergency_contacts',
     '/history': 'village_history',
   };
@@ -130,7 +132,7 @@ export default function Sidebar() {
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Operational
           </span>
         </div>
-        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Bodla Parivar Console v2.0</p>
+        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Version 30.08.26 — Developed by Rutul Patel</p>
       </div>
     </aside>
   );

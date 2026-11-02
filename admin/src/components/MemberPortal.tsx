@@ -3,7 +3,7 @@
 import React, { useEffect, useState, FormEvent } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   User,
   Bell,
@@ -27,6 +27,7 @@ import {
   LayoutDashboard,
   ChevronRight,
   Globe,
+  FileText,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { AdminFeature } from '@/components/AdminLanguageContext';
@@ -43,6 +44,7 @@ interface UserPortalProps {
   fullName: string;
   onSignOut: () => void;
   features: AdminFeature[];
+  roles: string[];
 }
 
 interface NoticeItem {
@@ -56,6 +58,25 @@ interface NoticeItem {
   created_at: string;
   is_pinned?: boolean;
 }
+
+const formatNoticeText = (value: string) =>
+  value.split(/(https?:\/\/[^\s<>]+|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/gi).map((part, index) => {
+    if (/^https?:\/\//i.test(part)) {
+      const trailing = part.match(/[).,!?:;]+$/)?.[0] ?? '';
+      const href = trailing ? part.slice(0, -trailing.length) : part;
+      return (
+        <React.Fragment key={index}>
+          <a href={href} target="_blank" rel="noopener noreferrer" className="break-all text-blue-700 underline">{href}</a>
+          {trailing}
+        </React.Fragment>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*')) return <strong key={index}>{part.slice(1, -1)}</strong>;
+    if (part.startsWith('_') && part.endsWith('_')) return <em key={index}>{part.slice(1, -1)}</em>;
+    if (part.startsWith('~') && part.endsWith('~')) return <s key={index}>{part.slice(1, -1)}</s>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={index} className="rounded bg-slate-100 px-1 font-mono">{part.slice(1, -1)}</code>;
+    return <React.Fragment key={index}>{part}</React.Fragment>;
+  });
 
 interface EventItem {
   id: string;
@@ -79,39 +100,87 @@ interface UserComplaint {
 type TabKey = MemberSection;
 
 const featureTools: { feature: AdminFeature; title: string; description: string; href?: string; tab?: TabKey; icon: React.ElementType }[] = [
-  { feature: 'members', title: 'Members', description: 'View community members available to your account.', href: '/users', icon: User },
-  { feature: 'notices', title: 'Notice management', description: 'Create and manage community notices.', href: '/notices', icon: Bell },
+  { feature: 'members', title: 'Members', description: 'View community members available to your account.', tab: 'directory', icon: User },
+  { feature: 'notices', title: 'Notice management', description: 'Create and manage community notices.', tab: 'notices', icon: Bell },
   { feature: 'offerings', title: 'Offerings', description: 'Browse community offerings and place bids.', tab: 'offerings', icon: HeartHandshake },
-  { feature: 'navratri', title: 'Navratri', description: 'Manage festival bookings and options.', href: '/navratri', icon: Sparkles },
+  { feature: 'navratri', title: 'Navratri', description: 'Manage festival bookings and options.', tab: 'navratri', icon: Sparkles },
   { feature: 'events', title: 'Village events', description: 'Browse upcoming community events.', tab: 'events', icon: Calendar },
-  { feature: 'complaints', title: 'Complaints', description: 'Review and follow up on complaints.', href: '/complaints', icon: MessageSquareWarning },
-  { feature: 'emergency_contacts', title: 'Emergency contacts', description: 'Maintain local emergency information.', href: '/emergency', icon: PhoneCall },
-  { feature: 'village_history', title: 'Village history', description: 'Update community history and records.', href: '/history', icon: History },
-  { feature: 'notifications', title: 'Notifications', description: 'Send updates to the community.', href: '/notifications', icon: Send },
+  { feature: 'complaints', title: 'Complaints', description: 'Review and follow up on complaints.', tab: 'complaints', icon: MessageSquareWarning },
+  { feature: 'emergency_contacts', title: 'Emergency contacts', description: 'Maintain local emergency information.', tab: 'emergency', icon: PhoneCall },
+  { feature: 'village_history', title: 'Village history', description: 'Update community history and records.', tab: 'history', icon: History },
+  { feature: 'directory', title: 'Community directory', description: 'Businesses, jobs, and useful places.', tab: 'directory', icon: User },
+  { feature: 'gallery', title: 'Gallery', description: 'Browse community photos and videos.', tab: 'gallery', icon: Eye },
+  { feature: 'result_uploads', title: 'Result uploads', description: 'Submit a student result document.', tab: 'result_uploads', icon: FileText },
 ];
 
-export default function MemberPortal({ email, fullName, onSignOut, features }: UserPortalProps) {
+export default function MemberPortal({ email, fullName, onSignOut, features, roles }: UserPortalProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { lang, toggleLanguage } = useAdminLanguage();
   const { theme, toggleTheme } = useTheme();
   const sectionByPath: Record<string, TabKey> = {
     '/offerings': 'offerings', '/notices': 'notices', '/events': 'events',
     '/complaints': 'complaints', '/emergency': 'emergency', '/history': 'history',
     '/navratri': 'navratri', '/notifications': 'notifications', '/users': 'directory',
+    '/directory': 'directory', '/gallery': 'gallery', '/profile': 'profile',
+    '/result-uploads': 'result_uploads', '/notice-design': 'notice_design',
+    '/besanu-design': 'besanu_design',
   };
   const [selectedTab, setSelectedTab] = useState<TabKey>('overview');
   const activeTab = sectionByPath[pathname] ?? selectedTab;
-  const setActiveTab = setSelectedTab;
+  const tabPath: Partial<Record<TabKey, string>> = {
+    overview: '/',
+    directory: '/directory',
+    notices: '/notices',
+    events: '/events',
+    offerings: '/offerings',
+    complaints: '/complaints',
+    navratri: '/navratri',
+    emergency: '/emergency',
+    gallery: '/gallery',
+    notifications: '/notifications',
+    profile: '/profile',
+    history: '/history',
+    result_uploads: '/result-uploads',
+    notice_design: '/notice-design',
+    besanu_design: '/besanu-design',
+  };
+  const setActiveTab = (tab: TabKey) => {
+    setSelectedTab(tab);
+    const nextPath = tabPath[tab] ?? '/';
+    if (window.location.pathname !== nextPath) router.push(nextPath);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const assignedTools = featureTools.filter((tool) => features.includes(tool.feature));
-  const dashboardServices: { title: string; subtitle: string; icon: React.ElementType; action: () => void; keywords: string }[] = [
-    { title: 'નવરાત્રી', subtitle: 'Navratri services', icon: Sparkles, action: () => setActiveTab('navratri'), keywords: 'navratri festival' },
-    { title: 'સૂચનાઓ', subtitle: 'Community notices', icon: Bell, action: () => setActiveTab('notices'), keywords: 'notice announcement update' },
-    { title: 'ચઢાવો', subtitle: 'Community offerings', icon: HeartHandshake, action: () => setActiveTab('offerings'), keywords: 'offering donation bid' },
-    { title: 'તાત્કાલિક સંપર્ક', subtitle: 'Emergency contacts', icon: PhoneCall, action: () => setActiveTab('emergency'), keywords: 'emergency help phone' },
-    { title: 'ગેલેરી', subtitle: 'Village photos and videos', icon: Eye, action: () => setActiveTab('gallery'), keywords: 'gallery photos video' },
-    { title: 'ફરિયાદો', subtitle: 'Send a request or follow up', icon: MessageSquareWarning, action: () => setActiveTab('complaints'), keywords: 'complaint grievance request' },
-  ].filter((service) => `${service.title} ${service.subtitle} ${service.keywords}`.toLowerCase().includes(searchQuery.toLowerCase()));
+  const roleLabel = roles.find((role) => role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MODERATOR' || role === 'CONTENT_MANAGER')
+    ?? (features.length > 0 ? (lang === 'gu' ? 'સુવિધા સભ્ય' : 'FEATURE MEMBER') : (lang === 'gu' ? 'સમુદાય સભ્ય' : 'COMMUNITY MEMBER'));
+  const dashboardServices: { title: string; subtitle: string; icon: React.ElementType; action: () => void; keywords: string; feature?: AdminFeature }[] = [
+    { title: lang === 'gu' ? 'નવરાત્રી' : 'Navratri', subtitle: lang === 'gu' ? 'નવરાત્રી સેવાઓ' : 'Navratri services', icon: Sparkles, action: () => setActiveTab('navratri'), keywords: 'navratri festival નવરાત્રી', feature: 'navratri' as AdminFeature },
+    { title: lang === 'gu' ? 'સૂચનાઓ' : 'Notices', subtitle: lang === 'gu' ? 'સમુદાયની સૂચનાઓ' : 'Community notices', icon: Bell, action: () => setActiveTab('notices'), keywords: 'notice announcement update સૂચનાઓ' },
+    { title: lang === 'gu' ? 'ચઢાવો' : 'Offerings', subtitle: lang === 'gu' ? 'સમુદાયના ચઢાવો' : 'Community offerings', icon: HeartHandshake, action: () => setActiveTab('offerings'), keywords: 'offering donation bid ચઢાવો' },
+    { title: lang === 'gu' ? 'તાત્કાલિક સંપર્ક' : 'Emergency Contacts', subtitle: lang === 'gu' ? 'તાત્કાલિક સેવા નંબર' : 'Emergency contacts', icon: PhoneCall, action: () => setActiveTab('emergency'), keywords: 'emergency help phone કટોકટી', feature: 'emergency_contacts' as AdminFeature },
+    { title: lang === 'gu' ? 'ગેલેરી' : 'Gallery', subtitle: lang === 'gu' ? 'ગામના ફોટા અને વિડિઓ' : 'Village photos and videos', icon: Eye, action: () => setActiveTab('gallery'), keywords: 'gallery photos video ગેલેરી', feature: 'gallery' as AdminFeature },
+    { title: lang === 'gu' ? 'ફરિયાદો' : 'Complaints', subtitle: lang === 'gu' ? 'ફરિયાદ મોકલો અથવા હવાલો જુઓ' : 'Send a request or follow up', icon: MessageSquareWarning, action: () => setActiveTab('complaints'), keywords: 'complaint grievance request ફરિયાદ' },
+    { title: lang === 'gu' ? 'પરિણામ અપલોડ' : 'Result Uploads', subtitle: lang === 'gu' ? 'વિદ્યાર્થી પરિણામ અપલોડ કરો' : 'Result uploads', icon: FileText, action: () => setActiveTab('result_uploads'), keywords: 'result upload student exam પરિણામ', feature: 'result_uploads' as AdminFeature },
+    { title: lang === 'gu' ? 'અંતિમ યાત્રા પોસ્ટ' : 'Antim Yatra', subtitle: lang === 'gu' ? 'અંતિમ યાત્રા પોસ્ટ બનાવો' : 'Antim Yatra design', icon: FileText, action: () => setActiveTab('notice_design'), keywords: 'antim yatra funeral notice design અંતિમ યાત્રા' },
+    { title: lang === 'gu' ? 'બેસણું પોસ્ટ' : 'Besanu', subtitle: lang === 'gu' ? 'બેસણું પોસ્ટ બનાવો' : 'Besanu notice design', icon: FileText, action: () => setActiveTab('besanu_design'), keywords: 'besanu condolence notice design બેસણું' },
+  ].filter((service) => (!service.feature || features.includes(service.feature))
+    && `${service.title} ${service.subtitle} ${service.keywords}`.toLowerCase().includes(searchQuery.toLowerCase()));
+  const memberNavigation: { key: TabKey; label: string; icon: React.ElementType; feature?: AdminFeature }[] = [
+    { key: 'overview' as MemberSection, label: lang === 'gu' ? 'ડેશબોર્ડ' : 'Dashboard', icon: LayoutDashboard },
+    { key: 'directory' as MemberSection, label: lang === 'gu' ? 'સમુદાય સભ્યો' : 'Community Members', icon: User, feature: 'members' as AdminFeature },
+    { key: 'notices' as MemberSection, label: lang === 'gu' ? 'સૂચનાઓ' : 'Notices', icon: Bell },
+    { key: 'events' as MemberSection, label: lang === 'gu' ? 'ગામના કાર્યક્રમો' : 'Village Events', icon: Calendar },
+    { key: 'offerings' as MemberSection, label: lang === 'gu' ? 'ચઢાવો' : 'Offerings', icon: HeartHandshake },
+    { key: 'complaints' as MemberSection, label: lang === 'gu' ? 'મારી અરજી' : 'My Requests', icon: MessageSquareWarning },
+    { key: 'navratri' as MemberSection, label: lang === 'gu' ? 'નવરાત્રી' : 'Navratri', icon: Sparkles, feature: 'navratri' as AdminFeature },
+    { key: 'emergency' as MemberSection, label: lang === 'gu' ? 'કટોકટી સંપર્ક' : 'Emergency', icon: PhoneCall, feature: 'emergency_contacts' as AdminFeature },
+    { key: 'gallery' as MemberSection, label: lang === 'gu' ? 'ગેલેરી' : 'Gallery', icon: Eye, feature: 'gallery' as AdminFeature },
+    { key: 'result_uploads' as MemberSection, label: lang === 'gu' ? 'પરિણામ અપલોડ' : 'Result Uploads', icon: FileText, feature: 'result_uploads' as AdminFeature },
+    { key: 'notice_design' as MemberSection, label: lang === 'gu' ? 'અંતિમ યાત્રા' : 'Antim Yatra', icon: FileText },
+    { key: 'besanu_design' as MemberSection, label: lang === 'gu' ? 'બેસણું' : 'Besanu', icon: FileText },
+    { key: 'profile' as MemberSection, label: lang === 'gu' ? 'મારી પ્રોફાઈલ' : 'My Profile', icon: Settings },
+  ].filter((item) => !item.feature || features.includes(item.feature));
 
   // Data states
   const [notices, setNotices] = useState<NoticeItem[]>([]);
@@ -267,18 +336,10 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
       <aside className="hidden w-72 shrink-0 border-r border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900 md:flex md:flex-col">
         <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white p-5 dark:border-slate-800 dark:from-slate-850 dark:to-slate-900">
           <Image src="/bodla_parivar_logo.png" alt="Bodla Parivar" width={1069} height={258} className="h-auto w-full object-contain dark:brightness-110" priority />
-          <div className="mt-3 flex justify-center"><span className="inline-flex items-center gap-1.5 rounded-full bg-navy-50 px-2.5 py-1 text-[11px] font-bold tracking-wide text-navy-800 dark:bg-sky-950/80 dark:text-sky-300"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" /> COMMUNITY PORTAL</span></div>
+          <div className="mt-3 flex justify-center"><span className="inline-flex items-center gap-1.5 rounded-full bg-navy-50 px-2.5 py-1 text-[11px] font-bold tracking-wide text-navy-800 dark:bg-sky-950/80 dark:text-sky-300"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" /> {roleLabel.replaceAll('_', ' ')}</span></div>
         </div>
         <nav aria-label="Member portal" className="flex-1 space-y-1 overflow-y-auto p-3">
-          {[
-            { key: 'overview', label: 'Dashboard', icon: LayoutDashboard },
-            { key: 'directory', label: 'Community Members', icon: User },
-            { key: 'notices', label: 'Notices', icon: Bell },
-            { key: 'events', label: 'Village Events', icon: Calendar },
-            { key: 'offerings', label: 'Offerings', icon: HeartHandshake },
-            { key: 'complaints', label: 'My Requests', icon: MessageSquareWarning },
-            { key: 'profile', label: 'My Profile', icon: Settings },
-          ].map(({ key, label, icon: Icon }) => {
+          {memberNavigation.map(({ key, label, icon: Icon }) => {
             const active = activeTab === key;
             return <button key={key} type="button" onClick={() => setActiveTab(key as TabKey)} aria-current={active ? 'page' : undefined} className={`group flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-xs font-semibold transition ${active ? 'bg-navy-900 text-white shadow-sm dark:bg-sky-600' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'}`}><span className="flex items-center gap-3"><Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-slate-500 group-hover:text-navy-900 dark:text-slate-400 dark:group-hover:text-sky-400'}`} />{label}</span><ChevronRight className={`h-3.5 w-3.5 ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'}`} /></button>;
           })}
@@ -304,7 +365,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
 
         <div className="flex items-center gap-2 sm:gap-3">
           <button type="button" onClick={toggleLanguage} aria-label="Toggle portal language" title="Toggle portal language" className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"><Globe className="h-3.5 w-3.5 text-navy-700 dark:text-sky-400" /><span>{lang === 'gu' ? 'English' : 'ગુજરાતી'}</span></button>
-          <button onClick={() => setActiveTab('notifications')} aria-label="Open notifications" className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-700 transition hover:bg-blue-100 dark:bg-slate-800 dark:text-sky-300"><Bell className="h-4 w-4" /></button>
+          {(features.includes('notifications') || features.includes('notices')) && <button onClick={() => setActiveTab('notifications')} aria-label="Open notices and notifications" className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-700 transition hover:bg-blue-100 dark:bg-slate-800 dark:text-sky-300"><Bell className="h-4 w-4" /></button>}
           {/* Dark / Light Mode Toggle */}
           <button
             onClick={toggleTheme}
@@ -325,7 +386,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
                 {profileName || 'Resident Member'}
               </span>
               <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[140px] block">
-                {email}
+                {roleLabel.replaceAll('_', ' ')}
               </span>
             </div>
           </button>
@@ -336,7 +397,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
             className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:border-slate-800 dark:bg-slate-850 dark:text-slate-300 dark:hover:bg-rose-950/60 dark:hover:text-rose-400"
           >
             <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Sign out</span>
+            <span className="hidden sm:inline">{lang === 'gu' ? 'લૉગ આઉટ' : 'Sign out'}</span>
           </button>
         </div>
       </header>
@@ -347,13 +408,13 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
         {/* Navigation Tabs Bar */}
         <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 scrollbar-none">
           {[
-            { key: 'overview', label: 'Overview', icon: Sparkles },
-            { key: 'profile', label: 'My Profile', icon: User },
-            { key: 'notices', label: 'Notices & Circulars', icon: Bell, count: notices.length },
-            { key: 'events', label: 'Village Events', icon: Calendar, count: events.length },
-            { key: 'complaints', label: 'My Grievances', icon: MessageSquareWarning, count: complaints.length },
-            { key: 'history', label: 'Activity & History', icon: History },
-            { key: 'settings', label: 'Settings', icon: Settings },
+            { key: 'overview', label: lang === 'gu' ? 'ડેશબોર્ડ' : 'Overview', icon: Sparkles },
+            { key: 'profile', label: lang === 'gu' ? 'મારી પ્રોફાઈલ' : 'My Profile', icon: User },
+            { key: 'notices', label: lang === 'gu' ? 'સૂચનાઓ' : 'Notices & Circulars', icon: Bell, count: notices.length },
+            { key: 'events', label: lang === 'gu' ? 'ગામના કાર્યક્રમો' : 'Village Events', icon: Calendar, count: events.length },
+            { key: 'complaints', label: lang === 'gu' ? 'મારી ફરિયાદો' : 'My Grievances', icon: MessageSquareWarning, count: complaints.length },
+            { key: 'history', label: lang === 'gu' ? 'ઇતિહાસ' : 'Activity & History', icon: History },
+            { key: 'settings', label: lang === 'gu' ? 'સેટિંગ્સ' : 'Settings', icon: Settings },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -458,9 +519,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
 
                     return tab ? (
                       <button key={feature} type="button" onClick={() => setActiveTab(tab)} className={className}>{content}</button>
-                    ) : (
-                      <Link key={feature} href={href ?? '/'} className={className}>{content}</Link>
-                    );
+                    ) : <button key={feature} type="button" onClick={() => setActiveTab('overview')} className={className}>{content}</button>;
                   })}
                 </div>
               </section>
@@ -575,8 +634,8 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
                   {profileName ? profileName.charAt(0).toUpperCase() : 'U'}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Profile Information</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Update your community contact details</p>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">{lang === 'gu' ? 'પ્રોફાઇલ માહિતી' : 'Profile Information'}</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{lang === 'gu' ? 'તમારા સમુદાય સંપર્ક વિગતો સુધારો' : 'Update your community contact details'}</p>
                 </div>
               </div>
 
@@ -595,7 +654,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
               <form onSubmit={handleUpdateProfile} className="mt-6 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
-                    Full Name
+                    {lang === 'gu' ? 'પૂરું નામ' : 'Full Name'}
                   </label>
                   <input
                     type="text"
@@ -608,7 +667,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
-                    Email Address (Read-only)
+                    {lang === 'gu' ? 'ઈમેલ સરનામું (ફેરફાર ન કરી શકાય)' : 'Email Address (Read-only)'}
                   </label>
                   <input
                     type="email"
@@ -621,7 +680,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">
-                    Mobile Phone Number
+                    {lang === 'gu' ? 'મોબાઇલ નંબર' : 'Mobile Phone Number'}
                   </label>
                   <input
                     type="tel"
@@ -639,7 +698,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
                     className="inline-flex items-center gap-2 rounded-xl bg-navy-900 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-navy-800 disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
                   >
                     <Save className="h-4 w-4" />
-                    {isUpdatingProfile ? 'Saving…' : 'Save Changes'}
+                    {isUpdatingProfile ? (lang === 'gu' ? 'સાચવી રહ્યું છે…' : 'Saving…') : (lang === 'gu' ? 'ફેરફાર સાચવો' : 'Save Changes')}
                   </button>
                 </div>
               </form>
@@ -652,12 +711,16 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
           <div className="space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Community Notices</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Official circulars and announcements from village leadership</p>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">{lang === 'gu' ? 'સમુદાયની સૂચનાઓ' : 'Community Notices'}</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{lang === 'gu' ? 'ગામના નેતૃત્વ તરફથી ઔપચારિક પરિપત્રો અને જાહેરાતો' : 'Official circulars and announcements from village leadership'}</p>
               </div>
 
-              {/* Search box */}
-              <div className="relative w-full max-w-xs">
+              {/* Search and notice composer */}
+              <div className="flex w-full max-w-md items-center gap-2">
+                <button type="button" onClick={() => setActiveTab('notifications')} className="min-h-9 shrink-0 rounded-xl bg-amber-600 px-3 text-xs font-bold text-white hover:bg-amber-700">
+                  {lang === 'gu' ? '+ નવી સૂચના મોકલો' : '+ Send Notice'}
+                </button>
+              <div className="relative w-full">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
@@ -666,6 +729,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
                 />
+              </div>
               </div>
             </div>
 
@@ -682,7 +746,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-bold text-slate-900 dark:text-white">{n.title_en || n.title_gu}</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-white">{lang === 'gu' ? (n.title_gu || n.title_en) : (n.title_en || n.title_gu)}</h3>
                         {n.is_pinned && (
                           <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-950/80 dark:text-amber-400">
                             PINNED
@@ -690,10 +754,10 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
                         )}
                       </div>
                       {n.title_gu && n.title_en && (
-                        <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">{n.title_gu}</p>
+                        <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">{lang === 'gu' ? (n.title_en || '') : (n.title_gu || '')}</p>
                       )}
-                      <p className="mt-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                        {n.description_en || n.description_gu || 'No detailed description available.'}
+                      <p className="mt-3 whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {formatNoticeText(lang === 'gu' ? (n.description_gu || n.description_en || 'વિગતવાર માહિતી ઉપલબ્ધ નથી.') : (n.description_en || n.description_gu || 'No detailed description available.'))}
                       </p>
                       {n.image_url && <img src={n.image_url} alt="Notice attachment" className="mt-3 max-h-72 w-full rounded-xl object-contain" />}
                       {n.attachment_url && <a href={n.attachment_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-sky-300">Open video or document</a>}
@@ -905,7 +969,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
 
                 <div className="flex items-center justify-between pt-4">
                   <div>
-                    <h4 className="font-semibold text-sm text-slate-900 dark:text-white">Email Notifications</h4>
+                    <h4 className="font-semibold text-sm text-slate-900 dark:text-white">Email Notices</h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400">Receive alerts when new village notices are issued</p>
                   </div>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -930,18 +994,18 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
           </div>
         )}
 
-        {['navratri', 'offerings', 'emergency', 'gallery', 'notifications', 'directory'].includes(activeTab) && <MemberFeatureViews section={activeTab} fullName={profileName} />}
+        {['navratri', 'offerings', 'emergency', 'gallery', 'notifications', 'directory', 'result_uploads', 'notice_design', 'besanu_design'].includes(activeTab) && <MemberFeatureViews section={activeTab} fullName={profileName} />}
       </div>
 
       <nav aria-label="Member dashboard navigation" className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_18px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 md:hidden">
         <div className="mx-auto grid max-w-2xl grid-cols-5 gap-1">
           {[
-            { key: 'overview', label: 'Home', icon: Sparkles },
-            { key: 'directory', label: 'Members', icon: User },
-            { key: 'notices', label: 'Notices', icon: Bell },
-            { key: 'offerings', label: 'Offerings', icon: HeartHandshake },
-            { key: 'profile', label: 'Profile', icon: User },
-          ].map(({ key, label, icon: Icon }) => (
+            { key: 'overview', label: lang === 'gu' ? 'હોમ' : 'Home', icon: Sparkles },
+            { key: 'directory', label: lang === 'gu' ? 'સભ્યો' : 'Members', icon: User, feature: 'members' as AdminFeature },
+            { key: 'notices', label: lang === 'gu' ? 'સૂચનાઓ' : 'Notices', icon: Bell },
+            { key: 'offerings', label: lang === 'gu' ? 'ચઢાવો' : 'Offerings', icon: HeartHandshake },
+            { key: 'profile', label: lang === 'gu' ? 'પ્રોફાઈલ' : 'Profile', icon: User },
+          ].filter((item) => !('feature' in item) || !item.feature || features.includes(item.feature)).map(({ key, label, icon: Icon }) => (
             <button key={key} onClick={() => setActiveTab(key as TabKey)} aria-current={activeTab === key ? 'page' : undefined} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition sm:text-xs ${activeTab === key ? 'bg-blue-50 text-blue-800 dark:bg-sky-950 dark:text-sky-300' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
               <Icon className="h-4 w-4" />
               <span>{label}</span>
@@ -955,9 +1019,9 @@ export default function MemberPortal({ email, fullName, onSignOut, features }: U
         isOpen={isSignOutModalOpen}
         onClose={() => setIsSignOutModalOpen(false)}
         onConfirm={onSignOut}
-        title="Sign Out"
-        description="Are you sure you want to end your current resident session?"
-        confirmText="Sign Out"
+        title={lang === 'gu' ? 'લૉગ આઉટ' : 'Sign Out'}
+        description={lang === 'gu' ? 'શું તમે હાલનું સત્ર બંધ કરવા માંગો છો?' : 'Are you sure you want to end your current resident session?'}
+        confirmText={lang === 'gu' ? 'લૉગ આઉટ' : 'Sign Out'}
         isDestructive
       />
       </div>

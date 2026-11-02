@@ -40,7 +40,6 @@ const featureOptions: { value: UserFeature; label: string; labelGu: string }[] =
   { value: 'complaints', label: 'Complaints', labelGu: 'ફરિયાદો' },
   { value: 'emergency_contacts', label: 'Emergency Contacts', labelGu: 'તાત્કાલિક સંપર્ક' },
   { value: 'village_history', label: 'Village History', labelGu: 'ગામનો ઇતિહાસ' },
-  { value: 'notifications', label: 'Notifications', labelGu: 'સૂચનાઓ' },
 ];
 
 const roleOptions: { value: UserRole; label: string; labelGu: string; description: string }[] = [
