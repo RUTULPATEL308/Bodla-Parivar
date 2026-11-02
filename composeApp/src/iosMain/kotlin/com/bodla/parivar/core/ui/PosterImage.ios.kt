@@ -21,9 +21,9 @@ actual fun PlatformShrinkPoster(png: ByteArray, maxEdgePx: Int): ByteArray {
     if (png.isEmpty()) return png
     return try {
         val data = png.usePinned { pinned ->
-            NSData.dataWithBytes(pinned.addressOf(0), png.size.toULong())
+            NSData(pinned.addressOf(0), png.size.toULong())
         }
-        val image = UIImage(data = data) ?: return png
+        val image = UIImage(data) ?: return png
         val size = image.size.useContents { this }
         val longestEdge = maxOf(size.width * image.scale, size.height * image.scale)
         if (longestEdge <= maxEdgePx.toDouble()) return png
