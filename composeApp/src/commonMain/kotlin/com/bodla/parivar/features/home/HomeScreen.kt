@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +35,7 @@ import com.bodla.parivar.domain.model.Notice
 @Composable
 fun HomeScreen(
     onNavigate: (Screen) -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit = {},
     modifier: Modifier = Modifier,
     userName: String = "ગ્રામજન",
     isOffline: Boolean = false,
@@ -45,7 +49,9 @@ fun HomeScreen(
         topBar = {
             HomeTopBar(
                 onNotificationClick = { onNavigate(Screen.Notifications) },
-                onProfileClick = { onNavigate(Screen.Profile) }
+                onProfileClick = { onNavigate(Screen.Profile) },
+                onLanguageChange = onLanguageChange,
+                onNavigate = onNavigate
             )
         },
         containerColor = CreamBackground,
@@ -105,6 +111,29 @@ fun HomeScreen(
                                 color = TextTertiary
                             )
                         },
+                        trailingIcon = {
+                            Text(
+                                text = "🔍",
+                                fontSize = 18.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        if (searchQuery.isNotBlank()) {
+                                            onNavigate(Screen.Directory)
+                                        }
+                                    }
+                                    .padding(12.dp)
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Search
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                if (searchQuery.isNotBlank()) {
+                                    onNavigate(Screen.Directory)
+                                }
+                            }
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = WarmWhiteSurface,
@@ -176,7 +205,10 @@ fun HomeScreen(
                         Triple(Strings.serviceOfferings(lang), "🙏", Screen.Offerings), // ચઢાવો
                         Triple(Strings.serviceEmergency(lang), "🚨", Screen.Emergency),
                         Triple(Strings.serviceGallery(lang), "🖼", Screen.Gallery),
-                        Triple(Strings.serviceComplaints(lang), "✍", Screen.Complaints)
+                        Triple(Strings.serviceComplaints(lang), "✍", Screen.Complaints),
+                        Triple(if (lang == AppLanguage.GUJARATI) "પરિણામ" else "Results", "🎓", Screen.ResultUpload),
+                        Triple(Strings.antimYatraPost(lang), "🕯️", Screen.NoticeDesign),
+                        Triple(Strings.besanuPost(lang), "🕊️", Screen.BesanuDesign)
                     )
 
                     for (row in 0 until (services.size + 2) / 3) {
@@ -303,9 +335,12 @@ fun HomeScreen(
 @Composable
 private fun HomeTopBar(
     onNotificationClick: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onLanguageChange: (AppLanguage) -> Unit,
+    onNavigate: (Screen) -> Unit
 ) {
     val lang = LocalAppLanguage.current
+    var showMoreMenu by remember { mutableStateOf(false) }
 
     Surface(
         color = WarmWhiteSurface,
@@ -360,6 +395,74 @@ private fun HomeTopBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(text = "👤", fontSize = 18.sp)
+                }
+
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(LightIconBg)
+                            .clickable { showMoreMenu = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "•••", fontSize = 16.sp, color = TextPrimary)
+                    }
+                    DropdownMenu(
+                        expanded = showMoreMenu,
+                        onDismissRequest = { showMoreMenu = false },
+                        modifier = Modifier.background(WarmWhiteSurface)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (lang == AppLanguage.GUJARATI) "પ્રોફાઇલ" else "Profile") },
+                            onClick = {
+                                showMoreMenu = false
+                                onProfileClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Notices") },
+                            onClick = {
+                                showMoreMenu = false
+                                onNavigate(Screen.Notices)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (lang == AppLanguage.GUJARATI) "વધુ ઓપ્શન" else "More options") },
+                            onClick = {
+                                showMoreMenu = false
+                                onNavigate(Screen.More)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (lang == AppLanguage.GUJARATI) "ભાષા: ગુજરાતી" else "Language: Gujarati") },
+                            trailingIcon = {
+                                RadioButton(
+                                    selected = lang == AppLanguage.GUJARATI,
+                                    onClick = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                showMoreMenu = false
+                                onLanguageChange(AppLanguage.GUJARATI)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (lang == AppLanguage.GUJARATI) "ભાષા: English" else "Language: English") },
+                            trailingIcon = {
+                                RadioButton(
+                                    selected = lang == AppLanguage.ENGLISH,
+                                    onClick = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                showMoreMenu = false
+                                onLanguageChange(AppLanguage.ENGLISH)
+                            }
+                        )
+                    }
                 }
             }
         }

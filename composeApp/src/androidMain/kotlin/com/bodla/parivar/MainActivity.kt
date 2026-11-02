@@ -1,11 +1,8 @@
 package com.bodla.parivar
 
-import android.Manifest
-import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.os.Build
 import android.media.RingtoneManager
@@ -15,38 +12,34 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import com.bodla.parivar.core.AndroidPlatform
+import com.bodla.parivar.core.PendingNotices
+import com.google.firebase.messaging.FirebaseMessaging
+import io.github.aakira.napier.Napier
+import java.lang.ref.WeakReference
 
 class MainActivity : ComponentActivity() {
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install the Android 12+ Splash Screen — must be called BEFORE super.onCreate()
         installSplashScreen()
         super.onCreate(savedInstanceState)
         AndroidPlatform.appContext = applicationContext
-        AndroidPlatform.currentActivityRef = java.lang.ref.WeakReference(this)
-        AndroidPlatform.pendingNoticeId = intent?.getStringExtra("reference_id")
-            ?.takeIf { it.isNotBlank() }
+        AndroidPlatform.currentActivityRef = WeakReference(this)
+        PendingNotices.post(intent?.getStringExtra("reference_id"))
         createVillageNotificationChannel()
-        requestNotificationPermissionIfNeeded()
 
         // Subscribe to global topic for push broadcast notifications
         try {
-            com.google.firebase.messaging.FirebaseMessaging.getInstance()
+            FirebaseMessaging.getInstance()
                 .subscribeToTopic("all_users")
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
-                        io.github.aakira.napier.Napier.d("Successfully subscribed to FCM topic: all_users", tag = "FCM")
+                        Napier.d("Successfully subscribed to FCM topic: all_users", tag = "FCM")
                     } else {
-                        io.github.aakira.napier.Napier.w("Failed to subscribe to FCM topic: all_users", task.exception, tag = "FCM")
+                        Napier.w("Failed to subscribe to FCM topic: all_users", task.exception, tag = "FCM")
                     }
                 }
         } catch (e: Exception) {
-            io.github.aakira.napier.Napier.e("FirebaseMessaging init error", e, tag = "FCM")
+            Napier.e("FirebaseMessaging init error", e, tag = "FCM")
         }
 
         setContent {
@@ -57,14 +50,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        AndroidPlatform.pendingNoticeId = intent.getStringExtra("reference_id")
-            ?.takeIf { it.isNotBlank() }
-        if (AndroidPlatform.pendingNoticeId != null) recreate()
+        // Publish the target so the running UI can navigate without restarting.
+        PendingNotices.post(intent.getStringExtra("reference_id"))
     }
 
     override fun onResume() {
         super.onResume()
-        AndroidPlatform.currentActivityRef = java.lang.ref.WeakReference(this)
+        AndroidPlatform.currentActivityRef = WeakReference(this)
     }
 
     override fun onDestroy() {
@@ -72,20 +64,6 @@ class MainActivity : ComponentActivity() {
             AndroidPlatform.currentActivityRef = null
         }
         super.onDestroy()
-    }
-
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-
-        AlertDialog.Builder(this)
-            .setTitle("ગામની સૂચનાઓ (Community notifications)")
-            .setMessage("નવી સૂચનાઓનો અવાજ અને અપડેટ મેળવવા મંજૂરી આપો. Allow notifications to hear and see new village updates.")
-            .setNegativeButton("પછી (Later)", null)
-            .setPositiveButton("મંજૂરી આપો (Allow)") { _, _ ->
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            .show()
     }
 
     private fun createVillageNotificationChannel() {

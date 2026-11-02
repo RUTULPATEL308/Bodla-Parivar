@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 fun GujlishTextField(
     value: String,
     onValueChange: (String) -> Unit,
+    onSelectionChanged: ((TextRange) -> Unit)? = null,
     modifier: Modifier = Modifier,
     label: (@Composable () -> Unit)? = null,
     placeholder: (@Composable () -> Unit)? = null,
@@ -64,6 +65,7 @@ fun GujlishTextField(
         onValueChange = { newTfv ->
             val prevText = textFieldValue.text
             val currText = newTfv.text
+            onSelectionChanged?.invoke(newTfv.selection)
 
             // Check if a space or newline was just typed
             val cursor = newTfv.selection.end

@@ -22,6 +22,7 @@ data class NoticeDto(
     @SerialName("is_pinned") val isPinned: Boolean = false,
     @SerialName("publish_at") val publishAt: String? = null,
     @SerialName("created_at") val createdAt: String,
+    @SerialName("published_by") val publishedBy: String? = null,
     val category: CategoryDto? = null
 )
 

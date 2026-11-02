@@ -71,6 +71,15 @@ Loop per task: Read -> Plan -> Implement -> Test -> Review -> Commit -> Update d
 - [ ] TASK-N11 Test with app open, in background and closed, on both platforms
 
 ## Phase 6: Tests and release
+- [ ] Result Upload: apply migration 034 and verify enabled/disabled submission and staff export on staging
+- [ ] Result Upload RLS follow-up: apply migration 035 and verify the Result Upload page toggle with staff roles
+- [ ] Result Upload mobile fix: apply migration 036 and verify Android/iOS read the enabled setting
+- [ ] Result Upload storage repair: apply migration 037 to the app's Supabase project and verify private image/PDF upload
+- [ ] Result Upload realtime: apply migration 038 and verify new submissions appear live in the admin dashboard
+- [ ] Result Upload visibility: apply migration 039 and use the admin-only count to distinguish missing rows from staff read-policy issues
+- [ ] Result Upload staff list: apply migration 040 and confirm ADMIN/SUPER_ADMIN can load the saved submissions
+- [ ] Result Upload mobile staff tools: build and install Android/iOS app with migration 040 to confirm list, toggle, document preview and CSV export
+- [ ] Result Upload toggle repair: apply migration 041 and verify web and mobile staff can switch the feature on/off
 - [ ] TASK-020 Add admin tests (Playwright for key flows)
 - [ ] TASK-021 Complete `docs/TEST_PLAN.md` checklist
 - [ ] TASK-022 Decide admin hosting (ADR-004), deploy preview, QA, then production

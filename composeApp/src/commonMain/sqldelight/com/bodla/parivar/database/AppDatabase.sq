@@ -32,11 +32,11 @@ INSERT OR REPLACE INTO CachedVillageInfo(
 
 -- 2. Cached Notices
 CREATE TABLE CachedNotice (
-    id TEXT PRIMARY KEY NOT NULL,
+    id TEXT NOT NULL PRIMARY KEY,
     titleGu TEXT NOT NULL,
     titleEn TEXT NOT NULL,
-    descriptionGu TEXT,
-    descriptionEn TEXT,
+    descriptionGu TEXT NOT NULL,
+    descriptionEn TEXT NOT NULL,
     categoryNameGu TEXT,
     categoryNameEn TEXT,
     imageUrl TEXT,

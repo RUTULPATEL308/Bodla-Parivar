@@ -5,6 +5,14 @@ object Endpoints {
     var SUPABASE_URL: String = "https://kjoykvxrnyykdnzektoj.supabase.co"
     var SUPABASE_ANON_KEY: String = "sb_publishable_PNb4_Epkaqv-J1KdC0x7dQ_-vxdAt-d"
 
+    // Admin (Next.js) API base – set ADMIN_API_URL env var in the mobile app or default to emulator host loopback for dev
+    val ADMIN_API_BASE: String
+        get() = System.getenv("ADMIN_API_URL") ?: "http://10.0.2.2:3000"
+    val NOTIFICATION_ENHANCE: String
+        get() = "${SUPABASE_URL.trimEnd('/')}/functions/v1/enhance-message"
+    val NOTIFICATION_ENHANCE_ADMIN: String
+        get() = "${ADMIN_API_BASE.trimEnd('/')}/api/notifications/enhance"
+
     val isConfigured: Boolean
         get() = !SUPABASE_URL.contains("your-project-id") && SUPABASE_ANON_KEY.isNotBlank()
 
@@ -79,6 +87,21 @@ object Endpoints {
     val VILLAGE_SETTINGS: String
         get() = "$REST_BASE_URL/village_settings?limit=1"
 
+    val RESULT_UPLOAD_SETTINGS: String
+        get() = "$REST_BASE_URL/village_settings?select=result_upload_enabled&order=created_at.asc&limit=1"
+
+    val RESULT_UPLOADS: String
+        get() = "$REST_BASE_URL/result_uploads"
+
+    val RESULT_UPLOAD_ADMIN_LIST: String
+        get() = "$REST_BASE_URL/rpc/result_upload_admin_list"
+
+    val SET_RESULT_UPLOAD_ENABLED: String
+        get() = "$REST_BASE_URL/rpc/set_result_upload_enabled"
+
+    val RESULT_UPLOAD_BUCKET: String
+        get() = "${SUPABASE_URL.trimEnd('/')}/storage/v1/object/result-uploads"
+
     val OFFERING_BIDS_BASE: String
         get() = "$REST_BASE_URL/offering_bids"
 
@@ -109,4 +132,5 @@ object Endpoints {
     // Latest notifications (for in-app toasts)
     val NOTIFICATIONS_LATEST: String
         get() = "$REST_BASE_URL/notifications?order=created_at.desc&limit=5"
+
 }

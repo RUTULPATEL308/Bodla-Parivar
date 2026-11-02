@@ -13,11 +13,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.unit.IntRect
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 
 expect fun PlatformPrint(content: String, title: String)
 expect fun PlatformShare(content: String, title: String)
+expect fun PlatformShareFile(content: String, filename: String, mimeType: String)
+expect fun PlatformCapturePoster(boundsInWindow: IntRect): ByteArray?
+expect fun PlatformOpenUrl(url: String)
 
 /**
  * Material design vector icons for Print and Share that don't depend on extended icons library.

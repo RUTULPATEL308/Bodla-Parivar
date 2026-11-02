@@ -50,6 +50,9 @@ object Strings {
     fun servicePlaces(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "સ્થળો" else "Places"
     fun serviceGallery(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "ગેલેરી" else "Gallery"
     fun serviceComplaints(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "ફરિયાદ" else "Complaints"
+    fun more(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "વધુ" else "More"
+    fun antimYatraPost(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "અંતિમ યાત્રા પોસ્ટ" else "Antim yatra Post"
+    fun besanuPost(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "બેસણું પોસ્ટ" else "Besanu Post"
 
     // Offerings / ચઢાવો (Explicitly non-auction terminology)
     fun offeringsTitle(lang: AppLanguage) = if (lang == AppLanguage.GUJARATI) "ચઢાવો" else "Offerings"

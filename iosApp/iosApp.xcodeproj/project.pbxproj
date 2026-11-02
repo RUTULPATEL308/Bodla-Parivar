@@ -140,7 +140,7 @@
 			name = "Build Kotlin Framework";
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" = \"YES\" ]; then\n  echo \"Skipping Gradle build because the IDE already built the Kotlin framework.\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "if [ \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" = \"YES\" ]; then\n  echo \"Skipping Gradle build because the IDE already built the Kotlin framework.\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\nbash ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\n";
 		};
 		F10000000000000000000002 /* Ensure GoogleService-Info.plist */ = {
 			isa = PBXShellScriptBuildPhase;

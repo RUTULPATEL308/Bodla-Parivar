@@ -538,7 +538,7 @@ function NotificationsView() {
               </article>
             ))
           ) : (
-            <EmptyMessage>You're all caught up. New community updates will appear here.</EmptyMessage>
+            <EmptyMessage>You&apos;re all caught up. New community updates will appear here.</EmptyMessage>
           )}
         </LoadState>
       )}
@@ -933,5 +933,5 @@ const historySections = [
 ];
 
 function VillageHistoryView() {
-  return <section className="space-y-4"><div><h2 className={titleClass}>Bodla village history</h2><p className="mt-1 text-sm text-slate-500">Memories, roots and a story shared across generations.</p></div><p className={`${cardClass} text-sm leading-7 text-slate-600 dark:text-slate-300`}>This overview connects Bodla's story with its families and shared village life. Refer to the original Gujarati booklet for names, dates and figures.</p>{historySections.map(([title, text]) => <article key={title} className={cardClass}><h3 className={titleClass}>{title}</h3><p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{text}</p></article>)}</section>;
+  return <section className="space-y-4"><div><h2 className={titleClass}>Bodla village history</h2><p className="mt-1 text-sm text-slate-500">Memories, roots and a story shared across generations.</p></div><p className={`${cardClass} text-sm leading-7 text-slate-600 dark:text-slate-300`}>This overview connects Bodla&apos;s story with its families and shared village life. Refer to the original Gujarati booklet for names, dates and figures.</p>{historySections.map(([title, text]) => <article key={title} className={cardClass}><h3 className={titleClass}>{title}</h3><p className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300">{text}</p></article>)}</section>;
 }

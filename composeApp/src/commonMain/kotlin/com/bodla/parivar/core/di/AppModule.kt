@@ -25,6 +25,7 @@ val appModule: Module = module {
     single<BusinessRepository> { BusinessRepositoryImpl(get(), get()) }
     single<OfferingRepository> { OfferingRepositoryImpl(get(), get(), get(), get()) }
     single<ComplaintRepository> { ComplaintRepositoryImpl(get(), get(), get()) }
+    single<ResultUploadRepository> { ResultUploadRepositoryImpl(get(), get()) }
     single<EmergencyRepository> { EmergencyRepositoryImpl(get(), get()) }
     single<VillageRepository> { VillageRepositoryImpl(get(), get()) }
 }
@@ -52,6 +53,7 @@ object AppContainer {
     val businessRepository: BusinessRepository by lazy { BusinessRepositoryImpl(database, httpClient) }
     val offeringRepository: OfferingRepository by lazy { OfferingRepositoryImpl(database, httpClient, syncEngine, tokenStorage) }
     val complaintRepository: ComplaintRepository by lazy { ComplaintRepositoryImpl(database, httpClient, syncEngine) }
+    val resultUploadRepository: ResultUploadRepository by lazy { ResultUploadRepositoryImpl(httpClient, tokenStorage) }
     val emergencyRepository: EmergencyRepository by lazy { EmergencyRepositoryImpl(database, httpClient) }
     val villageRepository: VillageRepository by lazy { VillageRepositoryImpl(database, httpClient) }
 }

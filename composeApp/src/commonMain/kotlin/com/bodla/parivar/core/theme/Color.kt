@@ -29,6 +29,12 @@ val StatusWarning = Color(0xFFF59E0B)       // Warning Amber
 val StatusError = Color(0xFFC62828)         // Error Red
 val StatusInfo = Color(0xFF2563EB)          // Information Blue
 
+// Rose & Emerald Alert Colors
+val RoseErrorBackground = Color(0xFFFEE2E2)
+val RoseErrorText = Color(0xFF991B1B)
+val EmeraldSuccessBackground = Color(0xFFECFDF5)
+val EmeraldSuccessText = Color(0xFF065F46)
+
 // Dark Theme Variants
 val DarkBackground = Color(0xFF1C1917)
 val DarkSurface = Color(0xFF292524)

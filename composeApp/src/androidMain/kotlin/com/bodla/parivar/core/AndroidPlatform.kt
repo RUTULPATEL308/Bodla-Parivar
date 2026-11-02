@@ -9,5 +9,4 @@ import java.lang.ref.WeakReference
 object AndroidPlatform {
     var appContext: Context? = null
     var currentActivityRef: WeakReference<Activity>? = null
-    var pendingNoticeId: String? = null
 }

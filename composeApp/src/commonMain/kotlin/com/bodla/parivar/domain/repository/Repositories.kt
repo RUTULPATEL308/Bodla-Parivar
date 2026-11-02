@@ -10,6 +10,7 @@ interface AuthRepository {
     suspend fun getRegisteredUsers(): Result<List<Profile>>
     suspend fun getFeaturePermissions(): List<String>
     suspend fun updateProfile(profile: Profile): Result<Profile>
+    suspend fun updatePassword(newPassword: String): Result<Unit>
     suspend fun logout(): Result<Unit>
 }
 
@@ -18,6 +19,7 @@ interface NoticeRepository {
     suspend fun refreshNotices(): Result<Unit>
     suspend fun getPinnedNotice(): Notice?
     suspend fun getNoticeById(id: String): Notice?
+    suspend fun deleteNotice(id: String): Result<Unit>
 }
 
 interface EventRepository {
@@ -66,6 +68,26 @@ interface ComplaintRepository {
     fun getMyComplaints(): Flow<List<Complaint>>
     suspend fun submitComplaint(title: String, description: String, categoryId: String?, photoUrl: String?): Result<Unit>
 }
+
+interface ResultUploadRepository {
+    suspend fun isEnabled(): Result<Boolean>
+    suspend fun setEnabled(enabled: Boolean): Result<Boolean>
+    suspend fun submit(studentName: String, standard: String, schoolName: String, fileName: String, contentType: String, bytes: ByteArray): Result<Unit>
+    suspend fun getSubmissions(): Result<List<ResultUpload>>
+    suspend fun getSignedFileUrl(filePath: String): Result<String>
+}
+
+data class ResultUpload(
+    val id: String,
+    val studentName: String,
+    val standard: String,
+    val schoolName: String,
+    val filePath: String,
+    val fileName: String,
+    val createdAt: String,
+    val submittedBy: String,
+    val submitterPhone: String?
+)
 
 interface EmergencyRepository {
     fun getEmergencyContacts(): Flow<List<EmergencyContact>>

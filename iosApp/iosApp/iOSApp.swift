@@ -77,7 +77,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     private func handleNotificationPayload(_ userInfo: [AnyHashable: Any]) {
         if let referenceId = userInfo["reference_id"] as? String, !referenceId.isEmpty {
-            IOSPlatform.shared.pendingNoticeId = referenceId
+            IOSPlatform.shared.postPendingNoticeId(noticeId: referenceId)
         }
     }
 }

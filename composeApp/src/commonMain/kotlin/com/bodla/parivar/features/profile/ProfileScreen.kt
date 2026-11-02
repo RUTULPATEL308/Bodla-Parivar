@@ -8,12 +8,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bodla.parivar.core.di.AppContainer
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.localization.Strings
@@ -173,9 +179,9 @@ fun ProfileScreen(
                                 StatusChip(status = primaryRole)
                             }
                             Text(
-                                text = if (lang == AppLanguage.GUJARATI) 
+                                text = if (lang == AppLanguage.GUJARATI)
                                     "તમારી પાસે વહીવટી સ્ટાફના અધિકારો છે. સભ્યોનું સંચાલન, સૂચનાઓ, ચઢાવો અને ફરિયાદો તપાસવા માટે ડેશબોર્ડ ખોલો."
-                                else 
+                                else
                                     "Authorized staff account. Open the console to manage members, circulars, offerings, and grievances.",
                                 style = BodlaCaption,
                                 color = TextSecondary
@@ -243,6 +249,7 @@ fun ProfileScreen(
             item {
                 BodlaCard {
                     val menuItems = listOf(
+                        Pair(if (lang == AppLanguage.GUJARATI) "✏️ પ્રોફાઇલ અપડેટ" else "✏️ Edit Profile", { onNavigate(Screen.EditProfile) }),
                         Pair("✍ " + Strings.myComplaints(lang), { onNavigate(Screen.Complaints) }),
                         Pair("🙏 " + Strings.myOfferings(lang), { onNavigate(Screen.Offerings) }),
                         Pair("🏪 " + (if (lang == AppLanguage.GUJARATI) "મારા વ્યવસાયો" else "My Businesses"), { onNavigate(Screen.Directory) }),
@@ -278,6 +285,16 @@ fun ProfileScreen(
                         containerColor = StatusError.copy(alpha = 0.9f),
                         contentColor = WarmWhiteSurface
                     )
+                }
+            }
+
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "Version 30.08.26", style = BodlaCaption, color = TextSecondary)
+                    Text(text = "Developed by Rutul Patel", style = BodlaCaption, color = TextSecondary)
                 }
             }
         }

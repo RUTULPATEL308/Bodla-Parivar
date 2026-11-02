@@ -57,7 +57,8 @@ data class Notice(
     val isPinned: Boolean = false,
     val status: String = "PUBLISHED",
     val publishAt: String? = null,
-    val createdAt: String
+    val createdAt: String,
+    val publishedById: String? = null
 )
 
 @Serializable

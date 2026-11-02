@@ -118,6 +118,14 @@ Immutable record of administrative actions:
 - `old_data JSONB`, `new_data JSONB`
 - `created_at TIMESTAMPTZ DEFAULT NOW()`
 
+### `result_uploads`
+Private resident student-result submissions, readable only by staff. Files live in the private `result-uploads` Storage bucket.
+- `user_id UUID REFERENCES profiles(id)`: submitting resident
+- `student_name TEXT`, `standard TEXT`, `school_name TEXT`
+- `file_path TEXT`, `file_name TEXT`, `content_type TEXT`
+- `created_at TIMESTAMPTZ DEFAULT NOW()`
+- Rows and file uploads are accepted only while `village_settings.result_upload_enabled` is true.
+
 ---
 
 ## 4. Key RPC Functions
@@ -141,4 +149,12 @@ All SQL scripts are in `database/migrations/`:
 - `020_current_user_offering_winner_rpc.sql`: Authenticated winner verification without direct private-table reads
 - `021_grant_offering_winner_private_read.sql`: Allows authenticated winner/admin reads, still restricted by row-level security
 - `022_publish_admin_entered_winner_name.sql`: Publishes the name supplied by staff when closing an in-person winning bid
+- `034_result_uploads.sql`: Adds the Result Upload switch, private submissions table and private file bucket policies
+- `035_result_upload_admin_toggle.sql`: Adds a staff-checked Result Upload toggle RPC, explicit village-settings insert/update checks, and creates missing default settings
+- `036_result_upload_setting_consistency.sql`: Updates the Result Upload flag consistently across legacy duplicate village-settings rows
+- `037_repair_result_upload_bucket.sql`: Idempotently creates or repairs the private Result Upload bucket and upload/read/delete policies
+- `038_result_upload_realtime.sql`: Adds result submissions to Supabase Realtime for live admin dashboard updates
+- `039_result_upload_admin_read_diagnostics.sql`: Adds a staff-only count RPC to distinguish missing submissions from staff read-policy issues
+- `040_result_upload_admin_list_rpc.sql`: Adds a staff-checked SECURITY DEFINER list RPC to return result rows and submitter details when direct SELECT RLS hides them
+- `041_fix_result_upload_toggle_where.sql`: Fixes Result Upload toggle updates rejected by database safe-update protection
 

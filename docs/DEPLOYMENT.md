@@ -45,6 +45,12 @@
    supabase functions deploy send-notification
    supabase functions deploy audit-logger
    ```
+5. Store the Firebase service account so the app can push notifications:
+   ```bash
+   supabase secrets set FCM_SERVICE_ACCOUNT_KEY='{"project_id":"...","client_email":"...","private_key":"..."}'
+   ```
+   Without this secret the `send-notification` function still publishes notices to the feed, but no notification is delivered to the phones.
+6. The Android app ships the `google-services.json` and the iOS app the `GoogleService-Info.plist`; both files are gitignored and must be added for every build.
 
 ---
 

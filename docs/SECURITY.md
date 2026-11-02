@@ -23,6 +23,7 @@
 | `complaints` | No Access | Read/Create Own | Read + Assign + Update Status | Full Access |
 | `emergency_contacts` | Read Active | Read Active | Read Active | Full Access |
 | `offering_winner_private` | No Access | Read Own (Winner Profile Only) | Full Access | Full Access |
+| `result_uploads` | No Access | Insert Own While Feature Enabled | Staff Read | Staff Read |
 | `audit_logs` | No Access | No Access | No Access | Read Only |
 
 ---
@@ -33,6 +34,7 @@ All media uploads (photos, attachments) to Supabase Storage enforce strict limit
 - **Profile Photos**: JPEG/PNG/WebP, max 5 MB, stored under authenticated user's folder (`auth.uid()`).
 - **Notice Attachments**: JPEG/PNG/WebP/PDF, max 10 MB, restricted to staff upload.
 - **Complaint Photos**: JPEG/PNG/WebP, max 10 MB, stored under private bucket accessible only by uploader and village administration.
+- **Student Result Documents**: JPEG/PNG/WebP/PDF, max 10 MB, stored in the private `result-uploads` bucket. Residents can upload only to their own auth-user folder while Result Upload is enabled; staff can read files and submission rows.
 - **Offering Images**: JPEG/PNG/WebP, max 8 MB.
 - **MIME Sniffing Prevention**: Content-Type validation is enforced both client-side and at the storage bucket policy level.
 

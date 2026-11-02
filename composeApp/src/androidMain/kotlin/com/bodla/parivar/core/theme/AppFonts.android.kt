@@ -14,5 +14,6 @@ actual val AnekGujaratiFont: FontFamily = FontFamily(
     Font(R.font.anek_gujarati, FontWeight.Normal),
     Font(R.font.anek_gujarati, FontWeight.Medium),
     Font(R.font.anek_gujarati, FontWeight.SemiBold),
-    Font(R.font.anek_gujarati, FontWeight.Bold)
+    Font(R.font.anek_gujarati, FontWeight.Bold),
+    Font(R.font.anek_gujarati, FontWeight.ExtraBold)
 )

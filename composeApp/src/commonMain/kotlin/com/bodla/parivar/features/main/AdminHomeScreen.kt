@@ -87,7 +87,9 @@ fun AdminHomeScreen(
         if (profile?.isStaff == true || canAccess("complaints")) add(Triple(if (isGujarati) "ફરિયાદો" else "Complaints", "✍️", Screen.Complaints))
         if (profile?.isStaff == true || canAccess("emergency_contacts")) add(Triple(if (isGujarati) "તાત્કાલિક સંપર્ક" else "Emergency contacts", "🚨", Screen.Emergency))
         if (profile?.isStaff == true || canAccess("village_history")) add(Triple(if (isGujarati) "ગામનો ઇતિહાસ" else "Village history", "📖", Screen.VillageHistory))
-        if (profile?.isStaff == true || canAccess("notifications")) add(Triple(if (isGujarati) "સૂચનાઓ" else "Notifications", "🔔", Screen.Notifications))
+        add(Triple(if (isGujarati) "પરિણામ" else "Results", "🎓", Screen.ResultUpload))
+        add(Triple(if (isGujarati) "અંતિમ યાત્રા પોસ્ટ" else "Antim Yatra Post", "🕯️", Screen.NoticeDesign))
+        add(Triple(if (isGujarati) "બેસણું પોસ્ટ" else "Besanu Post", "🕊️", Screen.BesanuDesign))
         add(Triple(if (isGujarati) "રહેવાસી હોમ" else "Resident home", "🏠", Screen.Home))
     }
     val filteredActions = dashboardActions.filter { (title, _, _) ->

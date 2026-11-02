@@ -23,6 +23,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -281,6 +282,27 @@ class AuthRepositoryImpl(
         }
     }
 
+    override suspend fun updatePassword(newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage.getToken()
+                ?: return@withContext Result.failure(Exception("Not signed in"))
+            val response = httpClient.put(Endpoints.AUTH_USER) {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $token")
+                setBody(buildJsonObject { put("password", newPassword) }.toString())
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception(friendlyAuthError(response.status.value, body)))
+            }
+        } catch (e: Exception) {
+            Napier.e("AuthRepository: Update password error", e)
+            Result.failure(e)
+        }
+    }
+
     override suspend fun logout(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             httpClient.post(Endpoints.AUTH_LOGOUT)
@@ -430,8 +452,8 @@ class NoticeRepositoryImpl(
                             id = dto.id,
                             titleGu = dto.titleGu,
                             titleEn = dto.titleEn,
-                            descriptionGu = dto.descriptionGu,
-                            descriptionEn = dto.descriptionEn,
+                            descriptionGu = dto.descriptionGu ?: "",
+                            descriptionEn = dto.descriptionEn ?: "",
                             categoryNameGu = dto.category?.nameGu,
                             categoryNameEn = dto.category?.nameEn,
                             imageUrl = dto.imageUrl,
@@ -466,6 +488,25 @@ class NoticeRepositoryImpl(
             .selectNoticeById(id)
             .executeAsOneOrNull()
             ?.toDomain()
+    }
+
+    override suspend fun deleteNotice(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/delete_notice") {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("p_notice_id", id) }.toString())
+            }
+            if (response.status.isSuccess()) {
+                database.appDatabaseQueries.deleteNotice(id)
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception("HTTP ${response.status} deleting notice: ${body.take(300)}"))
+            }
+        } catch (e: Exception) {
+            Napier.e("delete notice error", e)
+            Result.failure(e)
+        }
     }
 }
 
@@ -1248,6 +1289,180 @@ class ComplaintRepositoryImpl(
             Result.failure(e)
         }
     }
+}
+
+class ResultUploadRepositoryImpl(
+    private val httpClient: HttpClient,
+    private val tokenStorage: TokenStorage
+) : ResultUploadRepository {
+    @kotlinx.serialization.Serializable
+    private data class ProfileIdDto(val id: String)
+
+    @kotlinx.serialization.Serializable
+    private data class SubmissionDto(
+        val id: String,
+        @kotlinx.serialization.SerialName("user_id") val userId: String,
+        @kotlinx.serialization.SerialName("student_name") val studentName: String,
+        val standard: String,
+        @kotlinx.serialization.SerialName("school_name") val schoolName: String,
+        @kotlinx.serialization.SerialName("file_path") val filePath: String,
+        @kotlinx.serialization.SerialName("file_name") val fileName: String,
+        @kotlinx.serialization.SerialName("created_at") val createdAt: String,
+        @kotlinx.serialization.SerialName("submitted_by") val submittedBy: String? = null,
+        @kotlinx.serialization.SerialName("submitter_phone") val submitterPhone: String? = null
+    )
+
+    override suspend fun getSubmissions(): Result<List<ResultUpload>> = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.post(Endpoints.RESULT_UPLOAD_ADMIN_LIST) {
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception("Could not load result submissions. Apply migration 040 and sign in as staff."))
+            Result.success(response.body<List<SubmissionDto>>().map {
+                ResultUpload(it.id, it.studentName, it.standard, it.schoolName, it.filePath, it.fileName, it.createdAt, it.submittedBy.orEmpty(), it.submitterPhone)
+            })
+        } catch (_: Exception) {
+            Result.failure(Exception("Could not load result submissions. Check your connection and try again."))
+        }
+    }
+
+    override suspend fun setEnabled(enabled: Boolean): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.post(Endpoints.SET_RESULT_UPLOAD_ENABLED) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("p_enabled", enabled) }.toString())
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception("Could not change Result Upload. Confirm staff access and migrations 035–036."))
+            Result.success(response.body<Boolean>())
+        } catch (_: Exception) {
+            Result.failure(Exception("Could not change Result Upload. Check your connection and staff access."))
+        }
+    }
+
+    override suspend fun getSignedFileUrl(filePath: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/storage/v1/object/sign/result-uploads/$filePath") {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("expiresIn", 300) }.toString())
+            }
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception("Could not open this result document."))
+            val signedPath = response.body<JsonObject>()["signedURL"]?.jsonPrimitive?.contentOrNull
+                ?: return@withContext Result.failure(Exception("Could not open this result document."))
+            val fullUrl = if (signedPath.startsWith("http")) signedPath else "${Endpoints.SUPABASE_URL.trimEnd('/')}/storage/v1$signedPath"
+            Result.success(fullUrl)
+        } catch (_: Exception) {
+            Result.failure(Exception("Could not open this result document. Check your connection and staff access."))
+        }
+    }
+
+    override suspend fun isEnabled(): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.get(Endpoints.RESULT_UPLOAD_SETTINGS)
+            if (!response.status.isSuccess()) return@withContext Result.failure(Exception("Could not check submissions."))
+            val rows = response.body<List<JsonObject>>()
+            Result.success(rows.firstOrNull()?.get("result_upload_enabled")?.jsonPrimitive?.booleanOrNull == true)
+        } catch (_: Exception) {
+            Result.failure(Exception("Could not check submissions. Check your connection and try again."))
+        }
+    }
+
+    override suspend fun submit(studentName: String, standard: String, schoolName: String, fileName: String, contentType: String, bytes: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
+        var stage = "checking upload settings"
+        try {
+            if (studentName.trim().length !in 2..120 || standard.trim().length !in 1..40 || schoolName.trim().length !in 2..160) {
+                return@withContext Result.failure(Exception("Please check the student and school details."))
+            }
+            if (contentType !in setOf("image/jpeg", "image/png", "image/webp", "application/pdf") || bytes.size > 10 * 1024 * 1024) {
+                return@withContext Result.failure(Exception("Choose an image or PDF smaller than 10 MB."))
+            }
+            val enabled = isEnabled().getOrElse { return@withContext Result.failure(it) }
+            if (!enabled) return@withContext Result.failure(Exception("Result Upload is currently closed."))
+
+            stage = "checking signed-in profile"
+            val authUser = httpClient.get(Endpoints.AUTH_USER).body<AuthUserDto>()
+            val profileId = httpClient.get("${Endpoints.PROFILES}?select=id&auth_user_id=eq.${authUser.id}").body<List<ProfileIdDto>>().firstOrNull()?.id
+                ?: return@withContext Result.failure(Exception("Sign in before submitting a result."))
+            val safeName = fileName.substringAfterLast('/').substringAfterLast('\\').replace(Regex("[^A-Za-z0-9._-]"), "_").take(120).ifBlank { "result" }
+            val objectPath = "${authUser.id}/${Clock.System.now().toEpochMilliseconds()}_$safeName"
+            stage = "uploading the selected file"
+            val upload = httpClient.post("${Endpoints.RESULT_UPLOAD_BUCKET}/$objectPath") {
+                contentType(ContentType.parse(contentType))
+                header("Cache-Control", "max-age=3600")
+                header("x-upsert", "false")
+                setBody(bytes)
+            }
+            if (!upload.status.isSuccess()) {
+                val responseBody = upload.bodyAsText()
+                val details = responseBody.lowercase()
+                Napier.e("ResultUploadRepository: Storage upload rejected with HTTP ${upload.status.value}: ${storageErrorSummary(responseBody)}")
+                val message = when {
+                    "row-level security" in details || "unauthorized" in details || upload.status.value == 403 ->
+                        "Upload was blocked by file access rules. Ask the administrator to verify Result Upload is enabled and migrations 034–036 are applied."
+                        "bucket not found" in details || upload.status.value == 404 ->
+                        "Result Upload storage bucket is missing. Apply migration 037 to the same Supabase project used by the admin portal, then retry."
+                    "content-type" in details || "mime" in details || upload.status.value == 415 ->
+                        "Choose a JPG, PNG, WebP image or PDF."
+                    "payload too large" in details || "file size" in details || upload.status.value == 413 ->
+                        "The selected file is larger than 10 MB."
+                    "invalid jwt" in details || upload.status.value == 401 ->
+                        "Your sign-in has expired. Sign out, sign in again, and retry."
+                    else -> "Upload service rejected the file (HTTP ${upload.status.value}). Ask the administrator to check the Storage bucket and policies."
+                }
+                return@withContext Result.failure(Exception(message))
+            }
+
+            stage = "saving the submission"
+            val record = httpClient.post(Endpoints.RESULT_UPLOADS) {
+                contentType(ContentType.Application.Json)
+                header("Prefer", "return=representation")
+                url { parameters.append("select", "id") }
+                setBody(buildJsonObject {
+                    put("user_id", profileId)
+                    put("student_name", studentName.trim())
+                    put("standard", standard.trim())
+                    put("school_name", schoolName.trim())
+                    put("file_path", objectPath)
+                    put("file_name", safeName)
+                    put("content_type", contentType)
+                }.toString())
+            }
+            if (!record.status.isSuccess()) {
+                val responseBody = record.bodyAsText()
+                Napier.e("ResultUploadRepository: Submission insert rejected with HTTP ${record.status.value}: ${storageErrorSummary(responseBody)}")
+                runCatching { httpClient.delete("${Endpoints.RESULT_UPLOAD_BUCKET}/$objectPath") }
+                val message = when (record.status.value) {
+                    403 -> "Submission access was denied. Confirm Result Upload is enabled and try again."
+                    404 -> "Result Upload is not fully set up yet. Please contact the administrator."
+                    else -> "Could not save the submission. Check the details and try again."
+                }
+                return@withContext Result.failure(Exception(message))
+            }
+            val savedRows = record.body<List<JsonObject>>()
+            if (savedRows.size != 1 || savedRows.firstOrNull()?.get("id")?.jsonPrimitive?.contentOrNull.isNullOrBlank()) {
+                Napier.e("ResultUploadRepository: Submission insert returned HTTP success without a saved row representation.")
+                runCatching { httpClient.delete("${Endpoints.RESULT_UPLOAD_BUCKET}/$objectPath") }
+                return@withContext Result.failure(Exception("The result was not confirmed as saved. Please retry or contact the administrator."))
+            }
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Napier.e("ResultUploadRepository: Failed while $stage", error)
+            val message = if (stage == "checking signed-in profile") {
+                "Your sign-in could not be verified. Sign out, sign in again, and retry."
+            } else {
+                "Could not submit the result while $stage. Check your connection and try again."
+            }
+            Result.failure(Exception(message))
+        }
+    }
+
+    private fun storageErrorSummary(body: String): String = runCatching {
+        val fields = Json.parseToJsonElement(body).jsonObject
+        listOf("statusCode", "error", "message")
+            .mapNotNull { key -> fields[key]?.jsonPrimitive?.contentOrNull }
+            .joinToString(" ")
+            .take(240)
+    }.getOrDefault(body.take(240))
 }
 
 // ==============================================================================

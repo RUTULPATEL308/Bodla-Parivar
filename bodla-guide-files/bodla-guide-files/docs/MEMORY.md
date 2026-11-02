@@ -35,7 +35,21 @@ Backend and admin panel work. Mobile app, offline sync and live bidding are not 
 - Migration 019 applied on staging; admin and mobile winner UI pending (B06a, B06b, B07). Old mobile prompt does not appear because the server no longer fills `winning_bidder_name`.
 
 ## Current Task
-TASK-001
+Result Upload feature
+
+## Result Upload (2026-10-20)
+- Added migration 034 for an admin-controlled `village_settings.result_upload_enabled` switch, private `result_uploads` rows, and a private Storage bucket limited to JPEG/PNG/WebP/PDF at 10 MB.
+- Admin portal has a settings switch and Result Uploads list with private signed-file access and UTF-8 spreadsheet export.
+- Mobile Android/iOS has a Gujarati form for student name, standard, school, and image/PDF; staff can also review submissions in the app, and uploads are rejected when the switch is off.
+- Still needs migration applied and end-to-end verification against a Supabase staging project.
+- Follow-up: migration 035 moves switch control to the Result Upload page and uses an `is_staff()`-guarded RPC, with explicit settings INSERT/UPDATE RLS checks and a default row for projects without the seed.
+- Follow-up: the mobile app now reads the oldest `village_settings` row explicitly, matching the admin page. Migration 036 keeps the feature flag synchronized across any duplicate legacy settings rows.
+- Follow-up: Storage returned 404 `bucket not found` during mobile upload. Migration 037 idempotently repairs the private bucket and its policies; apply it in the same Supabase project as the admin portal.
+- Follow-up: migration 038 publishes result_uploads for Realtime; the admin page subscribes to changes and has a manual refresh, while mobile navigates home on successful submission.
+- Follow-up: migration 039 adds a staff-only result count RPC so the admin page can distinguish absent rows from SELECT RLS invisibility.
+- Follow-up: count RPC reports saved rows while direct dashboard SELECT returns none; migration 040 supplies a staff-checked SECURITY DEFINER list RPC for the dashboard. `is_staff()` includes ADMIN and SUPER_ADMIN.
+- Follow-up: mobile staff Result Upload now uses the list RPC, can toggle the shared setting, open signed documents, and share an Excel-readable CSV export on Android/iOS.
+- Follow-up: web toggle failed with `UPDATE requires a WHERE clause (21000)`; migration 041 adds `WHERE id IS NOT NULL` while keeping all duplicate settings rows synchronized.
 
 ## Next Step
 Rotate exposed credentials, then verify the mobile app builds.

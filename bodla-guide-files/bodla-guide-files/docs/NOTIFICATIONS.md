@@ -35,6 +35,18 @@ Edge Function: send-notification (service role, staff-verified)
 - Never include private data (phone numbers, bid bidder details) in push text.
 - Tapping a notification opens the related screen using `reference_id`.
 
+## Antim Yatra notices
+| Part | Value |
+|---|---|
+| Lock screen title | `અંતિમ યાત્રા / સ્મશાન યાત્રા` (English: `Antim Yatra / Samsan Yatra`) |
+| Notices feed title | `અંતિમ યાત્રા: <deceased name>` so the name stays scannable |
+| Notification body | One-line summary, e.g. `શ્રી <name> ની અંતિમ યાત્રા તા. <date>` |
+| Notification picture | The generated poster, uploaded to the public `antim-yatra-posters` bucket and passed as `image_url` |
+
+- The poster is the picture for both the lock screen notification and the in-app notification list, so the family sees the same image everywhere.
+- The app scales the poster down before uploading it, because FCM downloads the notification image itself and drops pictures that are too large.
+- Notices published from the admin console can override the lock screen title and reuse the uploaded picture; the picture URL must be a public URL on the project's own storage.
+
 ## Mobile requirements
 - Ask notification permission at a sensible moment, with a Gujarati explanation (Android 13+ and iOS require it).
 - Register the device token after login; mark old tokens inactive on logout or when FCM reports them invalid.
@@ -53,5 +65,7 @@ Edge Function: send-notification (service role, staff-verified)
 
 ## Known gaps in current code
 - Migration 016 lets anonymous users insert and everyone read all notifications.
-- Need to verify the Edge Function's FCM sending code is complete and uses current FCM HTTP v1 API.
-- Mobile app has no confirmed token registration or push handling yet.
+- The `send-notification` Edge Function uses the FCM HTTP v1 API, but it only pushes while `FCM_SERVICE_ACCOUNT_KEY` is configured as a function secret.
+- If the Edge Function is not deployed, the app falls back to the `publish_antim_yatra_notice` database function, which stores the notice and the notification history but cannot send push.
+- iOS ignores the FCM picture (`fcm_options.image`) until the app ships a Notification Service Extension.
+- Device tokens are not yet registered per user, so the admin console falls back to the `all_users` topic when no tokens are stored.

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,8 +27,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.bodla.parivar.features.notices.ZoomableImage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +47,12 @@ import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
+import coil3.compose.AsyncImage
+import com.bodla.parivar.features.notices.NoticeAttachmentPreview
+import com.bodla.parivar.features.notices.formatNoticeText
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -47,7 +65,10 @@ data class AppNotification(
     @SerialName("body_en") val bodyEn: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("reference_id") val referenceId: String? = null,
-    val type: String? = null
+    val type: String? = null,
+    val payload: JsonObject? = null,
+    @SerialName("image_url") val imageUrl: String? = null,
+    @SerialName("attachment_url") val attachmentUrl: String? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,13 +82,18 @@ fun NotificationCenterScreen(
     val lang = LocalAppLanguage.current
     val isGujarati = lang == AppLanguage.GUJARATI
 
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
+    var previewImageTitle by remember { mutableStateOf("") }
+    var previewAttachmentUrl by remember { mutableStateOf<String?>(null) }
+    var previewAttachmentTitle by remember { mutableStateOf("") }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            text = if (isGujarati) "સૂચનાઓ" else "Notifications",
+                            text = if (isGujarati) "સૂચનાઓ" else "Notices",
                             style = BodlaPageTitle
                         )
                         Text(
@@ -166,7 +192,67 @@ fun NotificationCenterScreen(
                                 Text(text = title, style = BodlaCardTitle, color = TextPrimary)
                                 if (body.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    Text(text = body, style = BodlaBody, color = TextSecondary)
+                                    Text(text = formatNoticeText(body), style = BodlaBody, color = TextSecondary)
+                                }
+                                val imageUrl = notification.imageUrl ?: notification.payload?.get("image_url")?.jsonPrimitive?.contentOrNull
+                                val attachmentUrl = notification.attachmentUrl ?: notification.payload?.get("attachment_url")?.jsonPrimitive?.contentOrNull
+                                if (!imageUrl.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    AsyncImage(
+                                        model = imageUrl,
+                                        contentDescription = title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(160.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                previewImageTitle = title
+                                                previewImageUrl = imageUrl
+                                            }
+                                    )
+                                }
+                                if (!imageUrl.isNullOrBlank() || !attachmentUrl.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        if (!imageUrl.isNullOrBlank()) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    previewImageTitle = title
+                                                    previewImageUrl = imageUrl
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(34.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isGujarati) "🖼️ ફોટો જુઓ" else "🖼️ View Image",
+                                                    style = BodlaCaption.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = SaffronPrimary
+                                                )
+                                            }
+                                        }
+                                        if (!attachmentUrl.isNullOrBlank()) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    previewAttachmentTitle = title
+                                                    previewAttachmentUrl = attachmentUrl
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(34.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isGujarati) "📄 દસ્તાવેજ જુઓ" else "📄 View Document",
+                                                    style = BodlaCaption.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = SaffronPrimary
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                                 notification.createdAt?.let { createdAt ->
                                     Spacer(modifier = Modifier.height(8.dp))
@@ -178,5 +264,63 @@ fun NotificationCenterScreen(
                 }
             }
         }
+    }
+
+    previewImageUrl?.let { url ->
+        AlertDialog(
+            onDismissRequest = { previewImageUrl = null },
+            confirmButton = {
+                TextButton(onClick = { previewImageUrl = null }) {
+                    Text(if (isGujarati) "બંધ કરો" else "Close")
+                }
+            },
+            title = {
+                if (previewImageTitle.isNotBlank()) {
+                    Text(text = previewImageTitle, style = BodlaCardTitle)
+                }
+            },
+            text = {
+                ZoomableImage(
+                    model = url,
+                    contentDescription = previewImageTitle.ifBlank { "Notice image" },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 280.dp, max = 520.dp),
+                    zoomInLabel = if (isGujarati) "મોટું કરો" else "Zoom in",
+                    zoomOutLabel = if (isGujarati) "નાનું કરો" else "Zoom out",
+                    resetLabel = if (isGujarati) "રીસેટ" else "Reset"
+                )
+            }
+        )
+    }
+
+    previewAttachmentUrl?.let { url ->
+        val uriHandler = LocalUriHandler.current
+        AlertDialog(
+            onDismissRequest = { previewAttachmentUrl = null },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        uriHandler.openUri(url + if (url.contains('?')) "&download" else "?download")
+                    }) {
+                        Text(if (isGujarati) "ડાઉનલોડ કરો" else "Download")
+                    }
+                    TextButton(onClick = { previewAttachmentUrl = null }) {
+                        Text(if (isGujarati) "બંધ કરો" else "Close")
+                    }
+                }
+            },
+            title = {
+                if (previewAttachmentTitle.isNotBlank()) {
+                    Text(text = previewAttachmentTitle, style = BodlaCardTitle)
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 520.dp)) {
+                    NoticeAttachmentPreview(
+                        url = url,
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    )
+                }
+            }
+        )
     }
 }

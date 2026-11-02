@@ -11,8 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
@@ -34,9 +37,12 @@ import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.domain.model.Notice
+import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.core.ui.PrintAction
+import com.bodla.parivar.core.di.AppContainer
+import kotlinx.coroutines.launch
 
-private fun formatNoticeText(value: String): AnnotatedString = buildAnnotatedString {
+fun formatNoticeText(value: String): AnnotatedString = buildAnnotatedString {
     val markup = Regex("""(https?://[^\s<>]+|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)""", RegexOption.IGNORE_CASE)
     var cursor = 0
     markup.findAll(value).forEach { match ->
@@ -87,6 +93,9 @@ fun NoticeListScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { onNavigate(Screen.SendNotification) }) {
+                        Text(text = "＋", fontSize = 22.sp, color = SaffronPrimary)
+                    }
                     PrintAction(title = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Notices",
                         content = notices.joinToString("\n\n") { "${it.titleGu}\n${it.descriptionGu.orEmpty()}\n${it.createdAt}" },
                         englishContent = notices.joinToString("\n\n") { "${it.titleEn}\n${it.descriptionEn.orEmpty()}\n${it.createdAt}" },
@@ -159,8 +168,30 @@ fun NoticeCard(
                     )
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!notice.imageUrl.isNullOrBlank()) {
+                    Text(text = "🖼️", fontSize = 14.sp)
+                }
+                if (!notice.attachmentUrl.isNullOrBlank()) {
+                    Text(text = "📄", fontSize = 14.sp)
+                }
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
+        val imageUrl = notice.imageUrl
+        if (!imageUrl.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = if (lang == AppLanguage.GUJARATI) notice.titleGu else notice.titleEn,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         Text(
             text = if (lang == AppLanguage.GUJARATI) notice.titleGu else notice.titleEn,
             style = BodlaCardTitle,
@@ -190,12 +221,18 @@ fun NoticeCard(
 fun NoticeDetailScreen(
     onBack: () -> Unit,
     notice: Notice? = null,
+    currentProfile: Profile? = null,
+    onDeleted: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
     val uriHandler = LocalUriHandler.current
     val showImagePreview = remember { mutableStateOf(false) }
     val showAttachmentPreview = remember { mutableStateOf(false) }
+    val showDeleteConfirmation = remember { mutableStateOf(false) }
+    val isDeleting = remember { mutableStateOf(false) }
+    val deleteError = remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
     val currentNotice = notice
 
     Scaffold(
@@ -267,9 +304,43 @@ fun NoticeDetailScreen(
                 }
                 val attachmentUrl = currentNotice.attachmentUrl
                 if (!attachmentUrl.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(onClick = { showAttachmentPreview.value = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (lang == AppLanguage.GUJARATI) "વિડિયો / દસ્તાવેજ જુઓ" else "View video / document")
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAttachmentPreview.value = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (lang == AppLanguage.GUJARATI) "દસ્તાવેજ જુઓ" else "View document")
+                        }
+                        OutlinedButton(
+                            onClick = { uriHandler.openUri(attachmentUrl + if (attachmentUrl.contains('?')) "&download" else "?download") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (lang == AppLanguage.GUJARATI) "ડાઉનલોડ કરો" else "Download")
+                        }
+                    }
+                }
+
+                val canDelete = currentProfile?.let { profile ->
+                    profile.isAdmin ||
+                        profile.roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
+                } == true
+                if (canDelete) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { showDeleteConfirmation.value = true },
+                        enabled = !isDeleting.value,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (lang == AppLanguage.GUJARATI) "સૂચના ડિલીટ કરો" else "Delete Notice")
+                    }
+                    deleteError.value?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(message, color = MaterialTheme.colorScheme.error, style = BodlaCaption)
                     }
                 }
             }
@@ -277,6 +348,42 @@ fun NoticeDetailScreen(
     }
 
     if (currentNotice == null) return
+
+    if (showDeleteConfirmation.value) {
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting.value) showDeleteConfirmation.value = false },
+            title = { Text(if (lang == AppLanguage.GUJARATI) "સૂચના ડિલીટ કરવી છે?" else "Delete this notice?") },
+            text = { Text(if (lang == AppLanguage.GUJARATI) "આ સૂચના કાયમી રીતે કાઢી નાખવામાં આવશે." else "This notice will be permanently removed.") },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeleting.value,
+                    onClick = {
+                        isDeleting.value = true
+                        deleteError.value = null
+                        coroutineScope.launch {
+                            val result = AppContainer.noticeRepository.deleteNotice(currentNotice.id)
+                            isDeleting.value = false
+                            if (result.isSuccess) {
+                                showDeleteConfirmation.value = false
+                                onDeleted?.invoke()
+                                onBack()
+                            } else {
+                                deleteError.value = if (lang == AppLanguage.GUJARATI)
+                                    "સૂચના ડિલીટ થઈ શકી નથી: ${result.exceptionOrNull()?.message ?: ""}"
+                                else
+                                    "Could not delete the notice: ${result.exceptionOrNull()?.message ?: ""}"
+                            }
+                        }
+                    }
+                ) { Text(if (lang == AppLanguage.GUJARATI) "ડિલીટ" else "Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation.value = false }) {
+                    Text(if (lang == AppLanguage.GUJARATI) "રદ કરો" else "Cancel")
+                }
+            }
+        )
+    }
 
     if (showImagePreview.value && !currentNotice.imageUrl.isNullOrBlank()) {
         AlertDialog(

@@ -24,18 +24,29 @@ import com.bodla.parivar.core.localization.ProvideAppLanguage
 import com.bodla.parivar.core.localization.Strings
 import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.network.Endpoints
+import com.bodla.parivar.core.PendingNotices
 import io.ktor.http.HttpHeaders
 import com.bodla.parivar.core.network.KtorClientFactory
 import com.bodla.parivar.core.sync.SyncStatus
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.domain.model.Offering
 import com.bodla.parivar.domain.model.OfferingBid
+import com.bodla.parivar.domain.model.Notice
 import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.features.auth.LoginScreen
 import com.bodla.parivar.features.auth.RegisterScreen
 import com.bodla.parivar.features.complaints.ComplaintListScreen
 import com.bodla.parivar.features.complaints.CreateComplaintScreen
+import com.bodla.parivar.features.resultupload.ResultUploadScreen
 import com.bodla.parivar.features.directory.DirectoryScreen
+import com.bodla.parivar.features.design.NoticeDesignData
+import com.bodla.parivar.features.design.NoticeDesignScreen
+import com.bodla.parivar.features.design.NoticeDesignPreviewScreen
+import com.bodla.parivar.features.design.publishAntimYatraNotice
+import com.bodla.parivar.features.besanu.BesanuDesignData
+import com.bodla.parivar.features.besanu.BesanuDesignScreen
+import com.bodla.parivar.features.besanu.BesanuDesignPreviewScreen
+import com.bodla.parivar.features.besanu.publishBesanuNotice
 import com.bodla.parivar.features.emergency.EmergencyScreen
 import com.bodla.parivar.features.events.EventDetailScreen
 import com.bodla.parivar.features.events.EventListScreen
@@ -45,24 +56,38 @@ import com.bodla.parivar.features.main.AdminHomeScreen
 import com.bodla.parivar.features.main.RegisteredUsersScreen
 import com.bodla.parivar.features.notifications.AppNotification
 import com.bodla.parivar.features.notifications.NotificationCenterScreen
+import com.bodla.parivar.features.notifications.SendNotificationScreen
 import com.bodla.parivar.features.notices.NoticeDetailScreen
 import com.bodla.parivar.features.notices.NoticeListScreen
 import com.bodla.parivar.features.offerings.AddOfferingScreen
 import com.bodla.parivar.features.offerings.OfferingDetailScreen
 import com.bodla.parivar.features.offerings.OfferingListScreen
 import com.bodla.parivar.features.offerings.replaceBidHistory
+import com.bodla.parivar.features.profile.EditProfileScreen
 import com.bodla.parivar.features.profile.ProfileScreen
+import io.github.aakira.napier.Napier
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
+import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.Json
 
 private fun Profile.hasAdminDashboardAccess(): Boolean =
     isAdmin || roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
+
+private suspend fun loadLatestNotifications(): List<AppNotification> {
+    val response = AppContainer.httpClient.get(Endpoints.NOTIFICATIONS_LATEST)
+    if (!response.status.isSuccess()) {
+        error("Could not load notifications (${response.status.value}).")
+    }
+    return kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        .decodeFromString(response.bodyAsText())
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,46 +113,94 @@ fun MainScreen(
             }
         )
     }
+    var noticeDesignData by remember { mutableStateOf(NoticeDesignData()) }
+    var besanuDesignData by remember { mutableStateOf(BesanuDesignData()) }
     val snackbarHostState = remember { SnackbarHostState() }
     var lastNotifId by remember { mutableStateOf<String?>(null) }
-    var pendingNoticeId by remember { mutableStateOf(consumePendingNoticeId()) }
     var topNotificationMessage by remember { mutableStateOf<String?>(null) }
+    var pendingNoticeId by remember { mutableStateOf<String?>(null) }
+    var deepLinkedNotice by remember { mutableStateOf<Notice?>(null) }
+    var sessionReady by remember { mutableStateOf(false) }
     var latestNotifications by remember { mutableStateOf<List<AppNotification>>(emptyList()) }
     var pullDistance by remember { mutableFloatStateOf(0f) }
     var isPullRefreshing by remember { mutableStateOf(false) }
     val notificationsStartedAt = remember { Clock.System.now() }
     val pullThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
 
+    // A notification tap can arrive while the app is already running, so the
+    // target is observed continuously instead of only once at start-up.
+    LaunchedEffect(Unit) {
+        PendingNotices.pendingNoticeId.collect { posted ->
+            val noticeId = posted?.takeIf { it.isNotBlank() } ?: return@collect
+            pendingNoticeId = noticeId
+            PendingNotices.consume()
+        }
+    }
+
     // Auto-restore / refresh current user session on app start
     LaunchedEffect(Unit) {
-        suspend fun refreshCommunityData() {
-            val refreshResults = listOf(
-                AppContainer.noticeRepository.refreshNotices(),
-                AppContainer.eventRepository.refreshEvents(),
-                AppContainer.businessRepository.refreshBusinesses(),
-                AppContainer.offeringRepository.refreshOfferings(),
-                AppContainer.emergencyRepository.refreshEmergencyContacts()
-            )
-            refreshResults.filter { it.isFailure }.forEach { result ->
-                result.exceptionOrNull()?.let { error ->
-                    io.github.aakira.napier.Napier.w("MainScreen: Could not refresh community content", error)
+        try {
+            suspend fun refreshCommunityData() {
+                val refreshResults = listOf(
+                    runCatching { AppContainer.noticeRepository.refreshNotices() },
+                    runCatching { AppContainer.eventRepository.refreshEvents() },
+                    runCatching { AppContainer.businessRepository.refreshBusinesses() },
+                    runCatching { AppContainer.offeringRepository.refreshOfferings() },
+                    runCatching { AppContainer.emergencyRepository.refreshEmergencyContacts() }
+                )
+                refreshResults.filter { it.isFailure }.forEach { result ->
+                    result.exceptionOrNull()?.let { error ->
+                        Napier.w("MainScreen: Could not refresh community content", error)
+                    }
+                }
+                runCatching { loadLatestNotifications() }
+                    .onSuccess { latestNotifications = it }
+                    .onFailure { Napier.w("MainScreen: Could not refresh notifications", it) }
+            }
+
+            val user = runCatching { AppContainer.authRepository.getCurrentUser() }.getOrNull()
+            if (user != null) {
+                currentUser = user
+                val isAdminUser = user.hasAdminDashboardAccess()
+                currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                refreshCommunityData()
+            } else {
+                val cachedProfile = AppContainer.tokenStorage.getUserProfile()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { Json.decodeFromString<Profile>(it) }.getOrNull() }
+
+                if (cachedProfile != null) {
+                    currentUser = cachedProfile
+                    val isAdminUser = cachedProfile.isAdmin || cachedProfile.roles.any { role: String -> role.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
+                    currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                } else {
+                    currentUser = null
+                    currentScreen = Screen.Login
                 }
             }
+        } catch (e: Exception) {
+            Napier.e("MainScreen: Startup session error", e)
+        } finally {
+            sessionReady = true
         }
+    }
 
-        val user = AppContainer.authRepository.getCurrentUser()
-        if (user != null) {
-            currentUser = user
-            val isAdminUser = user.hasAdminDashboardAccess()
-            // A saved session starts on Home before its roles have loaded.
-            // Always route from the refreshed role data so returning admins
-            // do not remain on the resident dashboard.
-            currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
-            refreshCommunityData()
-        } else if (AppContainer.tokenStorage.getToken().isNullOrBlank()) {
-            currentUser = null
+    // Open the notice a notification tap targeted. This waits for the session
+    // so the deep link is not overwritten by the start-up screen reset.
+    LaunchedEffect(pendingNoticeId, sessionReady, currentUser) {
+        val noticeId = pendingNoticeId ?: return@LaunchedEffect
+        if (!sessionReady) return@LaunchedEffect
+        if (currentUser == null) {
+            // Sign-in is required first; the pending id is kept so the effect
+            // re-runs and opens the notice once the session is active.
             currentScreen = Screen.Login
+            return@LaunchedEffect
         }
+        pendingNoticeId = null
+        // Make sure the notice is cached before the detail screen resolves it.
+        AppContainer.noticeRepository.refreshNotices()
+        deepLinkedNotice = AppContainer.noticeRepository.getNoticeById(noticeId)
+        currentScreen = Screen.NoticeDetail(noticeId)
     }
 
     val pullRefreshConnection = remember {
@@ -212,6 +285,10 @@ fun MainScreen(
                 refreshOfferingBids(screen.offeringId)
                 delay(5000)
             }
+        } else if (screen == Screen.Notifications) {
+            runCatching { loadLatestNotifications() }
+                .onSuccess { latestNotifications = it }
+                .onFailure { io.github.aakira.napier.Napier.w("MainScreen: Could not refresh notifications", it) }
         }
     }
 
@@ -224,7 +301,7 @@ fun MainScreen(
         val defaultHome = if (isStrictAdmin) Screen.AdminHome else Screen.Home
 
         val isBottomBarVisible = when (currentScreen) {
-            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Navratri, Screen.Offerings, Screen.AddOffering, Screen.Notifications, Screen.Complaints, Screen.Emergency, Screen.Profile -> true
+            Screen.Home, Screen.AdminHome, Screen.AdminUsers, Screen.Notices, Screen.Navratri, Screen.Offerings, Screen.AddOffering, Screen.Notifications, Screen.Complaints, Screen.Emergency, Screen.Profile, Screen.More -> true
             else -> false
         } || isStaffOrAdmin
 
@@ -374,14 +451,6 @@ fun MainScreen(
                             }
 
                             NavigationBarItem(
-                                selected = currentScreen == Screen.Notifications,
-                                onClick = { currentScreen = Screen.Notifications },
-                                icon = { Text(text = "🔔", fontSize = 20.sp) },
-                                label = { Text(text = if (lang == AppLanguage.GUJARATI) "સૂચનાઓ" else "Updates", style = BodlaNavigation) },
-                                colors = NavigationBarItemDefaults.colors(selectedIconColor = SaffronPrimary, selectedTextColor = SaffronPrimary, indicatorColor = LightIconBg)
-                            )
-
-                            NavigationBarItem(
                                 selected = currentScreen == Screen.Profile,
                                 onClick = { currentScreen = Screen.Profile },
                                 icon = { Text(text = "👤", fontSize = 20.sp) },
@@ -483,10 +552,71 @@ fun MainScreen(
                     when (val screen = currentScreen) {
                         is Screen.Home -> HomeScreen(
                             onNavigate = { currentScreen = it },
+                            onLanguageChange = { currentLanguage = it },
                             userName = currentUser?.fullName ?: (if (lang == AppLanguage.GUJARATI) "ગ્રામજન" else "Resident"),
                             isOffline = !isConnectedToInternet,
                             pinnedNotice = notices.firstOrNull { it.isPinned },
                             latestNotices = notices.take(5),
+                            modifier = contentModifier
+                        )
+
+                        is Screen.NoticeDesign -> NoticeDesignScreen(
+                            initialData = noticeDesignData,
+                            onBack = { currentScreen = defaultHome },
+                            onPreview = { noticeDesignData = it; currentScreen = Screen.NoticeDesignPreview },
+                            modifier = contentModifier
+                        )
+
+                        is Screen.More -> MoreScreen(
+                            onNavigate = { currentScreen = it },
+                            modifier = contentModifier,
+                            canManageResults = currentUser?.isStaff == true
+                        )
+
+                        is Screen.NoticeDesignPreview -> NoticeDesignPreviewScreen(
+                            data = noticeDesignData,
+                            onBack = { currentScreen = Screen.NoticeDesign },
+                            onBroadcast = { posterPng, complete ->
+                                coroutineScope.launch {
+                                    val token = AppContainer.tokenStorage.getToken()
+                                    val result = runCatching {
+                                        if (token.isNullOrBlank()) error("Sign in to publish this notice.")
+                                        val published = publishAntimYatraNotice(noticeDesignData, token, posterPng)
+                                        val refreshResult = AppContainer.noticeRepository.refreshNotices()
+                                        published.copy(
+                                            feed_refresh_error = refreshResult.exceptionOrNull()?.message
+                                        )
+                                    }
+                                    complete(result)
+                                }
+                            },
+                            modifier = contentModifier
+                        )
+
+                        is Screen.BesanuDesign -> BesanuDesignScreen(
+                            initialData = besanuDesignData,
+                            onBack = { currentScreen = defaultHome },
+                            onPreview = { besanuDesignData = it; currentScreen = Screen.BesanuDesignPreview },
+                            modifier = contentModifier
+                        )
+
+                        is Screen.BesanuDesignPreview -> BesanuDesignPreviewScreen(
+                            data = besanuDesignData,
+                            onBack = { currentScreen = Screen.BesanuDesign },
+                            onBroadcast = { posterPng, complete ->
+                                coroutineScope.launch {
+                                    val token = AppContainer.tokenStorage.getToken()
+                                    val result = runCatching {
+                                        if (token.isNullOrBlank()) error("Sign in to publish this notice.")
+                                        val published = publishBesanuNotice(besanuDesignData, token, posterPng)
+                                        val refreshResult = AppContainer.noticeRepository.refreshNotices()
+                                        published.copy(
+                                            feed_refresh_error = refreshResult.exceptionOrNull()?.message
+                                        )
+                                    }
+                                    complete(result)
+                                }
+                            },
                             modifier = contentModifier
                         )
 
@@ -528,6 +658,13 @@ fun MainScreen(
                         is Screen.Directory -> DirectoryScreen(
                             businesses = businesses,
                             onNavigate = { currentScreen = it },
+                            modifier = contentModifier
+                        )
+
+                        is Screen.EditProfile -> EditProfileScreen(
+                            profile = currentUser,
+                            onBack = { currentScreen = Screen.Profile },
+                            onUpdated = { updated -> currentUser = updated },
                             modifier = contentModifier
                         )
 
@@ -597,8 +734,13 @@ fun MainScreen(
                         )
 
                         is Screen.NoticeDetail -> NoticeDetailScreen(
-                            notice = notices.find { it.id == screen.noticeId },
+                            notice = notices.find { it.id == screen.noticeId }
+                                ?: deepLinkedNotice?.takeIf { it.id == screen.noticeId },
                             onBack = { currentScreen = Screen.Notices },
+                            currentProfile = currentUser,
+                            onDeleted = {
+                                coroutineScope.launch { AppContainer.noticeRepository.refreshNotices() }
+                            },
                             modifier = contentModifier
                         )
 
@@ -691,9 +833,30 @@ fun MainScreen(
                             modifier = contentModifier
                         )
 
+                        is Screen.ResultUpload -> ResultUploadScreen(
+                            repository = AppContainer.resultUploadRepository,
+                            canManage = currentUser?.isStaff == true,
+                            onBack = { currentScreen = Screen.More },
+                            onSubmissionSuccess = { currentScreen = defaultHome },
+                            modifier = contentModifier
+                        )
+
                         is Screen.Emergency -> EmergencyScreen(
                             onBack = { currentScreen = defaultHome },
                             emergencyContacts = emergencyContacts,
+                            modifier = contentModifier
+                        )
+
+                        is Screen.SendNotification -> SendNotificationScreen(
+                            onBack = { currentScreen = defaultHome },
+                            onSuccess = {
+                                coroutineScope.launch {
+                                    AppContainer.noticeRepository.refreshNotices()
+                                    runCatching { loadLatestNotifications() }
+                                        .onSuccess { latestNotifications = it }
+                                }
+                                currentScreen = defaultHome
+                            },
                             modifier = contentModifier
                         )
 

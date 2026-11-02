@@ -6,7 +6,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -114,10 +113,11 @@ fun App() {
                                     .background(WarmWhiteSurface, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Image(
-                                    painter = painterResource(Res.drawable.bodla_parivar_mark),
-                                    contentDescription = "Bodla Parivar logo",
-                                    modifier = Modifier.size(112.dp)
+                                Text(
+                                    text = "ॐ",
+                                    fontSize = 52.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SaffronPrimary
                                 )
                             }
                         }
