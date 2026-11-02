@@ -5,9 +5,10 @@ object Endpoints {
     var SUPABASE_URL: String = "https://kjoykvxrnyykdnzektoj.supabase.co"
     var SUPABASE_ANON_KEY: String = "sb_publishable_PNb4_Epkaqv-J1KdC0x7dQ_-vxdAt-d"
 
-    // Admin (Next.js) API base – set ADMIN_API_URL env var in the mobile app or default to emulator host loopback for dev
+    // Keep the admin base platform-safe. Common code cannot call System.getenv() in
+    // Kotlin Multiplatform, and iOS must not compile against JVM-only APIs.
     val ADMIN_API_BASE: String
-        get() = System.getenv("ADMIN_API_URL") ?: "http://10.0.2.2:3000"
+        get() = "http://localhost:3000"
     val NOTIFICATION_ENHANCE: String
         get() = "${SUPABASE_URL.trimEnd('/')}/functions/v1/enhance-message"
     val NOTIFICATION_ENHANCE_ADMIN: String
@@ -132,5 +133,4 @@ object Endpoints {
     // Latest notifications (for in-app toasts)
     val NOTIFICATIONS_LATEST: String
         get() = "$REST_BASE_URL/notifications?order=created_at.desc&limit=5"
-
 }
