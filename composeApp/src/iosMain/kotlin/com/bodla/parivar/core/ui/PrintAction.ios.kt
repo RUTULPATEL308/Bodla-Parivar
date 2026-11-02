@@ -23,6 +23,7 @@ import platform.UIKit.UIGraphicsGetCurrentContext
 import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
 import platform.UIKit.UIImagePNGRepresentation
 import platform.UIKit.UIScreen
+import platform.posix.memcpy
 
 actual fun PlatformPrint(content: String, title: String) {
     val formatter: UIPrintFormatter = UISimpleTextPrintFormatter(text = content)
@@ -67,7 +68,9 @@ actual fun PlatformCapturePoster(boundsInWindow: IntRect): ByteArray? {
         val image = UIGraphicsGetImageFromCurrentImageContext() ?: return null
         val png = UIImagePNGRepresentation(image) ?: return null
         ByteArray(png.length.toInt()).also { bytes ->
-            bytes.usePinned { pinned -> png.getBytes(pinned.addressOf(0), png.length) }
+            if (bytes.isNotEmpty()) bytes.usePinned { pinned ->
+                memcpy(pinned.addressOf(0), png.bytes, png.length)
+            }
         }
     } catch (error: Exception) {
         io.github.aakira.napier.Napier.e("Could not capture Antim Yatra poster", error, tag = "Share")
