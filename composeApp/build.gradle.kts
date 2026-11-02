@@ -4,7 +4,12 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.sqlDelight)
-    alias(libs.plugins.googleServices)
+    // Firebase plugin is applied only when google-services.json exists.
+    // This avoids CI failures in forks/PRs where the secret is unavailable.
+}
+
+if (file("${projectDir}/google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 kotlin {
