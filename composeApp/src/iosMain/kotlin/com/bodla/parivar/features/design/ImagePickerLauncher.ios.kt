@@ -11,21 +11,19 @@ import kotlinx.cinterop.usePinned
 import platform.Foundation.NSData
 import platform.UIKit.UIImagePickerController
 import platform.UIKit.UIImagePickerControllerDelegateProtocol
-import platform.UIKit.UIImagePickerControllerSourceTypePhotoLibrary
+import platform.UIKit.UIImagePickerControllerSourceType
 import platform.UIKit.UINavigationControllerDelegateProtocol
 import platform.UIKit.UIImageJPEGRepresentation
 import platform.UIKit.UIImage
 import platform.UIKit.UIDocumentPickerViewController
 import platform.UIKit.UIDocumentPickerDelegateProtocol
 import platform.Foundation.NSURL
-import platform.Foundation.NSString
-import platform.Foundation.NSStringEncodingConversionAllowLossy
-import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.lastPathComponent
-import platform.Foundation.URLByResolvingSymlinksInPath
-import platform.Foundation.NSDataReadingMappedIfSafe
-import platform.Foundation.NSObject
+import platform.Foundation.pathExtension
+import platform.Foundation.dataWithContentsOfURL
+import platform.darwin.NSObject
 import platform.posix.memcpy
+import platform.UIKit.UIDocumentPickerMode
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
@@ -48,7 +46,7 @@ actual fun ImagePickerButton(label: String, modifier: Modifier, onImagePicked: (
             }
         }
         picker.delegate = delegate
-        picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary
+        picker.sourceType = UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypePhotoLibrary
         parent.presentViewController(picker, animated = true, completion = null)
     }, modifier = modifier) { Text(label) }
 }
@@ -58,11 +56,14 @@ actual fun ImagePickerButton(label: String, modifier: Modifier, onImagePicked: (
 actual fun ResultDocumentPicker(label: String, modifier: Modifier, onDocumentPicked: (ResultDocument?) -> Unit) {
     val parent = LocalUIViewController.current
     TextButton(onClick = {
-        val picker = UIDocumentPickerViewController(documentTypes = listOf("public.image", "com.adobe.pdf"), inMode = 0)
+        val picker = UIDocumentPickerViewController(
+            documentTypes = listOf("public.image", "com.adobe.pdf"),
+            inMode = UIDocumentPickerMode.UIDocumentPickerModeImport
+        )
         val delegate = object : NSObject(), UIDocumentPickerDelegateProtocol {
             override fun documentPicker(controller: UIDocumentPickerViewController, didPickDocumentsAtURLs: List<*>) {
                 val url = didPickDocumentsAtURLs.firstOrNull() as? NSURL
-                val bytes = url?.let { NSData.dataWithContentsOfURL(it, NSDataReadingMappedIfSafe, null) }
+                val bytes = url?.let { NSData.dataWithContentsOfURL(it) }
                 val result = if (url != null && bytes != null) {
                     val contentType = when (url.pathExtension?.lowercase()) {
                         "pdf" -> "application/pdf"

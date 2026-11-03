@@ -3,7 +3,7 @@ package com.bodla.parivar.core.ui
 import io.github.aakira.napier.Napier
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.refTo
+import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
 import platform.CoreGraphics.CGContextScaleCTM
 import platform.CoreGraphics.CGRectMake
@@ -16,21 +16,24 @@ import platform.UIKit.UIGraphicsGetCurrentContext
 import platform.UIKit.UIGraphicsGetImageFromCurrentImageContext
 import platform.UIKit.UIImage
 import platform.UIKit.UIImagePNGRepresentation
-import platform.UIKit.imageWithData
 import platform.posix.memcpy
 
 @OptIn(ExperimentalForeignApi::class)
 actual fun PlatformShrinkPoster(png: ByteArray, maxEdgePx: Int): ByteArray {
     if (png.isEmpty()) return png
     return try {
-        val data = NSData.dataWithBytes(png.refTo(0), png.size.toULong())
+        val data = png.usePinned { pinned ->
+            NSData.dataWithBytes(pinned.addressOf(0), png.size.toULong())
+        }
         val image = UIImage.imageWithData(data) ?: return png
-        val longestEdge = maxOf(image.size.width * image.scale, image.size.height * image.scale)
+        val imageWidth = image.size.useContents { width }
+        val imageHeight = image.size.useContents { height }
+        val longestEdge = maxOf(imageWidth * image.scale, imageHeight * image.scale)
         if (longestEdge <= maxEdgePx) return png
 
         val ratio = maxEdgePx / longestEdge
-        val targetWidth = image.size.width * ratio
-        val targetHeight = image.size.height * ratio
+        val targetWidth = imageWidth * ratio
+        val targetHeight = imageHeight * ratio
 
         UIGraphicsBeginImageContextWithOptions(CGSizeMake(targetWidth, targetHeight), false, image.scale)
         val context = UIGraphicsGetCurrentContext()
@@ -39,7 +42,7 @@ actual fun PlatformShrinkPoster(png: ByteArray, maxEdgePx: Int): ByteArray {
             return png
         }
         CGContextScaleCTM(context, ratio, ratio)
-        image.drawInRect(CGRectMake(0.0, 0.0, image.size.width, image.size.height))
+        image.drawInRect(CGRectMake(0.0, 0.0, imageWidth, imageHeight))
         val resized = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
 
