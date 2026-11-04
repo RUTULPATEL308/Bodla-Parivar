@@ -1,0 +1,89 @@
+
+name: Bodla-Parivar iOS Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    name: 🎉 Bodla-Parivar iOS Build
+    runs-on: macos-latest
+
+    steps:
+      # 1. Download project source code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Install Java 17
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 3. Setup Gradle
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 4. Make Gradle executable
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      # 5. Prepare Firebase configuration
+      - name: Prepare GoogleService-Info.plist
+        run: |
+          PLIST="iosApp/iosApp/GoogleService-Info.plist"
+          EXAMPLE="iosApp/iosApp/GoogleService-Info.plist.example"
+
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > "$PLIST"
+          elif [ ! -f "$PLIST" ] && [ -f "$EXAMPLE" ]; then
+            cp "$EXAMPLE" "$PLIST"
+          fi
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+
+      # 6. Build iOS application
+      - name: Build iOS Release
+        run: |
+          xcodebuild build \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath iosApp/build \
+            CODE_SIGNING_ALLOWED=NO
+
+      # 7. Create IPA package
+      - name: Create IPA
+        run: |
+          APP_PATH="iosApp/build/Build/Products/Release-iphoneos/iosApp.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "iOS application not found!"
+            find iosApp/build/Build/Products -maxdepth 3 -name "*.app"
+            exit 1
+          fi
+
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+
+          zip -qry BodlaParivar.ipa Payload
+
+      # 8. Upload IPA to GitHub Releases
+      - name: Upload IPA to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-v1.0.${{ github.run_number }}
+          name: Bodla-Parivar iOS v1.0.${{ github.run_number }}
+          body: |
+            Bodla-Parivar iOS Build
+
+            Automatically generated using GitHub Actions.
+            This is an unsigned iOS package.
+          files: BodlaParivar.ipa
+          make_latest: true
