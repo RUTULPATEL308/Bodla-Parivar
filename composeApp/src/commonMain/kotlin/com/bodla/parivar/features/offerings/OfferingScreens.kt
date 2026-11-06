@@ -654,10 +654,10 @@ fun OfferingDetailScreen(
                                     color = TextSecondary
                                 )
                                 val callSuffix = when (currentOffering.bidCallCount) {
-                                    1 -> if (lang == AppLanguage.GUJARATI) " · ૧ વાર" else " · Call 1"
-                                    2 -> if (lang == AppLanguage.GUJARATI) " · ૨ વાર" else " · Call 2"
-                                    3 -> if (lang == AppLanguage.GUJARATI) " · ૩ વાર (બંધ)" else " · Final"
-                                    else -> if (currentOffering.bidCallCount > 0) " · ${currentOffering.bidCallCount} વાર" else ""
+                                    1 -> if (lang == AppLanguage.GUJARATI) " · ૧/૩ વાર" else " · Call 1/3"
+                                    2 -> if (lang == AppLanguage.GUJARATI) " · ૨/૩ વાર" else " · Call 2/3"
+                                    3 -> if (lang == AppLanguage.GUJARATI) " · ૩/૩ વાર (બંધ)" else " · Final call 3/3"
+                                    else -> if (lang == AppLanguage.GUJARATI) " · ૦/૩ વાર" else " · Call 0/3"
                                 }
                                 Text(
                                     text = "₹${it.toInt().toLocaleString()}$callSuffix",
@@ -1246,6 +1246,8 @@ fun OfferingDetailScreen(
                         bid = bid,
                         lang = lang,
                         showPhone = canManageOfferings,
+                        isCurrentHighest = bid.status != "REJECTED" && bid.amount == topBid,
+                        bidCallCount = currentOffering.bidCallCount,
                         onApprove = if (canManageOfferings) ({ updateBidStatus(bid, "APPROVED") }) else null,
                         onReject = if (canManageOfferings) ({ updateBidStatus(bid, "REJECTED") }) else null,
                         onDelete = if (canManageOfferings) ({ bidToDelete = bid }) else null
@@ -1385,6 +1387,8 @@ private fun BidHistoryItem(
     bid: OfferingBid,
     lang: AppLanguage,
     showPhone: Boolean,
+    isCurrentHighest: Boolean = false,
+    bidCallCount: Int = 0,
     onApprove: (() -> Unit)? = null,
     onReject: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null
@@ -1474,6 +1478,17 @@ private fun BidHistoryItem(
                     },
                     fontWeight = FontWeight.Black
                 )
+                if (isCurrentHighest && !isRejected) {
+                    Text(
+                        text = if (lang == AppLanguage.GUJARATI)
+                            "બોલી વાર $bidCallCount/3"
+                        else
+                            "Bid call $bidCallCount/3",
+                        style = BodlaCaption,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 if (onApprove != null || onReject != null || onDelete != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         if (isPending && onApprove != null) {

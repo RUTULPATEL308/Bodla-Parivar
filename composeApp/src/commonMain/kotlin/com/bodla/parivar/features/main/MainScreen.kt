@@ -283,6 +283,7 @@ fun MainScreen(
         if (screen is Screen.OfferingDetail) {
             while (true) {
                 refreshOfferingBids(screen.offeringId)
+                AppContainer.offeringRepository.refreshOfferings()
                 delay(5000)
             }
         } else if (screen == Screen.Notifications) {
@@ -782,7 +783,10 @@ fun MainScreen(
                                     result
                                 }
                             },
-                            onRefreshBids = { refreshOfferingBids(screen.offeringId) },
+                            onRefreshBids = {
+                                refreshOfferingBids(screen.offeringId)
+                                AppContainer.offeringRepository.refreshOfferings()
+                            },
                             onBack = { currentScreen = Screen.Offerings },
                             modifier = contentModifier
                         )

@@ -1248,8 +1248,15 @@ export default function AdminOfferingsPage() {
 
                       {/* Right: amount + actions */}
                       <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
-                        <div className={`text-lg font-black ${isTop ? 'text-saffron' : 'text-brand-text'}`}>
-                          ₹{bid.amount.toLocaleString()}
+                        <div className="text-right">
+                          <div className={`text-lg font-black ${isTop ? 'text-saffron' : 'text-brand-text'}`}>
+                            ₹{bid.amount.toLocaleString()}
+                          </div>
+                          {isTop && bid.status !== 'REJECTED' && (
+                            <div className="text-[10px] font-bold text-brand-muted">
+                              Bid call {currentSelectedOffering?.bid_call_count ?? 0}/3
+                            </div>
+                          )}
                         </div>
                         {bid.status === 'PENDING' && (
                           <div className="flex items-center gap-1">

@@ -59,7 +59,7 @@ fun resolveCurrentHighestBid(bids: List<OfferingBid>, storedWinningBidAmount: Do
 fun filterVisibleBidsForUser(serverBids: List<OfferingBid>, currentUser: Profile?): List<OfferingBid> {
     if (currentUser == null) return emptyList()
     if (currentUser.isStaff) {
-        return serverBids.filter { bid -> bid.status != "REJECTED" }
+        return serverBids
     }
 
     val normalizedUserName = currentUser.fullName.trim()

@@ -958,16 +958,30 @@ class OfferingRepositoryImpl(
             }
             if (!response.status.isSuccess()) return@withContext Result.failure(Exception(response.body<String>()))
 
+            val updatedBids = getOfferingBids(offeringId).getOrElse { error ->
+                return@withContext Result.failure(error)
+            }
+            val highestEligibleBid = updatedBids
+                .filter { it.status != "REJECTED" }
+                .maxByOrNull { it.amount }
+
+            val amountPayload = buildJsonObject {
+                if (highestEligibleBid == null) put("amount", JsonNull)
+                else put("amount", highestEligibleBid.amount)
+            }.toString()
+            val amountResponse = authorizedRequest {
+                httpClient.patch("${Endpoints.OFFERINGS_BASE}?id=eq.$offeringId") {
+                    contentType(ContentType.Application.Json)
+                    setBody(amountPayload)
+                }
+            }
+            if (!amountResponse.status.isSuccess()) {
+                return@withContext Result.failure(
+                    Exception("Bid status updated, but offering amount refresh failed: ${amountResponse.body<String>()}")
+                )
+            }
+
             if (status == "APPROVED") {
-                val amountResponse = authorizedRequest {
-                    httpClient.patch("${Endpoints.OFFERINGS_BASE}?id=eq.$offeringId") {
-                        contentType(ContentType.Application.Json)
-                        setBody(buildJsonObject { put("amount", bid.amount) }.toString())
-                    }
-                }
-                if (!amountResponse.status.isSuccess()) {
-                    return@withContext Result.failure(Exception("Bid approved, but offering amount update failed: ${amountResponse.body<String>()}"))
-                }
                 runCatching {
                     authorizedRequest {
                         httpClient.post("${Endpoints.REST_BASE_URL}/notifications") {

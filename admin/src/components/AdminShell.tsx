@@ -155,18 +155,26 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
     removeAuthRedirectParams();
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      let { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
       if (!sessionData.session) {
-        setSignedInEmail('');
-        setSignedInName('');
-        setAuthMode('login');
-        setAuthError('Your sign-in session is no longer active. Please sign in again.');
-        setAccessState('signed-out');
-        return;
+        const refreshResult = await supabase.auth.refreshSession();
+        sessionData = refreshResult.data;
+        sessionError = refreshResult.error;
+        if (sessionError || !sessionData.session) throw new Error('Auth session missing');
       }
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      let userResult = await supabase.auth.getUser();
+      let userError = userResult.error;
+      let user = userResult.data.user;
+      if (userError) {
+        const refreshResult = await supabase.auth.refreshSession();
+        if (!refreshResult.error && refreshResult.data.session) {
+          userResult = await supabase.auth.getUser();
+          userError = userResult.error;
+          user = userResult.data.user;
+        }
+      }
       if (userError) throw userError;
       if (!user) {
         setAuthError('Supabase could not verify this session. Please sign in again.');
@@ -174,6 +182,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      setAuthError('');
       setSignedInEmail(user.email ?? session.user.email ?? '');
       const metadataName = typeof user.user_metadata.full_name === 'string' ? user.user_metadata.full_name : '';
       const { data: profile, error: profileError } = await supabase
@@ -222,7 +231,12 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       setAccessState(isStaff ? 'staff' : window.location.pathname === '/offerings' ? 'member' : Array.isArray(featurePermissions) && featurePermissions.length > 0 ? 'feature-member' : 'member');
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : '';
-      if (message.includes('auth session missing')) {
+      if (
+        message.includes('auth session missing') ||
+        message.includes('refresh token') ||
+        message.includes('jwt expired') ||
+        message.includes('invalid jwt')
+      ) {
         setSignedInEmail('');
         setSignedInName('');
         setAuthMode('login');
