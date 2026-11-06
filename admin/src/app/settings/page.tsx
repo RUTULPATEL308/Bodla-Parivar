@@ -15,13 +15,16 @@ type VillageSettings = {
   description_en: string;
   contact_phone: string;
   contact_email: string;
+  android_app_download_url: string;
+  ios_app_download_url: string;
   latitude: number | '';
   longitude: number | '';
 };
 
 const emptySettings: VillageSettings = {
   village_name_gu: '', village_name_en: '', district: '', state: '', country: 'India',
-  description_gu: '', description_en: '', contact_phone: '', contact_email: '', latitude: '', longitude: '',
+  description_gu: '', description_en: '', contact_phone: '', contact_email: '',
+  android_app_download_url: '', ios_app_download_url: '', latitude: '', longitude: '',
 };
 
 export default function AdminSettingsPage() {
@@ -111,6 +114,8 @@ export default function AdminSettingsPage() {
           {textField('Country', 'country')}
           {textField('Contact phone', 'contact_phone')}
           {textField('Contact email', 'contact_email')}
+          {textField('Android app download URL', 'android_app_download_url')}
+          {textField('iOS App Store or TestFlight URL', 'ios_app_download_url')}
           <label className="block space-y-1.5 text-sm font-semibold text-brand-text">
             Latitude
             <input type="number" step="0.0000001" value={settings.latitude ?? ''} onChange={(event) => update('latitude', event.target.value === '' ? '' : Number(event.target.value))} className="w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 text-base font-normal" />

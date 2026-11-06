@@ -20,7 +20,9 @@ import {
   Search,
   CheckCircle2,
   Clock,
-  UserCheck
+  UserCheck,
+  Download,
+  Smartphone
 } from 'lucide-react';
 import { useAdminLanguage, useAdminFeatures } from '@/components/AdminLanguageContext';
 import { supabase } from '@/lib/supabase';
@@ -58,6 +60,8 @@ export default function AdminDashboard() {
   });
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [androidAppDownloadUrl, setAndroidAppDownloadUrl] = useState('');
+  const [iosAppDownloadUrl, setIosAppDownloadUrl] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -70,12 +74,14 @@ export default function AdminDashboard() {
           offeringsCount,
           complaintsCount,
           auditRes,
+          appLinksRes,
         ] = await Promise.all([
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
           supabase.from('notices').select('id', { count: 'exact', head: true }).eq('status', 'PUBLISHED'),
           supabase.from('offerings').select('id', { count: 'exact', head: true }),
           supabase.from('complaints').select('id', { count: 'exact', head: true }).neq('status', 'RESOLVED'),
           supabase.from('audit_logs').select('id, action, entity_type, created_at').order('created_at', { ascending: false }).limit(5),
+          supabase.from('village_settings').select('android_app_download_url, ios_app_download_url').order('created_at', { ascending: true }).limit(1).maybeSingle(),
         ]);
 
         if (active) {
@@ -88,6 +94,8 @@ export default function AdminDashboard() {
             recentAudits: 120,
           });
           setRecentLogs(auditRes.data ?? []);
+          setAndroidAppDownloadUrl(appLinksRes.data?.android_app_download_url?.trim() ?? '');
+          setIosAppDownloadUrl(appLinksRes.data?.ios_app_download_url?.trim() ?? '');
         }
       } catch (err) {
         console.error('Error loading dashboard stats:', err);
@@ -172,6 +180,76 @@ export default function AdminDashboard() {
               className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
             />
           </div>
+        </div>
+      </section>
+
+      {/* Mobile App Downloads */}
+      <section aria-labelledby="mobile-app-downloads">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 id="mobile-app-downloads" className="text-base font-bold text-slate-900 dark:text-white">
+              {isGujarati ? 'મોબાઇલ એપ્લિકેશન ડાઉનલોડ' : 'Mobile App Downloads'}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {isGujarati ? 'Android અથવા iOS માટે Bodla Parivar એપ મેળવો.' : 'Get the Bodla Parivar app for Android or iOS.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {[
+            {
+              platform: 'Android',
+              platformGu: 'Android',
+              url: androidAppDownloadUrl,
+              action: isGujarati ? 'APK ડાઉનલોડ કરો' : 'Download APK',
+              unavailable: isGujarati ? 'Android લિંક હજુ સેટ નથી' : 'Android link is not configured',
+              className: 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950',
+            },
+            {
+              platform: 'iOS',
+              platformGu: 'iOS',
+              url: iosAppDownloadUrl,
+              action: isGujarati ? 'App Store ખોલો' : 'Open App Store',
+              unavailable: isGujarati ? 'iOS લિંક હજુ સેટ નથી' : 'iOS link is not configured',
+              className: 'border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700',
+            },
+          ].map((app) => (
+            <div key={app.platform} className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy-50 text-navy-800 dark:bg-slate-800 dark:text-sky-300">
+                  <Smartphone aria-hidden="true" className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-white">{app.platform}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {app.url ? (isGujarati ? 'ઑફિશિયલ મોબાઇલ એપ' : 'Official mobile app') : app.unavailable}
+                  </p>
+                </div>
+              </div>
+
+              {app.url ? (
+                <a
+                  href={app.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition active:scale-[0.98] ${app.className}`}
+                >
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {app.action}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex min-h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-400 dark:border-slate-800 dark:bg-slate-850 dark:text-slate-500"
+                >
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {isGujarati ? 'લિંક ઉપલબ્ધ નથી' : 'Link unavailable'}
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       </section>
 

@@ -54,7 +54,7 @@ fun resolveCurrentHighestBid(bids: List<OfferingBid>, storedWinningBidAmount: Do
     bids.asSequence()
         .filter { bid -> bid.status != "REJECTED" }
         .maxOfOrNull { bid -> bid.amount }
-        ?: storedWinningBidAmount?.takeIf { amount -> amount > 0.0 }
+        ?: if (bids.isEmpty()) storedWinningBidAmount?.takeIf { amount -> amount > 0.0 } else null
 
 fun filterVisibleBidsForUser(serverBids: List<OfferingBid>, currentUser: Profile?): List<OfferingBid> {
     if (currentUser == null) return emptyList()

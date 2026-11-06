@@ -80,6 +80,7 @@ export interface Offering {
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'REJECTED';
   created_at: string;
   bid_call_count: number;
+  bid_closed_at?: string | null;
   winning_bidder_name: string | null;
   winning_bid_amount: number | null;
   winner_name_status?: string | null;

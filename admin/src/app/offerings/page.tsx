@@ -380,8 +380,6 @@ export default function AdminOfferingsPage() {
         const approvedBid = bids[offeringId]?.find(b => b.id === bidId);
         const offering = offerings.find(o => o.id === offeringId);
         if (approvedBid) {
-          const { error: amountError } = await supabase.from('offerings').update({ amount: approvedBid.amount }).eq('id', offeringId);
-          if (amountError) alert('Bid was approved, but the offering amount could not be updated: ' + amountError.message);
           // Notify all users of the new approved bid
           const { error: notificationError } = await supabase.from('notifications').insert({
             title_gu: `🔔 ${offering?.title_gu ?? 'ચઢાવો'} – નવી બોલી`,
@@ -396,7 +394,22 @@ export default function AdminOfferingsPage() {
     }
     setBids(prev => {
       const existing = prev[offeringId] || [];
-      return { ...prev, [offeringId]: existing.map(b => b.id === bidId ? { ...b, status: newStatus } : b) };
+      const updated = existing.map(b => b.id === bidId ? { ...b, status: newStatus } : b);
+      const highestEligible = updated
+        .filter(b => b.status !== 'REJECTED')
+        .reduce<OfferingBid | null>((highest, bid) => !highest || bid.amount > highest.amount ? bid : highest, null);
+
+      setOfferings(current => current.map(offering => offering.id === offeringId
+        ? {
+            ...offering,
+            amount: highestEligible?.amount ?? offering.amount,
+            winning_bid_amount: offering.bid_closed_at ? (highestEligible?.amount ?? null) : offering.winning_bid_amount,
+            winning_bidder_name: offering.bid_closed_at ? (highestEligible?.bidder_name ?? null) : offering.winning_bidder_name,
+          }
+        : offering
+      ));
+      void refreshSnapshotRef.current?.();
+      return { ...prev, [offeringId]: updated };
     });
   };
 

@@ -271,8 +271,17 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const accountCheckTimeout = window.setTimeout(() => {
+      if (active) {
+        setAccessState((current) =>
+          current === 'checking' ? 'signed-out' : current
+        );
+      }
+    }, 8000);
+
     return () => {
       active = false;
+      window.clearTimeout(accountCheckTimeout);
       subscription.unsubscribe();
     };
   }, []);
