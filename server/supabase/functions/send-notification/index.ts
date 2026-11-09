@@ -117,7 +117,7 @@ serve(async (req) => {
       const { count, error: rateError } = await supabase.from("notices")
         .select("id", { count: "exact", head: true }).eq("published_by", profile.id).gte("created_at", since);
       if (rateError) throw rateError;
-      if ((count ?? 0) >= 3) return json({ error: "You have reached the limit of 3 community notices in 24 hours." }, 429);
+      if ((count ?? 0) >= 20) return json({ error: "You have reached the limit of 20 community notices in 24 hours." }, 429);
     }
 
     const { data: notice, error: noticeError } = await supabase.from("notices").insert({
