@@ -1298,6 +1298,10 @@ fun OfferingDetailScreen(
                                 rawMessage.contains("higher than the current amount", ignoreCase = true) ||
                                 rawMessage.contains("bid is too low", ignoreCase = true)
                             bidSubmitErrorMessage = when {
+                                rawMessage.contains("BID_NOT_SUBMITTED_CLOSED", ignoreCase = true) ->
+                                    if (lang == AppLanguage.GUJARATI)
+                                        "બોલી સર્વર સુધી પહોંચે તે પહેલાં આ ચઢાવો બંધ થઈ ગયો. આ બોલી મોકલાઈ નથી."
+                                    else "Bidding closed before this bid reached the server. This bid was not submitted."
                                 isStaleBid -> if (lang == AppLanguage.GUJARATI)
                                     "બીજા સભ્યે વધુ બોલી મૂકી છે. ઓફર ફરી તપાસો અને વધુ રકમ દાખલ કરો."
                                 else "Another member placed a higher bid. Refresh the offering and enter a higher amount."

@@ -5,14 +5,8 @@ object Endpoints {
     var SUPABASE_URL: String = "https://kjoykvxrnyykdnzektoj.supabase.co"
     var SUPABASE_ANON_KEY: String = "sb_publishable_PNb4_Epkaqv-J1KdC0x7dQ_-vxdAt-d"
 
-    // Keep the admin base platform-safe. Common code cannot call System.getenv() in
-    // Kotlin Multiplatform, and iOS must not compile against JVM-only APIs.
-    val ADMIN_API_BASE: String
-        get() = "http://localhost:3000"
     val NOTIFICATION_ENHANCE: String
         get() = "${SUPABASE_URL.trimEnd('/')}/functions/v1/enhance-message"
-    val NOTIFICATION_ENHANCE_ADMIN: String
-        get() = "${ADMIN_API_BASE.trimEnd('/')}/api/notifications/enhance"
 
     val isConfigured: Boolean
         get() = !SUPABASE_URL.contains("your-project-id") && SUPABASE_ANON_KEY.isNotBlank()

@@ -29,6 +29,7 @@ data class AntimYatraPublishResult(
     val notice_created: Boolean = false,
     val notification_created: Boolean = false,
     val push_sent: Boolean = false,
+    val push_error: String? = null,
     /** True when the push service is not deployed, so no OS notification was sent. */
     val push_service_missing: Boolean = false,
     val feed_refresh_error: String? = null

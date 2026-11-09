@@ -327,7 +327,12 @@ fun NoticeDesignPreviewScreen(
                                     } else if (result.getOrNull()?.push_service_missing == true) {
                                         if (gu) "નોટિસ પ્રકાશિત થઈ, પણ નોટિફિકેશન સેવા ઉપલબ્ધ નથી. મોબાઇલ પુશ મોકલાઈ નથી." else "Notice published, but the notification service is not available. Mobile push was not delivered."
                                     } else {
-                                        if (gu) "નોટિસ પ્રકાશિત થઈ. મોબાઇલ પુશ મોકલાઈ નથી." else "Notice published. Mobile push was not delivered."
+                                        val pushErr = result.getOrNull()?.push_error
+                                        if (!pushErr.isNullOrBlank()) {
+                                            if (gu) "નોટિસ પ્રકાશિત થઈ. મોબાઇલ પુશ ભૂલ: $pushErr" else "Notice published. Mobile push error: $pushErr"
+                                        } else {
+                                            if (gu) "નોટિસ પ્રકાશિત થઈ. મોબાઇલ પુશ મોકલાઈ નથી." else "Notice published. Mobile push was not delivered."
+                                        }
                                     }.let { base ->
                                         if (result.getOrNull()?.feed_refresh_error.isNullOrBlank()) base
                                         else "$base Notices could not refresh on this device. Open Notices and refresh manually."

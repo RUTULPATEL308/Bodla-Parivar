@@ -17,6 +17,10 @@ import java.net.URL
 
 class BodlaFirebaseMessagingService : FirebaseMessagingService() {
 
+    companion object {
+        const val NOTIFICATION_CHANNEL_ID = "bodla_parivar_channel_v2"
+    }
+
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Napier.d("FCM Registration Token refreshed: $token", tag = "FCM")
@@ -73,7 +77,7 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val channelId = "bodla_parivar_channel"
+        val channelId = NOTIFICATION_CHANNEL_ID
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
         val notificationBuilder = NotificationCompat.Builder(this, channelId)

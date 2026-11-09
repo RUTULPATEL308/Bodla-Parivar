@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
   { name: 'Dashboard', nameGu: 'ડેશબોર્ડ', href: '/', icon: LayoutDashboard },
   { name: 'Users & Roles', nameGu: 'વપરાશકર્તાઓ', href: '/users', icon: Users },
   { name: 'Notices', nameGu: 'સૂચનાઓ', href: '/notices', icon: Bell },
+  { name: 'Besanu', nameGu: 'બેસણું', href: '/besanu-design', icon: BookOpen },
   { name: 'Offerings', nameGu: 'ચઢાવો', href: '/offerings', icon: WalletCards },
   { name: 'Navratri', nameGu: 'નવરાત્રી', href: '/navratri', icon: Sparkles },
   { name: 'Complaints', nameGu: 'ફરિયાદો', href: '/complaints', icon: AlertCircle },

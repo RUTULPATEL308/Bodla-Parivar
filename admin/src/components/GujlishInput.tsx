@@ -103,9 +103,11 @@ export function GujlishInput({
         />
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
-        <span>{helperText || 'અંગ્રેજી / ગુજલિશમાં લખી Space આપતાં જ ગુજરાતી થઈ જશે (દા.ત. "kem cho" -> "કેમ છો")'}</span>
-      </div>
+      {helperText && (
+        <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
+          <span>{helperText}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -204,9 +206,11 @@ export function GujlishTextarea({
         {...rest}
       />
 
-      <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
-        <span>{helperText || 'અંગ્રેજી / ગુજલિશમાં લખી Space આપતાં જ ગુજરાતી થઈ જશે'}</span>
-      </div>
+      {helperText && (
+        <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
+          <span>{helperText}</span>
+        </div>
+      )}
     </div>
   );
 }

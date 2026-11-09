@@ -99,6 +99,19 @@ class SyncEngine(
                         database.appDatabaseQueries.deleteSyncItem(item.id)
                     } else {
                         val errorBody = response.bodyAsText()
+                        if (
+                            item.entityType.equals("OFFERING_BID", ignoreCase = true) &&
+                            response.status == HttpStatusCode.BadRequest &&
+                            errorBody.contains("BIDDING_CLOSED", ignoreCase = true)
+                        ) {
+                            database.appDatabaseQueries.deleteSyncItem(item.id)
+                            _lastSyncError.value =
+                                "BID_NOT_SUBMITTED_CLOSED[${item.id}]: The offering closed before this bid reached the server. The unsent bid was removed."
+                            Napier.i("SyncEngine: Removed unsent bid ${item.id}; bidding is closed")
+                            hasFailures = true
+                            continue
+                        }
+
                         val errorMessage = if (response.status == HttpStatusCode.Unauthorized && _lastSyncError.value != null) {
                             _lastSyncError.value!!
                         } else {

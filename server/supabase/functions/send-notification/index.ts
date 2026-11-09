@@ -102,10 +102,23 @@ serve(async (req) => {
     }
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count, error: rateError } = await supabase.from("notices")
-      .select("id", { count: "exact", head: true }).eq("published_by", profile.id).gte("created_at", since);
-    if (rateError) throw rateError;
-    if ((count ?? 0) >= 3) return json({ error: "You have reached the limit of 3 community notices in 24 hours." }, 429);
+
+    // Check if user is staff (ADMIN, SUPER_ADMIN, MODERATOR, CONTENT_MANAGER)
+    const { data: userRoles } = await supabase
+      .from("user_roles")
+      .select("roles(name)")
+      .eq("user_id", profile.id);
+    const isStaff = (userRoles ?? []).some((r: any) => {
+      const name = r.roles?.name;
+      return name && ["ADMIN", "SUPER_ADMIN", "MODERATOR", "CONTENT_MANAGER"].includes(name);
+    });
+
+    if (!isStaff) {
+      const { count, error: rateError } = await supabase.from("notices")
+        .select("id", { count: "exact", head: true }).eq("published_by", profile.id).gte("created_at", since);
+      if (rateError) throw rateError;
+      if ((count ?? 0) >= 3) return json({ error: "You have reached the limit of 3 community notices in 24 hours." }, 429);
+    }
 
     const { data: notice, error: noticeError } = await supabase.from("notices").insert({
       title_gu: titleGu,
@@ -144,7 +157,12 @@ serve(async (req) => {
     }
 
     let pushSent = false;
+    let pushErrorDetails: string | null = null;
     const configuredServiceAccount = Deno.env.get("FCM_SERVICE_ACCOUNT_KEY");
+    if (!configuredServiceAccount) {
+      console.error("FCM service account key not configured");
+      return json({ error: "Push service not configured. Contact admin." }, 500);
+    }
     if (configuredServiceAccount) {
       try {
         const serviceAccount = JSON.parse(configuredServiceAccount) as Record<string, string>;
@@ -177,7 +195,7 @@ serve(async (req) => {
             android: {
               priority: "HIGH",
               notification: {
-                channel_id: "bodla_parivar_channel",
+                channel_id: "bodla_parivar_channel_v2",
                 sound: "default",
                 ...(imageUrl ? { image: imageUrl } : {}),
               },
@@ -188,10 +206,15 @@ serve(async (req) => {
             },
           } }),
         });
-        if (!pushResponse.ok) throw new Error(`FCM returned ${pushResponse.status}: ${await pushResponse.text()}`);
+        if (!pushResponse.ok) {
+          const errText = await pushResponse.text();
+          throw new Error(`FCM returned ${pushResponse.status}: ${errText}`);
+        }
         pushSent = true;
       } catch (pushError) {
-        console.error("Notice published, but FCM broadcast failed:", pushError);
+        const errorMsg = pushError instanceof Error ? pushError.message : String(pushError);
+        console.error("Notice published, but FCM broadcast failed:", errorMsg);
+        pushErrorDetails = errorMsg;
       }
     }
 
@@ -202,6 +225,7 @@ serve(async (req) => {
       notice_id: notice.id,
       notification_id: notification.id,
       push_sent: pushSent,
+      push_error: pushErrorDetails,
     }, 201);
   } catch (error) {
     console.error("Antim Yatra broadcast failed:", error);

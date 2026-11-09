@@ -899,7 +899,12 @@ class OfferingRepositoryImpl(
                 .countSyncQueueItemsById(queueId)
                 .executeAsOne() > 0
             if (!isStillQueued) {
-                Result.success(Unit)
+                val syncError = syncEngine.lastSyncError.value
+                if (syncError?.startsWith("BID_NOT_SUBMITTED_CLOSED[$queueId]:") == true) {
+                    Result.failure(Exception(syncError))
+                } else {
+                    Result.success(Unit)
+                }
             } else {
                 Result.failure(Exception("Bid is queued but could not be synced. Check your connection and try again."))
             }

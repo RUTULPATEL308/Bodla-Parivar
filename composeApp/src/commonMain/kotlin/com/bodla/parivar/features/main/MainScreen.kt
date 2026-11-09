@@ -496,6 +496,8 @@ fun MainScreen(
                     }
                 }
                 if (syncStatus == SyncStatus.ERROR) {
+                    val closedBidWasNotSubmitted =
+                        lastSyncError?.startsWith("BID_NOT_SUBMITTED_CLOSED[") == true
                     Surface(
                         color = Color(0xFFFFE4E6),
                         modifier = Modifier.fillMaxWidth()
@@ -505,10 +507,17 @@ fun MainScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = lastSyncError ?: if (lang == AppLanguage.GUJARATI)
-                                    "ક્લાઉડ સિંક નિષ્ફળ થયું. ઇન્ટરનેટ અને સાઇન-ઇન તપાસો."
-                                else
-                                    "Cloud sync failed. Check your connection and sign-in.",
+                                text = if (closedBidWasNotSubmitted) {
+                                    if (lang == AppLanguage.GUJARATI)
+                                        "ચઢાવો બંધ થઈ ગયો હોવાથી બાકી બોલી મોકલાઈ નથી. તેને કાઢી નાખી છે."
+                                    else
+                                        "A pending bid was not submitted because bidding closed. The unsent bid was removed."
+                                } else {
+                                    lastSyncError ?: if (lang == AppLanguage.GUJARATI)
+                                        "ક્લાઉડ સિંક નિષ્ફળ થયું. ઇન્ટરનેટ અને સાઇન-ઇન તપાસો."
+                                    else
+                                        "Cloud sync failed. Check your connection and sign-in."
+                                },
                                 style = BodlaCaption,
                                 color = Color(0xFF9F1239),
                                 maxLines = 2,
@@ -528,7 +537,13 @@ fun MainScreen(
                                     }
                                 }
                             ) {
-                                Text(if (lang == AppLanguage.GUJARATI) "ફરી પ્રયાસ" else "Retry")
+                                Text(
+                                    if (closedBidWasNotSubmitted) {
+                                        if (lang == AppLanguage.GUJARATI) "ફરી તપાસો" else "Refresh"
+                                    } else {
+                                        if (lang == AppLanguage.GUJARATI) "ફરી પ્રયાસ" else "Retry"
+                                    }
+                                )
                             }
                             if (lastSyncError?.contains("Sign out and sign in again") == true ||
                                 lastSyncError?.startsWith("Your session expired") == true

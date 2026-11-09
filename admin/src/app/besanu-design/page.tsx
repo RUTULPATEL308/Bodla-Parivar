@@ -1,3 +1,5 @@
+import { MobileParityFuneralDesignView } from '@/components/MemberFeatureViews';
+
 export default function BesanuDesignPage() {
-  return null;
+  return <MobileParityFuneralDesignView kind="besanu" />;
 }

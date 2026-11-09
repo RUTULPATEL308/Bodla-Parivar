@@ -156,12 +156,11 @@ export async function POST(request: NextRequest) {
     const pushTitleEn = String(notification_title_en || title_en || title_gu).slice(0, 120);
     const pushBodyGu = String(body_gu).slice(0, 240);
     const pushBodyEn = String(body_en || body_gu).slice(0, 300);
-    const pushNotification: { title: string; body: string; image?: string } = {
+    const pushNotification: { title: string; body?: string; image?: string } = {
       title: pushTitleGu,
-      body: pushBodyGu,
     };
     const androidNotification: { channelId: string; sound: string; image?: string } = {
-      channelId: 'bodla_parivar_channel',
+      channelId: 'bodla_parivar_channel_v2',
       sound: 'default',
     };
     const aps: { sound: string; 'mutable-content'?: number } = { sound: 'default' };

@@ -71,6 +71,7 @@ fun SendNotificationScreen(
     var selectedDocument by remember { mutableStateOf<ResultDocument?>(null) }
 
     var isSubmitting by remember { mutableStateOf(false) }
+    var wasNoticePublished by remember { mutableStateOf(false) }
     var isImprovingTitle by remember { mutableStateOf(false) }
     var isImprovingBody by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -89,60 +90,90 @@ fun SendNotificationScreen(
             successMessage = null
             try {
                 val token = AppContainer.tokenStorage.getToken()
-                val client = KtorClientFactory.create { token as String? }
+                val client = KtorClientFactory.create { token }
                 val requestBody = buildJsonObject {
                     put("text", currentText.trim())
                     put("type", if (field == "title") "title" else "message")
                 }.toString()
-                val endpoints = listOf(
-                    Endpoints.NOTIFICATION_ENHANCE_ADMIN,
-                    Endpoints.NOTIFICATION_ENHANCE
-                ).distinct()
-                var successfulResponse: io.ktor.client.statement.HttpResponse? = null
-                var lastError = ""
-                for (endpoint in endpoints) {
-                    try {
-                        val candidate = client.post(endpoint) {
-                            contentType(ContentType.Application.Json)
-                            setBody(requestBody)
-                        }
-                        if (candidate.status.isSuccess()) {
-                            successfulResponse = candidate
-                            break
-                        }
-                        lastError = candidate.bodyAsText()
-                    } catch (_: Exception) {
-                        lastError = if (isGujarati) "AI સેવા અનુપલબ્ધ છે." else "AI service unavailable."
+                val response = try {
+                    client.post(Endpoints.NOTIFICATION_ENHANCE) {
+                        contentType(ContentType.Application.Json)
+                        setBody(requestBody)
                     }
-                }
-                val response = successfulResponse ?: error("AI_ENHANCE_FAILED\n$lastError")
-                if (response.status.isSuccess()) {
-                    val rawResponse = response.bodyAsText()
-                    Napier.d("AI raw response: $rawResponse", tag = "SendNotification")
-                    val json = Json.parseToJsonElement(rawResponse).jsonObject
-                    if (field == "title") {
-                        val raw = json["enhanced_gu"]?.jsonPrimitive?.contentOrNull ?: titleGu
-                        Napier.d("AI raw enhanced: $raw", tag = "SendNotification")
-                        titleGu = stripSalutation(raw, titleGu)
-                        Napier.d("AI stripped: $titleGu", tag = "SendNotification")
-                        titleEn = json["enhanced_en"]?.jsonPrimitive?.contentOrNull ?: titleEn
+                } catch (exception: Exception) {
+                    Napier.e("AI enhancement request failed", exception, tag = "SendNotification")
+                    errorMessage = if (isGujarati) {
+                        "સર્વર સાથે જોડાણ થઈ શક્યું નથી. ઇન્ટરનેટ તપાસી ફરી પ્રયાસ કરો."
                     } else {
-                        val raw = json["enhanced_gu"]?.jsonPrimitive?.contentOrNull ?: bodyGu
-                        Napier.d("AI raw enhanced: $raw", tag = "SendNotification")
-                        bodyGu = stripSalutation(raw, bodyGu)
-                        Napier.d("AI stripped: $bodyGu", tag = "SendNotification")
-                        bodyEn = json["enhanced_en"]?.jsonPrimitive?.contentOrNull ?: bodyEn
-                        titleGu = generateAutoNoticeTitle(bodyGu)
+                        "Could not connect to the AI server. Check your internet connection and try again."
                     }
-                    successMessage = if (isGujarati) "AI દ્વારા લખાણ સુધારી દેવાયું!" else "AI enhanced the text successfully!"
-                } else {
-                    val errBody = runCatching { response.bodyAsText() }.getOrDefault("")
-                    Napier.e("AI request failed: ${response.status} $errBody", tag = "SendNotification")
-                    errorMessage = if (isGujarati) "AI સુધારો શક્ય થયો નથી. કૃપા કરીને ફરી પ્રયાસ કરો." else "AI enhancement failed. Please try again."
+                    null
+                }
+
+                if (response != null) {
+                    val rawResponse = response.bodyAsText()
+                    if (!response.status.isSuccess()) {
+                        val serverError = runCatching {
+                            Json.parseToJsonElement(rawResponse).jsonObject["error"]?.jsonPrimitive?.contentOrNull
+                        }.getOrNull()
+                        Napier.e(
+                            "AI request failed: ${response.status} $rawResponse",
+                            tag = "SendNotification"
+                        )
+                        errorMessage = when {
+                            response.status.value == 404 -> if (isGujarati) {
+                                "AI સેવા સર્વર પર ઉપલબ્ધ નથી. કૃપા કરીને backend deploy કરો."
+                            } else {
+                                "AI service is not deployed. Please deploy the backend function."
+                            }
+                            serverError.equals("AI not configured", ignoreCase = true) -> if (isGujarati) {
+                                "AI સેવા ગોઠવેલી નથી. Supabase માં AI_API_KEY સેટ કરો."
+                            } else {
+                                "AI service is not configured. Set AI_API_KEY in Supabase secrets."
+                            }
+                            response.status.value == 429 || response.status.value == 503 -> if (isGujarati) {
+                                "AI સેવા હાલમાં વ્યસ્ત છે. થોડી વાર પછી ફરી પ્રયાસ કરો."
+                            } else {
+                                "The AI service is temporarily busy. Please try again shortly."
+                            }
+                            response.status.value == 401 || response.status.value == 403 -> if (isGujarati) {
+                                "AI સેવા માટે પરવાનગી નથી. ફરી સાઇન ઇન કરો."
+                            } else {
+                                "You are not authorized to use the AI service. Please sign in again."
+                            }
+                            else -> if (isGujarati) {
+                                "AI સુધારો શક્ય થયો નથી. કૃપા કરીને ફરી પ્રયાસ કરો."
+                            } else {
+                                "AI enhancement failed. Please try again."
+                            }
+                        }
+                    } else {
+                        Napier.d("AI raw response: $rawResponse", tag = "SendNotification")
+                        val json = Json.parseToJsonElement(rawResponse).jsonObject
+                        if (field == "title") {
+                            val raw = json["enhanced_gu"]?.jsonPrimitive?.contentOrNull ?: titleGu
+                            Napier.d("AI raw enhanced: $raw", tag = "SendNotification")
+                            titleGu = stripSalutation(raw, titleGu)
+                            Napier.d("AI stripped: $titleGu", tag = "SendNotification")
+                            titleEn = json["enhanced_en"]?.jsonPrimitive?.contentOrNull ?: titleEn
+                        } else {
+                            val raw = json["enhanced_gu"]?.jsonPrimitive?.contentOrNull ?: bodyGu
+                            Napier.d("AI raw enhanced: $raw", tag = "SendNotification")
+                            bodyGu = stripSalutation(raw, bodyGu)
+                            Napier.d("AI stripped: $bodyGu", tag = "SendNotification")
+                            bodyEn = json["enhanced_en"]?.jsonPrimitive?.contentOrNull ?: bodyEn
+                            titleGu = generateAutoNoticeTitle(bodyGu)
+                        }
+                        successMessage = if (isGujarati) "AI દ્વારા લખાણ સુધારી દેવાયું!" else "AI enhanced the text successfully!"
+                    }
                 }
             } catch (exception: Exception) {
                 Napier.e("AI enhancement error", exception, tag = "SendNotification")
-                errorMessage = if (isGujarati) "AI સેવા ઑફલાઇન છે. ફરી પ્રયાસ કરો." else "AI enhancement service is offline. Please try again."
+                errorMessage = if (isGujarati) {
+                    "AI સુધારો શક્ય થયો નથી. કૃપા કરીને ફરી પ્રયાસ કરો."
+                } else {
+                    "AI enhancement failed. Please try again."
+                }
             }
 
             if (field == "title") isImprovingTitle = false else isImprovingBody = false
@@ -259,7 +290,7 @@ fun SendNotificationScreen(
                 val finalNotifTitle = finalTitleGu
 
                 // Post directly to send-notification edge function which handles FCM all_users topic
-                var response = client.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
+                val response = client.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
                     contentType(ContentType.Application.Json)
                     setBody(buildJsonObject {
                         put("title_gu", finalTitleGu)
@@ -279,79 +310,44 @@ fun SendNotificationScreen(
                     }.toString())
                 }
 
-                if (response.status.value == 404) {
-                    val profileId = runCatching {
-                        val authUser = client.get(Endpoints.AUTH_USER).body<JsonObject>()
-                        val userObj = authUser["user"]?.jsonObject ?: authUser
-                        val authUserId = userObj["id"]?.jsonPrimitive?.contentOrNull
-                        if (authUserId.isNullOrBlank()) {
-                            null
-                        } else {
-                            val profiles = client.get("${Endpoints.PROFILES}?auth_user_id=eq.$authUserId&select=id").body<List<JsonObject>>()
-                            profiles.firstOrNull()?.get("id")?.jsonPrimitive?.contentOrNull
-                        }
-                    }.getOrNull()
-                    response = client.post("${Endpoints.REST_BASE_URL}/notices") {
-                        contentType(ContentType.Application.Json)
-                        header("Prefer", "return=representation")
-                        setBody(buildJsonObject {
-                            put("title_gu", finalTitleGu)
-                            put("title_en", finalTitleEn)
-                            put("description_gu", finalBodyGu)
-                            put("description_en", finalBodyEn)
-                            put("status", "PUBLISHED")
-                            if (!profileId.isNullOrBlank()) {
-                                put("published_by", profileId)
-                            }
-                            if (!uploadedImageUrl.isNullOrBlank()) {
-                                put("image_url", uploadedImageUrl!!)
-                            }
-                            if (!uploadedAttachmentUrl.isNullOrBlank()) {
-                                put("attachment_url", uploadedAttachmentUrl!!)
-                            }
-                        }.toString())
-                    }
-
-                    if (response.status.isSuccess()) {
-                        val noticeBody = runCatching { response.bodyAsText() }.getOrDefault("")
-                        val noticeObj = runCatching { Json.parseToJsonElement(noticeBody).jsonObject }.getOrNull()
-                        val noticeId = noticeObj?.get("id")?.jsonPrimitive?.contentOrNull
-                        
-                        client.post("${Endpoints.REST_BASE_URL}/notifications") {
-                            contentType(ContentType.Application.Json)
-                            setBody(buildJsonObject {
-                                put("title_gu", finalNotifTitle)
-                                put("title_en", finalNotifTitle)
-                                put("body_gu", finalBodyGu)
-                                put("body_en", finalBodyEn)
-                                put("type", "NOTICE")
-                                if (!noticeId.isNullOrBlank()) {
-                                    put("reference_id", noticeId)
-                                }
-                                if (!uploadedImageUrl.isNullOrBlank()) {
-                                    put("image_url", uploadedImageUrl!!)
-                                }
-                                if (!uploadedAttachmentUrl.isNullOrBlank()) {
-                                    put("attachment_url", uploadedAttachmentUrl!!)
-                                }
-                            }.toString())
-                        }
-                    }
-                }
-
                 if (!response.status.isSuccess()) {
                     val raw = runCatching { response.bodyAsText() }.getOrDefault("")
+                    val serverMessage = runCatching {
+                        Json.parseToJsonElement(raw).jsonObject["error"]?.jsonPrimitive?.contentOrNull
+                    }.getOrNull()
                     val msg = when {
                         response.status.value == 401 || raw.contains("JWT expired", ignoreCase = true) ->
                             if (isGujarati) "સેશન સમાપ્ત. ફરી સાઇન ઇન કરો." else "Session expired. Please sign in again."
-                        else -> raw.ifBlank { "Failed to broadcast notification (${response.status.value})" }
+                        else -> serverMessage ?: raw.ifBlank { "Failed to broadcast notification (${response.status.value})" }
                     }
                     error(msg)
                 }
 
-                successMessage = if (isGujarati) "સૂચના સફળતાપૂર્વક તમામ વપરાશકર્તાઓને મોકલાઈ ગઈ છે!" else "Notice successfully broadcast to all users!"
-                kotlinx.coroutines.delay(1200)
-                onSuccess()
+                val responseBody = response.bodyAsText()
+                val pushSent = runCatching {
+                    Json.parseToJsonElement(responseBody)
+                        .jsonObject["push_sent"]
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        .equals("true", ignoreCase = true)
+                }.getOrDefault(false)
+                if (pushSent) {
+                    successMessage = if (isGujarati) {
+                        "સૂચના મોકલાઈ અને push alert મોકલવાની વિનંતી સફળ થઈ."
+                    } else {
+                        "Notice published and push alert request accepted."
+                    }
+                    kotlinx.coroutines.delay(1200)
+                    onSuccess()
+                } else {
+                    wasNoticePublished = true
+                    successMessage = if (isGujarati) "સૂચના સફળતાપૂર્વક સાચવાઈ." else "Notice was saved successfully."
+                    errorMessage = if (isGujarati) {
+                        "Push alert મોકલાઈ નથી. Duplicate સૂચના ન મોકલો; Admin ને FCM ગોઠવવા કહો."
+                    } else {
+                        "No push alert was sent. Do not send this notice again; ask an administrator to configure FCM."
+                    }
+                }
             } catch (e: Exception) {
                 errorMessage = e.message ?: (if (isGujarati) "સૂચના મોકલવામાં ભૂલ આવી." else "Error broadcasting notification.")
             } finally {
@@ -637,11 +633,13 @@ fun SendNotificationScreen(
             BodlaButton(
                 text = if (isSubmitting) {
                     if (isGujarati) "મોકલી રહ્યું છે..." else "Sending..."
+                } else if (wasNoticePublished) {
+                    if (isGujarati) "સૂચના સાચવાઈ" else "Notice Saved"
                 } else {
                     if (isGujarati) "તમામ વપરાશકર્તાઓને સૂચના મોકલો" else "Broadcast Notice to Everyone"
                 },
                 onClick = { submitBroadcast() },
-                enabled = !isSubmitting && bodyGu.isNotBlank(),
+                enabled = !isSubmitting && !wasNoticePublished && bodyGu.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             )
 

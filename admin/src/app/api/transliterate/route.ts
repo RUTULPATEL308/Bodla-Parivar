@@ -12,14 +12,17 @@ export async function GET(request: NextRequest) {
   try {
     const encoded = encodeURIComponent(text.trim());
     const apiUrl = `https://inputtools.google.com/request?text=${encoded}&itc=gu-t-i0-und&num=${num}&cp=0&cs=1`;
-    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(apiUrl, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       },
       next: { revalidate: 3600 },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
       return NextResponse.json({ success: false, error: 'Upstream transliteration failed' }, { status: 502 });
