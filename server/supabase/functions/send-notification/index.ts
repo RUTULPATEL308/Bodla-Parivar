@@ -165,7 +165,16 @@ serve(async (req) => {
     }
     if (configuredServiceAccount) {
       try {
-        const serviceAccount = JSON.parse(configuredServiceAccount) as Record<string, string>;
+        let rawJson = configuredServiceAccount.trim();
+        // Support base64 encoded JSON (or URL encoded) to prevent CLI shell-quoting corruption
+        if (!rawJson.startsWith("{")) {
+          try {
+            rawJson = new TextDecoder().decode(Uint8Array.from(atob(rawJson), (c) => c.charCodeAt(0)));
+          } catch {
+            // not base64, keep rawJson
+          }
+        }
+        const serviceAccount = JSON.parse(rawJson) as Record<string, string>;
         const projectId = serviceAccount.project_id;
         if (!projectId || !serviceAccount.client_email || !serviceAccount.private_key) {
           throw new Error("Firebase service account is incomplete.");
