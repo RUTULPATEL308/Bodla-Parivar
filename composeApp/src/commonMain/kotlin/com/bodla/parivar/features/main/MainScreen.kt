@@ -592,6 +592,7 @@ fun MainScreen(
                         is Screen.NoticeDesignPreview -> NoticeDesignPreviewScreen(
                             data = noticeDesignData,
                             onBack = { currentScreen = Screen.NoticeDesign },
+                            onSuccess = { currentScreen = defaultHome },
                             onBroadcast = { posterPng, complete ->
                                 coroutineScope.launch {
                                     val token = AppContainer.tokenStorage.getToken()
@@ -619,6 +620,7 @@ fun MainScreen(
                         is Screen.BesanuDesignPreview -> BesanuDesignPreviewScreen(
                             data = besanuDesignData,
                             onBack = { currentScreen = Screen.BesanuDesign },
+                            onSuccess = { currentScreen = defaultHome },
                             onBroadcast = { posterPng, complete ->
                                 coroutineScope.launch {
                                     val token = AppContainer.tokenStorage.getToken()

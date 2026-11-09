@@ -3,16 +3,18 @@ package com.bodla.parivar
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.bodla.parivar.core.security.TokenStorage
+import com.bodla.parivar.domain.model.Profile
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import io.github.aakira.napier.Napier
+import kotlinx.serialization.json.Json
 import java.net.URL
 
 class BodlaFirebaseMessagingService : FirebaseMessagingService() {
@@ -29,6 +31,19 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
         Napier.d("FCM Message received from: ${remoteMessage.from}", tag = "FCM")
+
+        // Exclude sender from receiving their own push notification
+        val senderProfileId = remoteMessage.data["sender_profile_id"]
+        if (!senderProfileId.isNullOrBlank()) {
+            val userProfileJson = TokenStorage().getUserProfile()
+            if (userProfileJson != null) {
+                val profile = runCatching { Json.decodeFromString<Profile>(userProfileJson) }.getOrNull()
+                if (profile?.id == senderProfileId) {
+                    Napier.d("Skipping push notification sent by self ($senderProfileId)", tag = "FCM")
+                    return
+                }
+            }
+        }
 
         // Extract title and body from notification payload or data payload
         val type = remoteMessage.data["type"]
@@ -101,24 +116,21 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
             }.getOrNull()?.let { poster ->
                 notificationBuilder
                     .setLargeIcon(poster)
-                    .setStyle(NotificationCompat.BigPictureStyle().bigPicture(poster).bigLargeIcon(null as android.graphics.Bitmap?))
+                    .setStyle(NotificationCompat.BigPictureStyle().bigPicture(poster).bigLargeIcon(null as Bitmap?))
             }
         }
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        // Notification channel is required on Android Oreo (API 26) and above
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "બોદલા પરિવાર સૂચનાઓ (Village Notices)",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "General and emergency notifications for Bodla Parivar members"
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            channelId,
+            "બોદલા પરિવાર સૂચનાઓ (Village Notices)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "General and emergency notifications for Bodla Parivar members"
+            enableVibration(true)
         }
+        notificationManager.createNotificationChannel(channel)
 
         notificationManager.notify(notificationId, notificationBuilder.build())
     }
@@ -130,7 +142,9 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
     private fun decodeNotificationBitmap(bytes: ByteArray): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        if ((bounds.outWidth <= 0) || (bounds.outHeight <= 0)) {
+            return null
+        }
         var sample = 1
         while (bounds.outWidth / sample > 1_200) sample *= 2
         val options = BitmapFactory.Options().apply { inSampleSize = sample }

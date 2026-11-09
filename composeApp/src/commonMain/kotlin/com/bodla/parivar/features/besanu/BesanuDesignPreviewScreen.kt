@@ -1,5 +1,8 @@
 package com.bodla.parivar.features.besanu
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -58,10 +61,12 @@ private val MutedOlive   = Color(0xFF5A5030)
 fun BesanuDesignPreviewScreen(
     data: BesanuDesignData,
     onBack: () -> Unit,
+    onSuccess: (() -> Unit)? = null,
     onBroadcast: (posterPng: ByteArray, onComplete: (Result<BesanuPublishResult>) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val gu = LocalAppLanguage.current == AppLanguage.GUJARATI
+    val coroutineScope = rememberCoroutineScope()
     var isSending by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var sendSucceeded by remember { mutableStateOf(false) }
@@ -325,6 +330,12 @@ fun BesanuDesignPreviewScreen(
                                 isSending = false
                                 sendSucceeded = result.isSuccess
                                 feedback = if (result.isSuccess) {
+                                    if (onSuccess != null) {
+                                        coroutineScope.launch {
+                                            delay(1500)
+                                            onSuccess()
+                                        }
+                                    }
                                     if (result.getOrNull()?.push_sent == true) {
                                         if (gu) "નોટિસ પ્રકાશિત થઈ અને મોબાઇલ પુશ પણ મોકલાઈ." else "Notice published and mobile push sent."
                                     } else if (result.getOrNull()?.push_service_missing == true) {

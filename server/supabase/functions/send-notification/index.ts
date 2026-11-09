@@ -198,6 +198,7 @@ serve(async (req) => {
               type: "NOTICE",
               notification_id: String(notification.id),
               reference_id: String(notice.id),
+              sender_profile_id: String(profile.id),
               image_url: imageUrl,
               attachment_url: attachmentUrl,
             },
