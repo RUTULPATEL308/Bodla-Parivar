@@ -272,18 +272,11 @@ export default function AdminNoticesPage() {
   async function deleteNotice(notice: Notice) {
     if (!window.confirm(`Permanently delete “${notice.title_en || notice.title_gu}” and its uploaded media?`)) return;
     setError('');
-    const { data: deletedRow, error: deleteError } = await supabase
-      .from('notices')
-      .delete()
-      .eq('id', notice.id)
-      .select('id')
-      .maybeSingle();
+    const { error: deleteError } = await supabase.rpc('delete_notice', {
+      p_notice_id: notice.id,
+    });
     if (deleteError) {
       setError(`Could not delete notice: ${deleteError.message}`);
-      return;
-    }
-    if (!deletedRow) {
-      setError('Could not delete notice. No row was deleted. Check staff access and that migration 024 was applied to the admin Supabase project.');
       return;
     }
 

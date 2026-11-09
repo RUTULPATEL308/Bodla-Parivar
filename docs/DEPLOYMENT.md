@@ -43,14 +43,21 @@
 4. Deploy Edge Functions:
    ```bash
    supabase functions deploy send-notification
+   supabase functions deploy enhance-message
    supabase functions deploy audit-logger
    ```
-5. Store the Firebase service account so the app can push notifications:
+5. Configure the AI provider key used by `enhance-message`:
+   ```bash
+   supabase secrets set AI_API_KEY='your-provider-api-key'
+   ```
+   The Gemini default model is `gemini-3.8-flash`. If an `AI_MODEL` secret already overrides it, update it with `supabase secrets set AI_MODEL=gemini-3.8-flash` or remove the override. Optionally set `AI_PROVIDER` and `AI_BASE_URL` as Supabase secrets when using a non-default provider. The AI key belongs only in Supabase secrets; never add it to the mobile app or commit it.
+6. Store the Firebase service account so the app can push notifications:
    ```bash
    supabase secrets set FCM_SERVICE_ACCOUNT_KEY='{"project_id":"...","client_email":"...","private_key":"..."}'
    ```
-   Without this secret the `send-notification` function still publishes notices to the feed, but no notification is delivered to the phones.
-6. The Android app ships the `google-services.json` and the iOS app the `GoogleService-Info.plist`; both files are gitignored and must be added for every build.
+   Without this secret the `send-notification` function still publishes notices to the feed, but no notification is delivered to the phones. The service account's Firebase project must match the Android app's `google-services.json` project. A successful FCM send means Firebase accepted the broadcast; each recipient must also allow notifications, and their device's notification sound/DND settings control whether it plays aloud.
+7. The Android app ships the `google-services.json` and the iOS app the `GoogleService-Info.plist`; both files are gitignored and must be added for every build.
+8. On Android 13 and later, users must grant the notification permission. The app requests it at launch; users can later change permission and sound for the Bodla Parivar notification channel in Android Settings.
 
 ---
 

@@ -5,6 +5,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function fetchWithTransientRetries(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, init);
+    if (response.ok || (response.status !== 429 && response.status !== 503) || attempt === 2) {
+      return response;
+    }
+
+    await response.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -30,11 +42,11 @@ serve(async (req) => {
       ? "https://generativelanguage.googleapis.com/v1beta/openai"
       : "https://api.openai.com/v1";
     const baseUrl = (Deno.env.get("AI_BASE_URL") || defaultBaseUrl).replace(/\/$/, "");
-    const model = Deno.env.get("AI_MODEL") || (provider === "gemini" ? "gemini-2.0-flash" : "gpt-4o-mini");
+    const model = Deno.env.get("AI_MODEL") || (provider === "gemini" ? "gemini-3.8-flash" : "gpt-4o-mini");
 
     const systemPrompt = "You are a helpful assistant for a Gujarati community app (Bodla village). Refine the following Gujarati text for a community notice/notification. Preserve the original core intent and essential details (names, dates, places, numbers). Preserve WhatsApp-style formatting markers (*bold*, _italic_, ~strikethrough~) and URLs. Do NOT add formal letter salutations, greetings, openings, or signatures. Do NOT prepend any greeting. If title is requested, return a crisp announcement title of 5-8 words. If body/message is requested, return a warm, readable community message. Output JSON: {\"enhanced_gu\":\"...\",\"enhanced_en\":\"...\"}. Return raw JSON only with no markdown or extra commentary.";
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await fetchWithTransientRetries(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
@@ -53,8 +65,11 @@ serve(async (req) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("AI upstream error:", response.status, errText);
-      return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 502,
+      const isBusy = response.status === 429 || response.status === 503;
+      return new Response(JSON.stringify({
+        error: isBusy ? "AI service is busy. Please try again shortly." : "AI service error",
+      }), {
+        status: isBusy ? response.status : 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

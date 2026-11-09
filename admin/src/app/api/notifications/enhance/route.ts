@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       ? 'https://generativelanguage.googleapis.com/v1beta/openai'
       : 'https://api.openai.com/v1';
     const baseUrl = (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, '');
-    const model = process.env.AI_MODEL || (provider === 'gemini' ? 'gemini-2.0-flash' : 'gpt-4o-mini');
+    const model = process.env.AI_MODEL || (provider === 'gemini' ? 'gemini-3.8-flash' : 'gpt-4o-mini');
 
     const systemPrompt = "You are a helpful assistant for a Gujarati community app (Bodla village). Refine the following Gujarati text for a community notice/notification. Preserve the original core intent and essential details (names, dates, places, numbers). Preserve any WhatsApp-style formatting markers (*bold*, _italic_, ~strikethrough~, code) and URLs. Do NOT add formal letter salutations, greetings, or openings. Do NOT prepend any greeting. Just refine the message text directly and return only the refined message. If title, return a crisp, catchy announcement title (max 15-20 words). If body/message, return a warm community message. Output JSON: {\"enhanced_gu\": \"...\", \"enhanced_en\": \"...\"}. No markdown, no extra commentary, raw JSON only.";
 

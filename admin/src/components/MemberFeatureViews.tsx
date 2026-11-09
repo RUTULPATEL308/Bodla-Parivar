@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import { AlertCircle, ExternalLink, LoaderCircle, MapPin, Phone } from 'lucide-react';
+import { AlertCircle, ExternalLink, LoaderCircle, MapPin, Phone, Trash2 } from 'lucide-react';
 import { useAdminLanguage } from '@/components/AdminLanguageContext';
-import { GujlishTextarea } from '@/components/GujlishInput';
+import { GujlishInput, GujlishTextarea } from '@/components/GujlishInput';
+import html2canvas from 'html2canvas';
 
 export type MemberSection = 'overview' | 'profile' | 'notices' | 'events' | 'complaints' | 'history' | 'settings' | 'navratri' | 'offerings' | 'emergency' | 'gallery' | 'notifications' | 'directory' | 'result_uploads' | 'notice_design' | 'besanu_design';
 
@@ -265,6 +266,7 @@ function NotificationsView() {
   const [canBroadcast, setCanBroadcast] = useState(true);
   const [checkingPermission, setCheckingPermission] = useState(true);
   const [showCompose, setShowCompose] = useState(false);
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
 
   // Form states
   const [bodyGu, setBodyGu] = useState('');
@@ -285,6 +287,13 @@ function NotificationsView() {
           if (active) setCheckingPermission(false);
           return;
         }
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .eq('status', 'ACTIVE')
+          .maybeSingle();
+        if (active && profile?.id) setCurrentProfileId(profile.id);
         if (!active) return;
         setCanBroadcast(true);
       } catch {
@@ -423,6 +432,26 @@ function NotificationsView() {
     }
   };
 
+  const handleDeleteNotification = async (notificationId: string) => {
+    if (!window.confirm('આ સૂચન કાઢી નાખવી છે?')) return;
+    setFeedback(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+      const res = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'સૂચન કાઢી શકાયું નથી.');
+      setRows((currentRows) => currentRows.filter((row) => row.id !== notificationId));
+      setFeedback({ success: true, message: 'સૂચન સફળતાપૂર્વક કાઢી નાખ્યું.' });
+    } catch (err: any) {
+      setFeedback({ success: false, message: err.message || 'સૂચન કાઢી શકાયું નથી.' });
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8dfd2] pb-4">
@@ -517,16 +546,29 @@ function NotificationsView() {
               <article key={row.id} className={cardClass}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className={titleClass}>{row.title_en || row.title_gu}</h3>
-                  <time className="text-xs text-slate-500">{row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</time>
+                  <div className="flex items-center gap-2">
+                    <time className="text-xs text-slate-500">{row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}</time>
+                    {currentProfileId && row.created_by === currentProfileId && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteNotification(row.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-300"
+                        aria-label="સૂચન કાઢી નાખો"
+                      >
+                        <Trash2 size={14} />
+                        કાઢો
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {row.title_gu && row.title_en && row.title_en !== row.title_gu && (
                   <p className="mt-1 text-xs text-slate-500">{row.title_gu}</p>
                 )}
                 <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{row.body_en || row.body_gu}</p>
-                {row.payload?.image_url && (
+                {(row.image_url || row.payload?.image_url) && (
                   <div className="mt-3">
                     <a
-                      href={row.payload.image_url}
+                      href={row.image_url || row.payload.image_url}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-sky-700 hover:bg-slate-50 dark:border-slate-700 dark:text-sky-400"
@@ -629,8 +671,9 @@ function ResultUploadsView() {
   </section>;
 }
 
-function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
+export function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
   const isBesanu = kind === 'besanu';
+  const posterRef = useRef<HTMLElement>(null);
   const [name, setName] = useState('');
   const [deathDate, setDeathDate] = useState('');
   const [weekday, setWeekday] = useState('');
@@ -650,6 +693,15 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
     if (!value) return '';
     const [year, month, day] = value.split('-');
     return `${day}/${month}/${year}`;
+  };
+
+  const formatTime = (value: string) => {
+    if (!value) return '';
+    const [hourText, minute = '00'] = value.split(':');
+    const hour = Number(hourText);
+    if (!Number.isFinite(hour)) return value;
+    const hour12 = hour % 12 || 12;
+    return `${hour12.toString().padStart(2, '0')}:${minute} ${hour < 12 ? 'AM' : 'PM'}`;
   };
 
   const selectDeathDate = (value: string) => {
@@ -672,12 +724,19 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
     setPublishing(true);
     setMessage('');
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `condolence/${user?.id || 'member'}/${Date.now()}-${cleanName}`;
-      const { error } = await supabase.storage.from('notices').upload(path, file, { contentType: file.type, upsert: false });
-      if (error) throw error;
-      const { data } = supabase.storage.from('notices').getPublicUrl(path);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/notices/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'ફોટો અપલોડ થઈ શક્યો નથી.');
       setPhotoUrl(data.publicUrl);
       setPhotoName(file.name);
     } catch (error: any) {
@@ -697,21 +756,40 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
     setPublishing(true);
     setMessage('');
     try {
-      const familyText = familyMembers.filter((member) => member.trim()).join(', ');
       const title = isBesanu ? `${name.trim()} - બેસણું સમાચાર` : `${name.trim()} - અંતિમ યાત્રા સમાચાર`;
-      const description = [
-        `સ્વ. ${name.trim()}`,
-        `અવસાનની તારીખ: ${formatDate(deathDate)}${weekday ? ` (${weekday})` : ''}`,
-        `${isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'} તારીખ: ${formatDate(eventDate)}`,
-        startTime ? (isBesanu ? `સમય: ${startTime}${endTime ? ` - ${endTime}` : ''}` : `સમય: ${startTime}`) : '',
-        `${isBesanu ? 'સ્થળ / સરનામું' : 'અંતિમ યાત્રા સરનામું'}: ${address.trim()}`,
-        !isBesanu && cremationGround.trim() ? `સ્મશાન ઘાટ: ${cremationGround.trim()}` : '',
-        familyText ? `પરિવારના સભ્યો: ${familyText}` : '',
-        mobileNumber.trim() ? `મો.: ${mobileNumber.trim()}` : '',
-      ].filter(Boolean).join('\n');
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('સત્ર સમાપ્ત થયું. ફરી લૉગિન કરો.');
+
+      if (!posterRef.current) throw new Error('પોસ્ટર તૈયાર થઈ શક્યું નથી. ફરી પ્રયત્ન કરો.');
+      const posterCanvas = await html2canvas(posterRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#fffdf7',
+        logging: false,
+      });
+      const posterBlob = await new Promise<Blob>((resolve, reject) => {
+        posterCanvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error('પોસ્ટર ઈમેજ બનાવી શકાઈ નથી.')),
+          'image/png',
+          1
+        );
+      });
+      const posterFile = new File(
+        [posterBlob],
+        `${isBesanu ? 'besanu' : 'antim-yatra'}-${Date.now()}.png`,
+        { type: 'image/png' }
+      );
+      const posterFormData = new FormData();
+      posterFormData.append('file', posterFile);
+      const posterResponse = await fetch('/api/notices/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: posterFormData,
+      });
+      const posterResult = await posterResponse.json();
+      if (!posterResponse.ok) throw new Error(posterResult.error || 'પોસ્ટર અપલોડ થઈ શક્યું નથી.');
+
       const response = await fetch('/api/notifications/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -722,9 +800,9 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
           title_en: title,
           notification_title_gu: title,
           notification_title_en: isBesanu ? 'Besanu' : 'Antim Yatra',
-          body_gu: description,
-          body_en: description,
-          image_url: photoUrl || undefined,
+          body_gu: title,
+          body_en: title,
+          image_url: posterResult.publicUrl,
         }),
       });
       const data = await response.json();
@@ -739,7 +817,28 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
 
   const posterBackground = isBesanu
     ? 'linear-gradient(135deg, rgba(224,237,232,.92), rgba(196,214,206,.92)), url(/poster-bg.jpg)'
-    : 'linear-gradient(135deg, rgba(255,253,247,.94), rgba(214,195,161,.88)), url(/poster-bg.jpg)';
+    : 'url(/poster-bg.jpg)';
+  const posterColors = isBesanu
+    ? {
+        title: '#1A3C40',
+        secondary: '#2C6E6A',
+        gold: '#8B6914',
+        lightGold: '#B8860B',
+        card: '#F5EDE0',
+        ink: '#1C1208',
+        muted: '#5A5030',
+        photo: '#E0EDE8',
+      }
+    : {
+        title: '#4A1220',
+        secondary: '#6E2332',
+        gold: '#9C7A38',
+        lightGold: '#D4AF37',
+        card: '#FBF4E8',
+        ink: '#2C1810',
+        muted: '#5E453A',
+        photo: '#EFE5D0',
+      };
 
   return (
     <section className="space-y-4">
@@ -749,7 +848,13 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
       </div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(320px,1fr)]">
         <div className={`${cardClass} space-y-3`}>
-          <label className="block text-xs font-semibold text-slate-600">અહીં નામ લખો *<input value={name} onChange={(event) => setName(event.target.value)} className={`${inputClass} mt-1`} /></label>
+          <GujlishInput
+            value={name}
+            onValueChange={setName}
+            label="અહીં નામ લખો *"
+            required
+            className={inputClass}
+          />
           <label className="block text-xs font-semibold text-slate-600">અવસાનની તારીખ *<input required type="date" value={deathDate} onChange={(event) => selectDeathDate(event.target.value)} className={`${inputClass} mt-1`} /></label>
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">વાર: {weekday || 'તારીખ પસંદ કર્યા પછી આપમેળે આવશે'}</div>
           <label className="block text-xs font-semibold text-slate-600">{isBesanu ? 'બેસણુંની તારીખ *' : 'અંતિમ યાત્રાની તારીખ *'}<input required type="date" value={eventDate} onChange={(event) => setEventDate(event.target.value)} className={`${inputClass} mt-1`} /></label>
@@ -757,12 +862,33 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
             <label className="text-xs font-semibold text-slate-600">{isBesanu ? 'સમય (શરૂ)' : 'સમય'}<input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className={`${inputClass} mt-1`} /></label>
             {isBesanu && <label className="text-xs font-semibold text-slate-600">સમય (સુધી)<input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className={`${inputClass} mt-1`} /></label>}
           </div>
-          <label className="block text-xs font-semibold text-slate-600">{isBesanu ? 'સ્થળ / સરનામું *' : 'અંતિમ યાત્રાનું સરનામું *'}<textarea required value={address} onChange={(event) => setAddress(event.target.value)} className={`${inputClass} mt-1`} rows={2} /></label>
-          {!isBesanu && <label className="block text-xs font-semibold text-slate-600">સ્મશાન ઘાટ<input value={cremationGround} onChange={(event) => setCremationGround(event.target.value)} className={`${inputClass} mt-1`} /></label>}
+          <GujlishTextarea
+            value={address}
+            onValueChange={setAddress}
+            label={isBesanu ? 'સ્થળ / સરનામું *' : 'અંતિમ યાત્રાનું સરનામું *'}
+            required
+            className={inputClass}
+            rows={2}
+          />
+          {!isBesanu && (
+            <GujlishInput
+              value={cremationGround}
+              onValueChange={setCremationGround}
+              label="સ્મશાન ઘાટ"
+              className={inputClass}
+            />
+          )}
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-700">પરિવારના સભ્યોના નામ</p>
             {familyMembers.map((member, index) => (
-              <input key={index} value={member} onChange={(event) => setFamilyMembers((current) => current.map((value, i) => i === index ? event.target.value : value))} placeholder={`સભ્ય ${index + 1}`} className={inputClass} />
+              <GujlishInput
+                key={index}
+                value={member}
+                onValueChange={(value) => setFamilyMembers((current) => current.map((item, i) => i === index ? value : item))}
+                label={index === 0 ? undefined : undefined}
+                placeholder={`સભ્ય ${index + 1}`}
+                className={inputClass}
+              />
             ))}
           </div>
           <label className="block text-xs font-semibold text-slate-600">મોબાઇલ નંબર<input inputMode="numeric" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value.replace(/\D/g, '').slice(0, 15))} className={`${inputClass} mt-1`} /></label>
@@ -774,23 +900,101 @@ function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
             <button type="button" disabled={publishing} onClick={() => void publish()} className="min-h-11 flex-1 rounded-xl bg-saffron px-4 text-sm font-bold text-white disabled:opacity-60">{publishing ? 'પ્રકાશિત થાય છે...' : 'નોટિસમાં પ્રકાશિત કરો'}</button>
           </div>
         </div>
-        <article className="min-h-[620px] overflow-hidden rounded-3xl border border-amber-200 bg-cover bg-center text-center shadow-lg" style={{ backgroundImage: posterBackground }}>
-          <div className="mx-auto flex min-h-[620px] max-w-xl flex-col items-center px-8 py-10">
-            <img src="/bodla-logo.jpg" alt="Bodla Parivar" className="mb-4 h-14 object-contain" />
-            <p className="text-2xl font-bold text-[#9c7a38]">ૐ શાંતિઃ</p>
-            <h3 className="mt-4 text-2xl font-extrabold text-[#4a1220]">{isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'}</h3>
-            <div className={`mt-5 flex h-44 w-44 items-center justify-center overflow-hidden rounded-full border-4 ${isBesanu ? 'border-[#b8860b] bg-[#e0ede8]' : 'border-[#d4af37] bg-[#efe5d0]'}`}>
-              {photoUrl ? <img src={photoUrl} alt={name || 'સ્વર્ગસ્થ વ્યક્તિનો ફોટો'} className="h-full w-full object-cover" /> : <span className="text-sm font-bold text-slate-500">ફોટો</span>}
+        <article
+          ref={posterRef}
+          className="relative mx-auto aspect-[3/4] w-full max-w-[520px] overflow-hidden rounded-[18px] border border-[#d9c79f] bg-cover bg-center text-center shadow-[0_12px_35px_rgba(74,18,32,.16)]"
+          style={{ backgroundImage: posterBackground }}
+        >
+          <div className="pointer-events-none absolute inset-[2.2%] rounded-[12px] border-2" style={{ borderColor: posterColors.gold }} />
+          <div className="pointer-events-none absolute inset-[3.4%] rounded-[10px] border" style={{ borderColor: `${posterColors.lightGold}CC` }} />
+          {[
+            ['top-2.5 left-[3.2%]', 'top'],
+            ['top-2.5 right-[3.2%]', 'top'],
+            ['bottom-2.5 left-[3.2%]', 'bottom'],
+            ['bottom-2.5 right-[3.2%]', 'bottom'],
+          ].map(([position]) => (
+            <span key={position} className={`pointer-events-none absolute h-2 w-2 rounded-full border border-white/70 ${position}`} style={{ backgroundColor: posterColors.gold }} />
+          ))}
+
+          <div className="relative mx-auto flex h-full max-w-[520px] flex-col items-center px-[7.5%] pb-[3%] pt-[2.8%]">
+            <p className="text-[17px] font-bold tracking-[2.5px]" style={{ color: posterColors.gold }}>ૐ શાંતિઃ</p>
+            <h3 className="mt-1 text-[28px] font-extrabold leading-tight tracking-[1px]" style={{ color: posterColors.title }}>
+              {isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'}
+            </h3>
+            <div className="my-[6px] flex w-[65%] items-center gap-2" aria-hidden="true">
+              <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
+              <span className="text-[11px]" style={{ color: posterColors.gold }}>✦</span>
+              <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
             </div>
-            <h4 className="mt-5 text-2xl font-bold text-[#4a1220]">સ્વ. {name || 'અહીં નામ લખો'}</h4>
-            <p className="mt-2 text-sm font-semibold text-[#6e2332]">{deathDate ? `અવસાન: ${formatDate(deathDate)}${weekday ? ` (${weekday})` : ''}` : 'અવસાનની તારીખ અને વાર'}</p>
-            <div className="mt-5 w-full rounded-xl border border-amber-300/70 bg-white/75 px-4 py-3 text-sm leading-7 text-slate-800">
-              <p className="font-bold">{isBesanu ? 'બેસણુંની માહિતી' : 'અંતિમ યાત્રાની માહિતી'}</p>
-              {eventDate && <p>{isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'}: {formatDate(eventDate)}{startTime ? ` | સમય: ${startTime}${isBesanu && endTime ? ` - ${endTime}` : ''}` : ''}</p>}
-              {address && <p>સ્થળ / સરનામું: {address}</p>}
-              {!isBesanu && cremationGround && <p>સ્મશાન ઘાટ: {cremationGround}</p>}
-              {familyMembers.some((member) => member.trim()) && <p>પરિવાર: {familyMembers.filter((member) => member.trim()).join(', ')}</p>}
-              {mobileNumber && <p>મો.: {mobileNumber}</p>}
+
+            <div
+              className="flex h-[138px] w-[138px] items-center justify-center overflow-hidden rounded-full border-[4px] p-[4px] shadow-[0_8px_18px_rgba(44,24,16,.16)] sm:h-[180px] sm:w-[180px]"
+              style={{ borderColor: posterColors.gold, backgroundColor: posterColors.photo }}
+            >
+              <div className="h-full w-full overflow-hidden rounded-full border" style={{ borderColor: `${posterColors.lightGold}CC` }}>
+                {photoUrl ? (
+                  <img src={photoUrl} alt={name || 'સ્વર્ગસ્થ વ્યક્તિનો ફોટો'} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[11px] font-bold" style={{ background: 'radial-gradient(circle, #EFE5D0 0%, #D6C3A1 100%)', color: posterColors.muted }}>
+                    ફોટો
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <h4 className="mt-[12px] min-h-[29px] text-[24px] font-semibold leading-[29px]" style={{ color: posterColors.title }}>
+              સ્વ. {name || 'અહીં નામ લખો'}
+            </h4>
+            <p className="mt-[2px] min-h-[18px] max-w-full text-[12.5px] font-semibold leading-[18px]" style={{ color: posterColors.secondary }}>
+              {deathDate || weekday
+                ? `અવસાન તા. ${deathDate ? formatDate(deathDate) : '[તારીખ]'}${weekday ? `, વાર : ${weekday}` : ''}`
+                : '[તારીખ] • [વાર]'}
+            </p>
+            <div className="my-[7px] flex w-[82%] items-center gap-2" aria-hidden="true">
+              <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
+              <span className="text-[11px]" style={{ color: posterColors.gold }}>✦</span>
+              <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
+            </div>
+
+            <p className="min-h-[34px] max-w-full whitespace-pre-line px-1 text-[12px] font-semibold leading-[17px]" style={{ color: posterColors.ink }}>
+              {isBesanu
+                ? 'બેસણાની શોકસભામાં આપની ઉપસ્થિતિથી શોકગ્રસ્ત પરિવારને સાંત્વના આપવાની વિનંતી છે.'
+                : `દિલગીરી સાથે જણાવવાનું કે અમારા વ્હાલા ${name || '[અહીં નામ લખો]'} નું${deathDate ? ` તા. ${formatDate(deathDate)} ના રોજ` : ''} અવસાન થયેલ છે.\nભગવાન એમના દિવ્ય આત્માને શાંતિ અર્પે અને પરિવારજનોને આ દુઃખ સહન કરવાની શક્તિ આપે ...`}
+            </p>
+
+            <div className="mt-[9px] w-full rounded-[11px] border px-[14px] py-[7px] text-[12px] leading-[20px]" style={{ backgroundColor: posterColors.card, borderColor: `${posterColors.gold}99`, color: posterColors.ink }}>
+              <p className="text-[14px] font-bold" style={{ color: posterColors.secondary }}>{isBesanu ? 'બેસણું / શોકસભા' : 'સ્મશાન યાત્રા / અંતિમ યાત્રા'}</p>
+              <p className="min-h-[20px]">
+                {isBesanu ? 'બેસણું' : 'અંતિમ યાત્રા'}
+                {` તા. ${eventDate ? formatDate(eventDate) : '[તારીખ]'}`}
+                {startTime ? ` ના ${Number(startTime.split(':')[0]) < 12 ? 'સવારે' : 'સાંજે'} ${formatTime(startTime)} વાગ્યે` : ''}
+                {isBesanu && endTime ? ` થી ${formatTime(endTime)} સુધી` : ''}
+                {!isBesanu && address ? ` અમારા નિવાસસ્થાન ${address} થી નીકળીને` : ''}
+                {!isBesanu && cremationGround ? ` ${cremationGround} જશે.` : !isBesanu ? ' જશે.' : ''}
+              </p>
+            </div>
+
+            <div className="mt-[5px] flex flex-col items-center text-[11px] leading-[14px]" style={{ color: posterColors.title }}>
+              <span className="inline-block rounded-[4px] px-[10px] py-[1px] font-bold text-white" style={{ backgroundColor: posterColors.title }}>લિ.</span>
+              <div className="mt-[2px] flex flex-col items-center">
+                {(familyMembers.some((member) => member.trim())
+                  ? familyMembers.filter((member) => member.trim())
+                  : ['પરિવારજનો']
+                ).slice(0, 5).map((member, index) => (
+                  <p key={`${member}-${index}`} className="min-h-[14px] font-semibold">{member}</p>
+                ))}
+              </div>
+            </div>
+            <p className="mt-[2px] min-h-[15px] text-[12px] font-bold leading-[15px]" style={{ color: posterColors.muted }}>
+              મો. {mobileNumber || '—'}
+            </p>
+            <div className="mt-[8px] flex w-[65%] items-center gap-2" aria-hidden="true">
+              <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
+              <span className="text-[11px]" style={{ color: posterColors.gold }}>✦</span>
+              <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
+            </div>
+            <div className="mt-[6px] w-[48%] rounded-md px-2 py-[3px]" style={{ backgroundColor: 'rgba(255,255,255,.42)' }}>
+              <img src="/bodla_parivar_logo.png" alt="Bodla Parivar" className="h-[32px] w-full object-contain" />
             </div>
           </div>
         </article>
@@ -868,8 +1072,8 @@ function FuneralNoticeDesignView({ kind }: { kind: 'antim' | 'besanu' }) {
         p_payload: {
           title_gu: title,
           title_en: title,
-          body_gu: `${name}${isBesanu ? 'નું બેસણું' : 'ની અંતિમ યાત્રા'}`,
-          body_en: `${name}${isBesanu ? ' Besanu' : ' Antim Yatra'}`,
+          body_gu: title,
+          body_en: title,
           description_gu: description,
           description_en: description,
           image_url: photoUrl || undefined,

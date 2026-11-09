@@ -326,7 +326,8 @@ fun NoticeDetailScreen(
 
                 val canDelete = currentProfile?.let { profile ->
                     profile.isAdmin ||
-                        profile.roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
+                        profile.roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") } ||
+                        (!currentNotice.publishedById.isNullOrBlank() && currentNotice.publishedById == profile.id)
                 } == true
                 if (canDelete) {
                     Spacer(modifier = Modifier.height(16.dp))
