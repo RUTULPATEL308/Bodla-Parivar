@@ -43,3 +43,8 @@
 
 # Preserve line numbers for debugging
 -keepattributes SourceFile,LineNumberTable
+
+# R8 missing classes - test dependencies and SLF4J
+-dontwarn androidx.test.platform.app.InstrumentationRegistry
+-dontwarn org.slf4j.impl.StaticLoggerBinder
+-dontwarn org.slf4j.**

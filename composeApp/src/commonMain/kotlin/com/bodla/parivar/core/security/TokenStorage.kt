@@ -1,6 +1,6 @@
 package com.bodla.parivar.core.security
 
-expect class TokenStorage {
+expect class TokenStorage() {
     fun saveToken(token: String)
     fun getToken(): String?
     fun saveRefreshToken(token: String)
