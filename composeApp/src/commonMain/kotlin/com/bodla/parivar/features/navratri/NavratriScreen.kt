@@ -396,7 +396,9 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                                             "NUMBER" -> KeyboardType.Number
                                             "AMOUNT" -> KeyboardType.Decimal
                                             else -> KeyboardType.Text
-                                        })
+                                        }),
+                                        colors = bodlaTextFieldColors(),
+                                        textStyle = BodlaBody.copy(color = TextPrimary)
                                     )
                                 } else {
                                     com.bodla.parivar.core.ui.GujlishTextField(

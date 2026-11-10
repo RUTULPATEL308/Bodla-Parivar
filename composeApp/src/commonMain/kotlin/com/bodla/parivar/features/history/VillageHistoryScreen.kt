@@ -109,7 +109,7 @@ fun VillageHistoryScreen(
                         Text(text = "←", fontSize = 22.sp, color = NAVY)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFFFFFFF))
+                colors = bodlaTopAppBarColors()
             )
         },
         containerColor = Color(0xFFFFFFFF),

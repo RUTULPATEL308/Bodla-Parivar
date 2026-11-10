@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-ios:
     name: 🎉 Bodla-Parivar iOS Build
@@ -32,7 +36,11 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
-      # 5. Prepare Firebase configuration
+      # 5. Check Xcode version
+      - name: Check Xcode version
+        run: xcodebuild -version
+
+      # 6. Prepare Firebase configuration
       - name: Prepare GoogleService-Info.plist
         run: |
           PLIST="iosApp/iosApp/GoogleService-Info.plist"
@@ -46,7 +54,7 @@ jobs:
         env:
           GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
 
-      # 6. Build iOS application
+      # 7. Build iOS application
       - name: Build iOS Release
         run: |
           xcodebuild build \
@@ -58,7 +66,7 @@ jobs:
             -derivedDataPath iosApp/build \
             CODE_SIGNING_ALLOWED=NO
 
-      # 7. Create IPA package
+      # 8. Create IPA package
       - name: Create IPA
         run: |
           APP_PATH="iosApp/build/Build/Products/Release-iphoneos/iosApp.app"
@@ -74,14 +82,14 @@ jobs:
 
           zip -qry BodlaParivar.ipa Payload
 
-      # 8. Upload IPA to GitHub Releases
+      # 9. Upload IPA to GitHub Releases
       - name: Upload IPA to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ios-v1.0.${{ github.run_number }}
-          name: Bodla-Parivar iOS v1.0.${{ github.run_number }}
+          tag_name: ios-v10.01.26-${{ github.run_number }}
+          name: Bodla-Parivar iOS v10.01.26-${{ github.run_number }}
           body: |
-            Bodla-Parivar iOS Build
+            Bodla-Parivar iOS Build v10.01.26
 
             Automatically generated using GitHub Actions.
             This is an unsigned iOS package.

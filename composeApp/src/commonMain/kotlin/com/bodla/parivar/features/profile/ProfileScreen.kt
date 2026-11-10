@@ -293,7 +293,7 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = "Version 30.08.26", style = BodlaCaption, color = TextSecondary)
+                    Text(text = "Version 10.01.26", style = BodlaCaption, color = TextSecondary)
                     Text(text = "Developed by Rutul Patel", style = BodlaCaption, color = TextSecondary)
                 }
             }

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-test:
     name: Build & Test Kotlin Multiplatform App
@@ -41,7 +45,11 @@ jobs:
 
   ios-simulator:
     name: Build iOS Simulator App
+<<<<<<< HEAD
     runs-on: macos-15
+=======
+    runs-on: macos-latest
+>>>>>>> b45677e (App Notification Push)
 
     steps:
       - name: Checkout repository
@@ -58,6 +66,9 @@ jobs:
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
+
+      - name: Check Xcode version
+        run: xcodebuild -version
 
       - name: Prepare GoogleService-Info.plist
         run: |
@@ -77,7 +88,6 @@ jobs:
           -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           ARCHS=arm64
-          ONLY_ACTIVE_ARCH=YES
           EXCLUDED_ARCHS=x86_64
           CODE_SIGNING_ALLOWED=NO
           build

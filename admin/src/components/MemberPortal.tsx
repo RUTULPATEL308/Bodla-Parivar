@@ -463,7 +463,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
 
             <label className="mx-auto flex h-12 w-full max-w-3xl items-center gap-3 rounded-2xl border border-[#e8dfd2] bg-white px-4 text-slate-500 shadow-sm ring-1 ring-black/[0.02] dark:border-slate-700 dark:bg-slate-900">
               <Search className="h-4 w-4 shrink-0" />
-              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="સુવિધા શોધો (ગુજરાતી / અંગ્રેજી)" className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500 dark:text-white" />
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="સુવિધા શોધો (ગુજરાતી / અંગ્રેજી)" className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500" />
             </label>
 
             {notices.find((notice) => notice.is_pinned) && (
@@ -661,7 +661,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                     required
                     value={profileName}
                     onChange={(e) => setProfileName(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-navy-900 dark:focus:border-sky-400"
                   />
                 </div>
 
@@ -673,7 +673,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                     type="email"
                     disabled
                     value={email}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2.5 text-sm text-slate-500 cursor-not-allowed dark:border-slate-800 dark:bg-slate-850 dark:text-slate-400"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2.5 text-sm text-slate-900 cursor-not-allowed dark:bg-slate-850 "
                   />
                   <p className="mt-1 text-[11px] text-slate-400">Email is linked to your authentication account.</p>
                 </div>
@@ -687,7 +687,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                     placeholder="+91 98765 43210"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-navy-900 dark:focus:border-sky-400"
                   />
                 </div>
 
@@ -727,7 +727,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                   placeholder="Search notices…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 outline-none transition focus:border-navy-900 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 outline-none transition focus:border-navy-900 "
                 />
               </div>
               </div>
@@ -844,7 +844,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                     placeholder="e.g. Street light repair near temple"
                     value={complaintTitle}
                     onChange={(e) => setComplaintTitle(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:focus:border-sky-400"
                   />
                 </div>
 
@@ -855,7 +855,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                   <select
                     value={complaintPriority}
                     onChange={(e) => setComplaintPriority(e.target.value as any)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 "
                   >
                     <option value="LOW">Low</option>
                     <option value="NORMAL">Normal</option>
@@ -874,7 +874,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
                     placeholder="Provide specific details and location..."
                     value={complaintDesc}
                     onChange={(e) => setComplaintDesc(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-navy-900 dark:focus:border-sky-400"
                   />
                 </div>
 

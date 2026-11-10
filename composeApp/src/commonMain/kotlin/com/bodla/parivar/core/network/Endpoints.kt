@@ -127,4 +127,7 @@ object Endpoints {
     // Latest notifications (for in-app toasts)
     val NOTIFICATIONS_LATEST: String
         get() = "$REST_BASE_URL/notifications?order=created_at.desc&limit=5"
+
+    val RPC_DELETE_NOTIFICATION: String
+        get() = "$REST_BASE_URL/rpc/delete_notification"
 }

@@ -20,6 +20,7 @@ interface NoticeRepository {
     suspend fun getPinnedNotice(): Notice?
     suspend fun getNoticeById(id: String): Notice?
     suspend fun deleteNotice(id: String): Result<Unit>
+    suspend fun deleteNotification(id: String): Result<Unit>
 }
 
 interface EventRepository {

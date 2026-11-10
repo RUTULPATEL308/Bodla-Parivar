@@ -177,7 +177,7 @@ export default function AdminDashboard() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={isGujarati ? 'સુવિધા અથવા મોડ્યુલ શોધો (જેમ કે: સભ્યો, સૂચના, ફરિયાદો)…' : 'Search tools & modules (e.g., users, complaints, notices, audit)...'}
-              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400"
+              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-navy-900 dark:focus:border-sky-400"
             />
           </div>
         </div>

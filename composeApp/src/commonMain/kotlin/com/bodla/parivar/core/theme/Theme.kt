@@ -1,7 +1,12 @@
 package com.bodla.parivar.core.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -49,13 +54,42 @@ private val DarkColorScheme = darkColorScheme(
 val LocalThemeIsDark = staticCompositionLocalOf { false }
 
 @Composable
+fun bodlaTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = WarmWhiteSurface,
+    unfocusedContainerColor = WarmWhiteSurface,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    cursorColor = SaffronPrimary,
+    focusedBorderColor = SaffronPrimary,
+    unfocusedBorderColor = BorderStroke,
+    focusedLabelColor = SaffronPrimary,
+    unfocusedLabelColor = TextSecondary
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun bodlaTopAppBarColors() = TopAppBarDefaults.topAppBarColors(
+    containerColor = WarmWhiteSurface,
+    titleContentColor = TextPrimary,
+    navigationIconContentColor = TextPrimary,
+    actionIconContentColor = TextPrimary
+)
+
+@Composable
 fun BodlaParivarTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val customTextSelectionColors = TextSelectionColors(
+        handleColor = SaffronPrimary,
+        backgroundColor = SaffronPrimary.copy(alpha = 0.35f)
+    )
 
-    CompositionLocalProvider(LocalThemeIsDark provides darkTheme) {
+    CompositionLocalProvider(
+        LocalThemeIsDark provides darkTheme,
+        LocalTextSelectionColors provides customTextSelectionColors
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AppTypography,

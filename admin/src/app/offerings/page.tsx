@@ -632,6 +632,43 @@ export default function AdminOfferingsPage() {
         status:         formData.status
       }]);
       if (error) { alert('Insert failed: ' + error.message); return; }
+
+      // Send notification to all users about the new offering
+      try {
+        const lang = (typeof window !== 'undefined' && typeof localStorage !== 'undefined')
+          ? (localStorage.getItem('lang') === 'gu' ? 'gu' : 'en')
+          : 'en';
+        const isGujarati = lang === 'gu';
+        const titleGu = isGujarati ? 'નવું ચઢાવો ઉમેરવામાં આવ્યું' : 'New Offering Added';
+        const titleEn = titleGu;
+        const bodyGu = isGujarati ? `નવું ચઢાવો ઉમેરવામાં આવ્યું છે: ${formData.title_gu || formData.title_en}` : `A new offering has been added: ${formData.title_gu || formData.title_en}`;
+        const bodyEn = bodyGu;
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? ''}`
+          },
+          body: JSON.stringify({
+            title_gu: titleGu,
+            title_en: titleEn,
+            notification_title_gu: titleGu,
+            notification_title_en: titleEn,
+            body_gu: bodyGu,
+            body_en: bodyEn,
+            description_gu: bodyGu,
+            description_en: bodyEn,
+            type: 'OFFERING'
+          })
+        }).catch(err => {
+          console.warn('Offering notification failed:', err);
+        });
+      } catch (err) {
+        console.warn('Offering notification error:', err);
+      }
     }
     setIsModalOpen(false);
     setFormData({

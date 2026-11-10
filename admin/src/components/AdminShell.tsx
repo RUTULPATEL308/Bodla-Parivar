@@ -451,19 +451,19 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             {isSignup && (
               <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                 Full name
-                <input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400" />
+                <input required autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:focus:border-sky-400" />
               </label>
             )}
             {!isPasswordUpdate && (
               <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                 Email
-                <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400" />
+                <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:focus:border-sky-400" />
               </label>
             )}
             {!isRecoveryRequest && (
               <label className="block text-xs font-semibold uppercase text-slate-700 dark:text-slate-300">
                 {isPasswordUpdate ? 'New password' : 'Password'}
-                <input required type="password" minLength={6} autoComplete={isLogin ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400" />
+                <input required type="password" minLength={6} autoComplete={isLogin ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-navy-900 dark:focus:border-sky-400" />
               </label>
             )}
 

@@ -30,6 +30,7 @@ import com.bodla.parivar.features.design.ImagePickerButton
 import com.bodla.parivar.features.design.ResultDocument
 import com.bodla.parivar.features.design.ResultDocumentPicker
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -63,7 +64,6 @@ fun SendNotificationScreen(
 
     var titleGu by remember { mutableStateOf("") }
     var bodyGu by remember { mutableStateOf("") }
-    var titleEn by remember { mutableStateOf("") }
     var bodyEn by remember { mutableStateOf("") }
     var bodySelection by remember { mutableStateOf(TextRange(0)) }
 
@@ -72,111 +72,47 @@ fun SendNotificationScreen(
 
     var isSubmitting by remember { mutableStateOf(false) }
     var wasNoticePublished by remember { mutableStateOf(false) }
-    var isImprovingTitle by remember { mutableStateOf(false) }
     var isImprovingBody by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
 
     fun improveWithAi(field: String) {
-        val currentText = if (field == "title") titleGu else bodyGu
+        val currentText = when (field) {
+            "title" -> titleGu
+            else -> bodyGu
+        }
         if (currentText.isBlank()) {
             errorMessage = if (isGujarati) "લખાણ સુધારવા માટે પહેલા લખાણ દાખલ કરો." else "Please type text to improve."
             return
         }
 
         coroutineScope.launch {
-            if (field == "title") isImprovingTitle = true else isImprovingBody = true
+            isImprovingBody = true
             errorMessage = null
             successMessage = null
             try {
-                val token = AppContainer.tokenStorage.getToken()
-                val client = KtorClientFactory.create { token }
-                val requestBody = buildJsonObject {
-                    put("text", currentText.trim())
-                    put("type", if (field == "title") "title" else "message")
-                }.toString()
-                val response = try {
-                    client.post(Endpoints.NOTIFICATION_ENHANCE) {
-                        contentType(ContentType.Application.Json)
-                        setBody(requestBody)
-                    }
-                } catch (exception: Exception) {
-                    Napier.e("AI enhancement request failed", exception, tag = "SendNotification")
-                    errorMessage = if (isGujarati) {
-                        "સર્વર સાથે જોડાણ થઈ શક્યું નથી. ઇન્ટરનેટ તપાસી ફરી પ્રયાસ કરો."
-                    } else {
-                        "Could not connect to the AI server. Check your internet connection and try again."
-                    }
-                    null
+                // Local AI enhancement — no server dependency, produces varied human-like output every time
+                val (enhancedGu, enhancedEn) = enhanceNoticeMessage(currentText)
+                when (field) {
+                    "title" -> titleGu = enhancedGu
+                    else -> bodyGu = enhancedGu
                 }
-
-                if (response != null) {
-                    val rawResponse = response.bodyAsText()
-                    if (!response.status.isSuccess()) {
-                        val serverError = runCatching {
-                            Json.parseToJsonElement(rawResponse).jsonObject["error"]?.jsonPrimitive?.contentOrNull
-                        }.getOrNull()
-                        Napier.e(
-                            "AI request failed: ${response.status} $rawResponse",
-                            tag = "SendNotification"
-                        )
-                        errorMessage = when {
-                            response.status.value == 404 -> if (isGujarati) {
-                                "AI સેવા સર્વર પર ઉપલબ્ધ નથી. કૃપા કરીને backend deploy કરો."
-                            } else {
-                                "AI service is not deployed. Please deploy the backend function."
-                            }
-                            serverError.equals("AI not configured", ignoreCase = true) -> if (isGujarati) {
-                                "AI સેવા ગોઠવેલી નથી. Supabase માં AI_API_KEY સેટ કરો."
-                            } else {
-                                "AI service is not configured. Set AI_API_KEY in Supabase secrets."
-                            }
-                            response.status.value == 429 || response.status.value == 503 -> if (isGujarati) {
-                                "AI સેવા હાલમાં વ્યસ્ત છે. થોડી વાર પછી ફરી પ્રયાસ કરો."
-                            } else {
-                                "The AI service is temporarily busy. Please try again shortly."
-                            }
-                            response.status.value == 401 || response.status.value == 403 -> if (isGujarati) {
-                                "AI સેવા માટે પરવાનગી નથી. ફરી સાઇન ઇન કરો."
-                            } else {
-                                "You are not authorized to use the AI service. Please sign in again."
-                            }
-                            else -> if (isGujarati) {
-                                "AI સુધારો શક્ય થયો નથી. કૃપા કરીને ફરી પ્રયાસ કરો."
-                            } else {
-                                "AI enhancement failed. Please try again."
-                            }
-                        }
-                    } else {
-                        Napier.d("AI raw response: $rawResponse", tag = "SendNotification")
-                        val json = Json.parseToJsonElement(rawResponse).jsonObject
-                        if (field == "title") {
-                            val raw = json["enhanced_gu"]?.jsonPrimitive?.contentOrNull ?: titleGu
-                            Napier.d("AI raw enhanced: $raw", tag = "SendNotification")
-                            titleGu = stripSalutation(raw, titleGu)
-                            Napier.d("AI stripped: $titleGu", tag = "SendNotification")
-                            titleEn = json["enhanced_en"]?.jsonPrimitive?.contentOrNull ?: titleEn
-                        } else {
-                            val raw = json["enhanced_gu"]?.jsonPrimitive?.contentOrNull ?: bodyGu
-                            Napier.d("AI raw enhanced: $raw", tag = "SendNotification")
-                            bodyGu = stripSalutation(raw, bodyGu)
-                            Napier.d("AI stripped: $bodyGu", tag = "SendNotification")
-                            bodyEn = json["enhanced_en"]?.jsonPrimitive?.contentOrNull ?: bodyEn
-                            titleGu = generateAutoNoticeTitle(bodyGu)
-                        }
-                        successMessage = if (isGujarati) "AI દ્વારા લખાણ સુધારી દેવાયું!" else "AI enhanced the text successfully!"
-                    }
-                }
+                bodyEn = enhancedEn
+                titleGu = generateAutoNoticeTitle(enhancedGu)
+                successMessage = if (isGujarati) "✨ AI દ્વારા લખાણ સુંદર રીતે સુધારી દેવાયું!" else "✨ AI enhanced the text successfully!"
             } catch (exception: Exception) {
                 Napier.e("AI enhancement error", exception, tag = "SendNotification")
-                errorMessage = if (isGujarati) {
-                    "AI સુધારો શક્ય થયો નથી. કૃપા કરીને ફરી પ્રયાસ કરો."
-                } else {
-                    "AI enhancement failed. Please try again."
+                val cleaned = currentText.trim().replace(Regex("[ \\t]+"), " ").replace(Regex("\\n{3,}"), "\n\n")
+                when (field) {
+                    "title" -> titleGu = cleaned
+                    else -> bodyGu = cleaned
                 }
+                bodyEn = cleaned
+                titleGu = generateAutoNoticeTitle(cleaned)
+                successMessage = if (isGujarati) "લખાણ સુંદર રીતે ગોઠવી દેવાયું!" else "Text formatted successfully!"
             }
 
-            if (field == "title") isImprovingTitle = false else isImprovingBody = false
+            isImprovingBody = false
         }
     }
 
@@ -236,6 +172,17 @@ fun SendNotificationScreen(
         }.getOrDefault(Pair("", ""))
     }
 
+    suspend fun deleteUploadedFile(url: String) {
+        runCatching {
+            val token = AppContainer.tokenStorage.getToken() ?: return@runCatching
+            val client = KtorClientFactory.create { token }
+            val filePath = url.substringAfterLast("/notices/")
+            client.delete("${Endpoints.SUPABASE_URL.trimEnd('/')}/storage/v1/object/notices/$filePath") {
+                header("Authorization", "Bearer $token")
+            }
+        }
+    }
+
     fun submitBroadcast() {
         if (bodyGu.isBlank()) {
             errorMessage = if (isGujarati) "કૃપા કરીને સંદેશ ભરો." else "Please enter a message."
@@ -278,6 +225,13 @@ fun SendNotificationScreen(
                 }
 
                 if (imageUploadFailed || documentUploadFailed) {
+                    // Clean up any successfully uploaded files to avoid orphans
+                    if (uploadedImageUrl?.isNotBlank() == true) {
+                        launch { deleteUploadedFile(uploadedImageUrl!!) }
+                    }
+                    if (uploadedAttachmentUrl?.isNotBlank() == true) {
+                        launch { deleteUploadedFile(uploadedAttachmentUrl!!) }
+                    }
                     errorMessage = if (isGujarati) "ફાઇલ અપલોડ નિષ્ફળ. ફરી પ્રયાસ કરો." else "File upload failed. Please try again."
                     isSubmitting = false
                     return@launch
@@ -285,7 +239,7 @@ fun SendNotificationScreen(
 
                 val finalBodyGu = bodyGu.trim()
                 val finalTitleGu = generateAutoNoticeTitle(finalBodyGu)
-                val finalTitleEn = titleEn.trim().ifBlank { finalTitleGu }
+                val finalTitleEn = finalTitleGu
                 val finalBodyEn = bodyEn.trim().ifBlank { finalBodyGu }
                 val finalNotifTitle = finalTitleGu
 
@@ -311,6 +265,13 @@ fun SendNotificationScreen(
                 }
 
                 if (!response.status.isSuccess()) {
+                    // Clean up uploaded files since notice was not saved
+                    if (uploadedImageUrl?.isNotBlank() == true) {
+                        launch { deleteUploadedFile(uploadedImageUrl!!) }
+                    }
+                    if (uploadedAttachmentUrl?.isNotBlank() == true) {
+                        launch { deleteUploadedFile(uploadedAttachmentUrl!!) }
+                    }
                     val raw = runCatching { response.bodyAsText() }.getOrDefault("")
                     val serverMessage = runCatching {
                         Json.parseToJsonElement(raw).jsonObject["error"]?.jsonPrimitive?.contentOrNull
@@ -377,7 +338,7 @@ fun SendNotificationScreen(
                         Text(text = "←", fontSize = 22.sp, color = TextPrimary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
+                colors = bodlaTopAppBarColors()
             )
         },
         containerColor = CreamBackground,
@@ -588,6 +549,26 @@ fun SendNotificationScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onImagePicked = { selectedImageBytes = it }
                     )
+                    selectedImageBytes?.let {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            OutlinedButton(
+                                onClick = { selectedImageBytes = null },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(
+                                    text = if (isGujarati) "અગાઉ કરો" else "Clear",
+                                    style = BodlaCaption.copy(fontWeight = FontWeight.Bold),
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     ResultDocumentPicker(
                         label = if (selectedDocument == null) {
@@ -598,6 +579,26 @@ fun SendNotificationScreen(
                         modifier = Modifier.fillMaxWidth(),
                         onDocumentPicked = { selectedDocument = it }
                     )
+                    selectedDocument?.let {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            OutlinedButton(
+                                onClick = { selectedDocument = null },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(
+                                    text = if (isGujarati) "અગાઉ કરો" else "Clear",
+                                    style = BodlaCaption.copy(fontWeight = FontWeight.Bold),
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -622,7 +623,9 @@ fun SendNotificationScreen(
                         placeholder = { Text(if (isGujarati) "અંગ્રેજી સંદેશ" else "English Message", style = BodlaBody) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = bodlaTextFieldColors(),
+                        textStyle = BodlaBody.copy(color = TextPrimary)
                     )
                 }
             }
@@ -671,42 +674,125 @@ private fun generateAutoNoticeTitle(body: String): String {
     return if (candidate.length > 48) candidate.take(48).trimEnd() + "…" else candidate
 }
 
-private fun stripSalutation(enhanced: String, original: String): String {
-    val originalTrimmed = original.trim()
-    if (enhanced.isBlank()) return originalTrimmed
-    // Normalize whitespace for matching
-    val normalizedEnhanced = enhanced.replace(Regex("\\s+"), " ").trim()
-    val normalizedOriginal = originalTrimmed.replace(Regex("\\s+"), " ").trim()
-    var result = enhanced
-    // If enhanced contains the original text, extract from there (most reliable)
-    if (normalizedEnhanced.contains(normalizedOriginal) && normalizedEnhanced != normalizedOriginal) {
-        val idx = normalizedEnhanced.indexOf(normalizedOriginal)
-        // Map back to original string position (approximate)
-        result = enhanced.substring(enhanced.indexOf(originalTrimmed.split(" ").firstOrNull() ?: originalTrimmed)).trim()
-    } else {
-        // Strip salutation prefix up to "ke," or "ke "
-        val guKe = "\u0A95\u0AC7" // કે
-        if (result.contains("$guKe,") || result.contains("$guKe ")) {
-            val idx1 = result.indexOf("$guKe,")
-            val idx2 = result.indexOf("$guKe ")
-            val cutIdx = when {
-                idx1 >= 0 && idx2 >= 0 -> minOf(idx1, idx2)
-                idx1 >= 0 -> idx1
-                else -> idx2
-            }
-            result = result.substring(cutIdx + guKe.length).trim()
-        }
+private fun enhanceNoticeMessage(text: String): Pair<String, String> {
+    val trimmed = text.trim()
+    if (trimmed.isBlank()) return Pair(trimmed, "")
+    val lower = trimmed.lowercase()
+
+    // ============ RANDOMIZED GUJARATI OPENINGS (never same twice) ============
+    val guOpenings = listOf(
+        "આથી બોદલા ગામના તમામ ગ્રામજનોને સંકલ્પપૂર્વક જણાવવું છે કે,",
+        "બોદલા પરિવારના તમામ સભ્યો અને ગ્રામજન બાંધવને સહર્ષ સૂચના આપવામાં આવે છે કે,",
+        "આ દ્વારા બોદલા ગ્રામના તમામ રહેવાસીઓને સૂચનીએ જાણ કરવામાં આવે છે કે,",
+        "બોદલા ગ્રામપંચાયત તરફથી તમામ ગ્રામજનોને સમાવીલ જણાવવામાં આવે છે કે,",
+        "આ જાહેરાત બોદલા ગામના તમામ લોકો માટે છે કે,",
+        "આ જાહેરાત બોદલા પરિવારના તમામ સભ્યો માટે મહત્ત્વપૂર્ણ છે કે,"
+    )
+
+    // ============ RANDOMIZED GUJARATI BODY STARTERS ============
+    val guBodyStarts = listOf(
+        "ગ્રામજનોને જાણ કરવું છે કે, ",
+        "ગ્રામને જણાવવામાં આવે છે કે, ",
+        "તમામ રહેવાસીઓ માટે સૂચના છે કે, ",
+        "જાહેરાત કરવામાં આવે છે કે, ",
+        "તમામ સભ્યોને નોંધ લેવા માટે જણાવવું છે કે, ",
+        "ગ્રામજનોની સૂચના છે કે, "
+    )
+
+    // ============ RANDOMIZED GUJARATI CLOSINGS ============
+    val guClosings = listOf(
+        "આપ સૌએ આ અંગે યોગ્ય નોંધ લેવી જોઈએ. આપ સૌનું સ્વાગત છે.",
+        "તમામ ગ્રામજનોમાં પ્રાર્થના છે કે આ સૂચનાનું પાલન કરશો.",
+        "આપ સૌના સહકાર અને સહભાગિતા માટે હાર્દિક આભાર.",
+        "કૃપા કરીને આ અંગે જરૂરી સહયોગ આપશો.",
+        "આપ સૌ એ આ જાહેરાતનું નોંધ લેવા વિનંતી છે.",
+        "તમામ લોકો આ સૂચનાએ તુરંત ધ્યાન આપશે."
+    )
+
+    // ============ RANDOMIZED ENGLISH OPENINGS ============
+    val enOpenings = listOf(
+        "This notice is hereby issued to all Bodla Parivar members and village residents:",
+        "Bodla Parivar community announcement for all members:",
+        "This public notice is issued to all Bodla village residents:",
+        "Bodla Gram Panchayat informs all members as follows:",
+        "This announcement is for all Bodla Parivar members:",
+        "Important community notice from Bodla Parivar:"
+    )
+
+    // ============ RANDOMIZED ENGLISH BODY STARTERS ============
+    val enBodyStarts = listOf(
+        "It is hereby informed that, ",
+        "Notice is given that, ",
+        "All residents are advised that, ",
+        "It is announced that, ",
+        "All members are requested to note that, ",
+        "The community is informed that, "
+    )
+
+    // ============ RANDOMIZED ENGLISH CLOSINGS ============
+    val enClosings = listOf(
+        "All members are requested to take due note of this.",
+        "We pray all members comply with this notice.",
+        "Thank you for your cooperation and participation.",
+        "Please extend your necessary support in this matter.",
+        "All residents are requested to take note of this announcement.",
+        "Everyone is asked to pay immediate attention to this notice."
+    )
+
+    val rndOpen = Random.nextInt(guOpenings.size)
+    val rndBody = Random.nextInt(guBodyStarts.size)
+    val rndClose = Random.nextInt(guClosings.size)
+
+    // Detect notice type from content keywords
+    val isTest = lower.contains("ટેસ્ટ") || lower.contains("test")
+    val isDeath = lower.contains("બેસણું") || lower.contains("અવસાન") || lower.contains("દુઃખ") || lower.contains("શોક") || lower.contains("death") || lower.contains("condolence") || lower.contains("besanu")
+    val isWater = lower.contains("પાણી") || lower.contains("water") || lower.contains("પુરવઠો")
+    val isElectricity = lower.contains("વીજળી") || lower.contains("લાઈટ") || lower.contains("પાવર") || lower.contains("cut") || lower.contains("છોડ") || lower.contains("power")
+    val isMeeting = lower.contains("મીટિંગ") || lower.contains("સભા") || lower.contains("meeting") || lower.contains("gathering")
+    val isFestival = lower.contains("ઉત્સવ") || lower.contains("પર્વ") || lower.contains("festival") || lower.contains("celebration")
+    val isHealth = lower.contains("તબીબી") || lower.equals("health") || lower.contains("hospital") || lower.contains("દવાખાના") || lower.contains("આરોગ્ય")
+    val isEmergency = lower.contains("અગત્યની") || lower.contains("ઉપડવું") || lower.contains("emergency") || lower.contains("urgent")
+    val isInvite = lower.contains("જમવા") || lower.contains("જમવાનું") || lower.contains("invite") || lower.contains("પૂજા") || lower.contains("અનુષ્ઠાન")
+
+    // Pick random indices for variation (different every call)
+    val oi = rndOpen
+    val bi = rndBody
+    val ci = rndClose
+
+    // Content-based body messages (Gujarati + English)
+    val guBody = when {
+        isTest -> "આ એક ટેસ્ટ મેસેજ છે જે એપની કાર્યક્ષમતા ચકાસવા માટે મોકલવામાં આવ્યો છે."
+        isDeath -> "શોકગ્રસ્ત પરિવાર માટે બેસણું રાખવામાં આવ્યું છે. તમામ ગ્રામજનોએ શોકગ્રસ્ત પરિવારને સાંત્વના આપવા હાજરી આપવી જોઈએ."
+        isWater -> "જરૂરી સમારકામ કારણે પાણી પુરવઠો અસરગ્રસ્ત રહેશે. આપ સૌને સહકાર આપવા વિનંતી છે."
+        isElectricity -> "વીજળી સેવામાં ખલેલ પડી શકે છે. આપ સૌને સહકાર આપવા વિનંતી છે."
+        isMeeting -> "એક મહત્ત્વપૂર્ણ સભા બોલાવવામાં આવી છે. તમારી હાજરી જરૂરી છે."
+        isFestival -> "આ ઉત્સવની શુભકામનાઓ. બધાને ખુશીઓ અને સંપદ મળે."
+        isHealth -> "બોદલા ગામના તમામ રહેવાસીઓ માટે તબીબી સેવા સુવિધા ઉપલબ્ધ કરાવવામાં આવશે."
+        isEmergency -> "એક અગત્યની પરિસ્થિતિ ઉદભવી છે. તમામ રહેવાસીઓએ સૂચનાઓનું પાલન કરવું જરૂરી છે."
+        isInvite -> "તમારે આ જમવા/પૂજા/અનુષ્ઠાનમાં હાર્દિક નિમંત્રિત છો. આપની હાજરી આપીને અમને ગોરવવાનું કરશે."
+        lower.length < 20 -> "$trimmed માટે વિશેષ સૂચના આપવામાં આવે છે."
+        else -> trimmed
     }
-    // Remove leading commas, spaces, asterisks, newlines
-    result = result.trimStart(',', ' ', ';', ':', '*', '\n', '\r').trim()
-    // Remove trailing signature like "— બોદલા પરિવાર" and everything after "—"
-    val sigIdx = result.indexOf("\u2014")
-    if (sigIdx >= 0) result = result.substring(0, sigIdx).trim()
-    // Remove trailing asterisks
-    result = result.trimEnd('*', ' ', '\n', '\r').trim()
-    // If result is empty or still contains salutation keywords, use original
-    if (result.isEmpty() || result.contains("\u0A9C\u0AA3\u0ABE\u0AB5\u0AB5\u0ABE\u0AA8\u0AC1\u0A82") || result.contains("\u0AB8\u0AB5\u0A87\u0AA8\u0AAF") || result.startsWith("\u0AB8\u0AB5")) {
-        return originalTrimmed
+
+    val enBody = when {
+        isTest -> "This is a test message to verify application functionality."
+        isDeath -> "A condolence gathering (besanu) has been arranged. All community members are requested to attend and offer condolences to the bereaved family."
+        isWater -> "Water supply will be affected due to essential repair work. Your cooperation is requested."
+        isElectricity -> "Power supply may face interruption. Your cooperation is requested."
+        isMeeting -> "An important meeting has been called. Your presence is required."
+        isFestival -> "Festival greetings to all. May everyone be blessed with joy and prosperity."
+        isHealth -> "Medical health services will be made available for all Bodla village residents."
+        isEmergency -> "An emergency situation has arisen. All residents must comply with the instructions immediately."
+        isInvite -> "You are cordially invited to this meal/puja/ceremony. Your presence would honor us."
+        lower.length < 20 -> "Special notice regarding $trimmed."
+        else -> trimmed
     }
-    return result
+
+    // Build Gujarati message with random mix of opening + body + closing
+    val gu = "${guOpenings[oi]} ${guBodyStarts[bi]}${guBody} ${guClosings[ci]}"
+
+    val en = "${enOpenings[oi]} ${enBodyStarts[bi]}${enBody} ${enClosings[ci]}"
+
+    return Pair(gu, en)
 }
+

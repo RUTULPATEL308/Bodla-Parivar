@@ -76,6 +76,11 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 private fun Profile.hasAdminDashboardAccess(): Boolean =
     isAdmin || roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
@@ -164,6 +169,10 @@ fun MainScreen(
                 val isAdminUser = user.hasAdminDashboardAccess()
                 currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
                 refreshCommunityData()
+                // Auto-sync pending uploads on cold start so local changes reach the server
+                runCatching { AppContainer.syncEngine.syncAll() }
+                    .onSuccess { Napier.d("MainScreen: Cold-start sync completed") }
+                    .onFailure { Napier.w("MainScreen: Cold-start sync failed", it) }
             } else {
                 val cachedProfile = AppContainer.tokenStorage.getUserProfile()
                     ?.takeIf { it.isNotBlank() }
@@ -182,6 +191,25 @@ fun MainScreen(
             Napier.e("MainScreen: Startup session error", e)
         } finally {
             sessionReady = true
+        }
+    }
+
+    // Periodic foreground refresh — keeps data near real-time when app is open on any screen.
+    // Runs every 30 seconds, pulls latest from Supabase and syncs pending uploads.
+    // This ensures deleted items on server are removed from local SQLDelight cache on all devices.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30000)
+            runCatching {
+                AppContainer.syncEngine.syncAll()
+                AppContainer.noticeRepository.refreshNotices()
+                AppContainer.offeringRepository.refreshOfferings()
+                AppContainer.eventRepository.refreshEvents()
+                AppContainer.businessRepository.refreshBusinesses()
+                AppContainer.emergencyRepository.refreshEmergencyContacts()
+                loadLatestNotifications()
+            }
+            .onFailure { Napier.w("MainScreen: Periodic refresh failed", it) }
         }
     }
 
@@ -284,7 +312,7 @@ fun MainScreen(
             while (true) {
                 refreshOfferingBids(screen.offeringId)
                 AppContainer.offeringRepository.refreshOfferings()
-                delay(5000)
+                delay(10000)
             }
         } else if (screen == Screen.Notifications) {
             runCatching { loadLatestNotifications() }
@@ -660,8 +688,28 @@ fun MainScreen(
                             notifications = latestNotifications,
                             onBack = { currentScreen = defaultHome },
                             onNotificationClick = { notification ->
-                                if (notification.type == "NOTICE" && !notification.referenceId.isNullOrBlank()) {
-                                    currentScreen = Screen.NoticeDetail(notification.referenceId)
+                                val targetId = notification.referenceId 
+                                    ?: notification.payload?.get("reference_id")?.jsonPrimitive?.contentOrNull 
+                                    ?: notification.payload?.get("referenceId")?.jsonPrimitive?.contentOrNull
+                                if (!targetId.isNullOrBlank()) {
+                                    currentScreen = Screen.NoticeDetail(targetId)
+                                } else {
+                                    currentScreen = Screen.Notices
+                                }
+                            },
+                            onDelete = { notification ->
+                                coroutineScope.launch {
+                                    val result = AppContainer.noticeRepository.deleteNotification(notification.id)
+                                    if (result.isSuccess) {
+                                        // Refresh both notifications list AND notices cache so deleted
+                                        // items are removed from local SQLDelight storage on all devices.
+                                        runCatching {
+                                            AppContainer.noticeRepository.refreshNotices()
+                                            loadLatestNotifications()
+                                        }
+                                        .onSuccess { latestNotifications = it }
+                                        .onFailure { Napier.w("MainScreen: Could not refresh after delete", it) }
+                                    }
                                 }
                             },
                             modifier = contentModifier
@@ -809,12 +857,49 @@ fun MainScreen(
                         )
 
                         is Screen.AddOffering -> if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true) {
+                            val currentLang = LocalAppLanguage.current
                             AddOfferingScreen(
                                 onBack = { currentScreen = Screen.Offerings },
                                 onSubmit = { offering ->
+                                    val isGujarati = currentLang == AppLanguage.GUJARATI
+                                    val titleGu = if (isGujarati) "નવું ચઢાવો ઉમેરવામાં આવ્યું" else "New Offering Added"
+                                    val titleEn = titleGu
+                                    val bodyGu = if (isGujarati) "નવું ચઢાવો ઉમેરવામાં આવ્યું છે: ${offering.titleGu}" else "A new offering has been added: ${offering.titleGu}"
+                                    val bodyEn = bodyGu
                                     coroutineScope.launch {
                                         AppContainer.offeringRepository.submitOffering(offering)
-                                            .onSuccess { currentScreen = Screen.Offerings }
+                                            .onSuccess {
+                                                // Send notification to all users about new offering
+                                                coroutineScope.launch {
+                                                    try {
+                                                        val token = AppContainer.syncEngine.refreshAccessTokenIfStale(AppContainer.tokenStorage.getToken())
+                                                            ?: AppContainer.tokenStorage.getToken()
+                                                            ?: error("Please sign in again.")
+                                                        val client = KtorClientFactory.create { token }
+
+                                                        val response = client.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
+                                                            contentType(ContentType.Application.Json)
+                                                            setBody(buildJsonObject {
+                                                                put("title_gu", titleGu)
+                                                                put("title_en", titleEn)
+                                                                put("notification_title_gu", titleGu)
+                                                                put("notification_title_en", titleEn)
+                                                                put("body_gu", bodyGu)
+                                                                put("body_en", bodyEn)
+                                                                put("description_gu", bodyGu)
+                                                                put("description_en", bodyEn)
+                                                            }.toString())
+                                                        }
+
+                                                        if (!response.status.isSuccess()) {
+                                                            Napier.w("Offering notification failed: ${response.status.value}", tag = "OfferingNotification")
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        Napier.e("Offering notification error", e, tag = "OfferingNotification")
+                                                    }
+                                                }
+                                                currentScreen = Screen.Offerings
+                                            }
                                             .onFailure { error ->
                                                 snackbarHostState.showSnackbar(error.message ?: "Could not create offering.")
                                             }
@@ -857,7 +942,7 @@ fun MainScreen(
                         is Screen.ResultUpload -> ResultUploadScreen(
                             repository = AppContainer.resultUploadRepository,
                             canManage = currentUser?.isStaff == true,
-                            onBack = { currentScreen = Screen.More },
+                            onBack = { currentScreen = defaultHome },
                             onSubmissionSuccess = { currentScreen = defaultHome },
                             modifier = contentModifier
                         )

@@ -13,7 +13,16 @@ import androidx.compose.ui.platform.LocalContext
 actual fun ImagePickerButton(label: String, modifier: Modifier, onImagePicked: (ByteArray?) -> Unit) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        onImagePicked(uri?.let { selected -> context.contentResolver.openInputStream(selected)?.use { it.readBytes() } })
+        uri?.let { selected ->
+            context.contentResolver.openInputStream(selected)?.use { stream ->
+                val bytes = stream.readBytes()
+                if (bytes.size <= 10 * 1024 * 1024) {
+                    onImagePicked(bytes)
+                } else {
+                    onImagePicked(null)
+                }
+            }
+        }
     }
     TextButton(onClick = { launcher.launch("image/*") }, modifier = modifier) { Text(label) }
 }
@@ -24,12 +33,12 @@ actual fun ResultDocumentPicker(label: String, modifier: Modifier, onDocumentPic
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val selected = uri?.let {
             val bytes = context.contentResolver.openInputStream(it)?.use { stream -> stream.readBytes() }
-            val type = context.contentResolver.getType(it)
+            val type = context.contentResolver.getType(it) ?: "application/octet-stream"
             val name = context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
                 val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
             } ?: "result"
-            if (bytes != null && type != null) ResultDocument(bytes, name, type) else null
+            if (bytes != null) ResultDocument(bytes, name, type) else null
         }
         onDocumentPicked(selected)
     }

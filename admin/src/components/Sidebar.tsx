@@ -133,7 +133,7 @@ export default function Sidebar() {
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Operational
           </span>
         </div>
-        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Version 30.08.26 — Developed by Rutul Patel</p>
+        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">Version 10.01.26 — Developed by Rutul Patel</p>
       </div>
     </aside>
   );

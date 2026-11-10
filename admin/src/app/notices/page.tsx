@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Bell, Bold, FileText, ImagePlus, Italic, LoaderCircle, Pin, Plus, Strikethrough, Video, X, Languages, Eye, Trash2, Download } from 'lucide-react';
 import { Notice } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { translateText } from '@/lib/translation';
 import PrintControls from '@/components/PrintControls';
 import { GujlishInput, GujlishTextarea } from '@/components/GujlishInput';
@@ -67,6 +67,10 @@ export default function AdminNoticesPage() {
   const [error, setError] = useState('');
   const guInput = useRef<HTMLTextAreaElement>(null);
   const enInput = useRef<HTMLTextAreaElement>(null);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [realtimeUnavailable, setRealtimeUnavailable] = useState(false);
+  const [realtimeError, setRealtimeError] = useState<string | null>(null);
+  const noticesRef = useRef(notices);
 
   async function improveWithAi() {
     const currentText = bodyGu.trim();
@@ -158,17 +162,62 @@ export default function AdminNoticesPage() {
 
   useEffect(() => {
     let active = true;
-    void supabase
-      .from('notices')
-      .select('id,title_gu,title_en,description_gu,description_en,image_url,attachment_url,status,is_pinned,publish_at,created_at')
-      .order('created_at', { ascending: false })
-      .then(({ data, error: loadError }) => {
-        if (!active) return;
-        if (loadError) setError(loadError.message);
-        else setNotices((data ?? []) as Notice[]);
-        setLoading(false);
-      });
-    return () => { active = false; };
+    let noticesChannel: ReturnType<typeof supabase.channel> | null = null;
+
+    async function loadNoticesData() {
+      const { data, error: loadError } = await supabase
+        .from('notices')
+        .select('id,title_gu,title_en,description_gu,description_en,image_url,attachment_url,status,is_pinned,publish_at,created_at')
+        .order('created_at', { ascending: false });
+      if (!active) return;
+      if (loadError) setError(loadError.message);
+      else {
+        setError('');
+        setNotices((data ?? []) as Notice[]);
+      }
+      setLoading(false);
+    }
+
+    void loadNoticesData();
+
+    // Subscribe to real-time notices changes
+    if (isSupabaseConfigured) {
+      noticesChannel = supabase
+        .channel(`notices_admin_${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'notices' }, (payload) => {
+          if (!active) return;
+          if (payload.eventType === 'INSERT') {
+            const r = payload.new as Notice;
+            setNotices(prev => [r, ...prev.filter(i => i.id !== r.id)]);
+            noticesRef.current = [r, ...noticesRef.current.filter(i => i.id !== r.id)];
+          } else if (payload.eventType === 'UPDATE') {
+            const r = payload.new as Notice;
+            setNotices(prev => prev.map(i => i.id === r.id ? r : i));
+            noticesRef.current = noticesRef.current.map(i => i.id === r.id ? r : i);
+          } else if (payload.eventType === 'DELETE') {
+            setNotices(prev => prev.filter(i => i.id !== payload.old.id));
+            noticesRef.current = noticesRef.current.filter(i => i.id !== payload.old.id);
+          }
+        })
+        .subscribe(status => {
+          if (!active) return;
+          setIsLiveConnected(status === 'SUBSCRIBED');
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setRealtimeUnavailable(true);
+            setRealtimeError(`Notices channel: ${status}`);
+          } else if (status === 'SUBSCRIBED') {
+            setRealtimeUnavailable(false);
+            setRealtimeError(null);
+          }
+        });
+    }
+
+    return () => {
+      active = false;
+      if (noticesChannel) {
+        supabase.removeChannel(noticesChannel);
+      }
+    };
   }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {

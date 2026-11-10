@@ -35,7 +35,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AndroidPlatform.appContext = applicationContext
         AndroidPlatform.currentActivityRef = WeakReference(this)
-        PendingNotices.post(intent?.getStringExtra("reference_id"))
+        val noticeId = intent?.getStringExtra("reference_id")
+            ?: intent?.getStringExtra("referenceId")
+            ?: intent?.getStringExtra("notice_id")
+            ?: intent?.getStringExtra("noticeId")
+        PendingNotices.post(noticeId)
         createVillageNotificationChannel()
         requestNotificationPermission()
 
@@ -62,8 +66,11 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Publish the target so the running UI can navigate without restarting.
-        PendingNotices.post(intent.getStringExtra("reference_id"))
+        val noticeId = intent.getStringExtra("reference_id")
+            ?: intent.getStringExtra("referenceId")
+            ?: intent.getStringExtra("notice_id")
+            ?: intent.getStringExtra("noticeId")
+        PendingNotices.post(noticeId)
     }
 
     override fun onResume() {

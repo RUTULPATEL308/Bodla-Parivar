@@ -25,6 +25,7 @@ import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.BodlaButton
 import com.bodla.parivar.core.ui.BodlaCard
+import com.bodla.parivar.core.ui.BodlaOutlinedTextField
 import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.domain.repository.AuthRepository
 import com.bodla.parivar.composeapp.generated.resources.Res
@@ -102,31 +103,23 @@ fun LoginScreen(
                         }
                     }
 
-                    OutlinedTextField(
+                    BodlaOutlinedTextField(
                         value = email,
                         onValueChange = { email = it; errorMessage = null },
                         label = { Text(text = if (lang == AppLanguage.GUJARATI) "ઈમેલ સરનામું (Email)" else "Email Address") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SaffronPrimary,
-                            focusedLabelColor = SaffronPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BodlaOutlinedTextField(
                         value = password,
                         onValueChange = { password = it; errorMessage = null },
                         label = { Text(text = if (lang == AppLanguage.GUJARATI) "પાસવર્ડ (Password)" else "Password") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SaffronPrimary,
-                            focusedLabelColor = SaffronPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -252,56 +245,40 @@ fun RegisterScreen(
                         }
                     }
 
-                    OutlinedTextField(
+                    BodlaOutlinedTextField(
                         value = fullName,
                         onValueChange = { fullName = it; errorMessage = null },
                         label = { Text(text = if (lang == AppLanguage.GUJARATI) "પૂરું નામ (Full Name)" else "Full Name") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SaffronPrimary,
-                            focusedLabelColor = SaffronPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BodlaOutlinedTextField(
                         value = email,
                         onValueChange = { email = it; errorMessage = null },
                         label = { Text(text = if (lang == AppLanguage.GUJARATI) "ઈમેલ (Email)" else "Email") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SaffronPrimary,
-                            focusedLabelColor = SaffronPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BodlaOutlinedTextField(
                         value = phone,
                         onValueChange = { phone = it; errorMessage = null },
                         label = { Text(text = if (lang == AppLanguage.GUJARATI) "મોબાઇલ નંબર (Phone)" else "Phone Number") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SaffronPrimary,
-                            focusedLabelColor = SaffronPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BodlaOutlinedTextField(
                         value = password,
                         onValueChange = { password = it; errorMessage = null },
                         label = { Text(text = if (lang == AppLanguage.GUJARATI) "પાસવર્ડ (Password)" else "Password") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SaffronPrimary,
-                            focusedLabelColor = SaffronPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))

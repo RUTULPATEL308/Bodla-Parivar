@@ -110,8 +110,8 @@ android {
         applicationId = "com.bodla.parivar"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 100126
+        versionName = "10.01.26"
     }
 
     packaging {
@@ -122,7 +122,8 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            proguardFiles("proguard-rules.pro")
         }
     }
 

@@ -55,6 +55,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 
 @Serializable
 data class AppNotification(
@@ -77,6 +79,7 @@ fun NotificationCenterScreen(
     notifications: List<AppNotification>,
     onBack: () -> Unit,
     onNotificationClick: (AppNotification) -> Unit = {},
+    onDelete: (AppNotification) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
@@ -87,6 +90,9 @@ fun NotificationCenterScreen(
     var previewAttachmentUrl by remember { mutableStateOf<String?>(null) }
     var previewAttachmentTitle by remember { mutableStateOf("") }
 
+    var deleteConfirmId by remember { mutableStateOf<String?>(null) }
+    var deleteConfirmTitle by remember { mutableStateOf("") }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -94,7 +100,8 @@ fun NotificationCenterScreen(
                     Column {
                         Text(
                             text = if (isGujarati) "સૂચનાઓ" else "Notices",
-                            style = BodlaPageTitle
+                            style = BodlaPageTitle,
+                            color = TextPrimary
                         )
                         Text(
                             text = if (isGujarati) "બોદલા પરિવારના નવા અપડેટ્સ" else "Updates from Bodla Parivar",
@@ -108,7 +115,7 @@ fun NotificationCenterScreen(
                         Text(text = "←", fontSize = 22.sp, color = TextPrimary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
+                colors = bodlaTopAppBarColors()
             )
         },
         containerColor = CreamBackground,
@@ -259,6 +266,14 @@ fun NotificationCenterScreen(
                                     Text(text = createdAt, style = BodlaCaption, color = TextTertiary)
                                 }
                             }
+                            IconButton(
+                                onClick = {
+                                    deleteConfirmId = notification.id
+                                    deleteConfirmTitle = title
+                                }
+                            ) {
+                                Text(text = "🗑️", fontSize = 18.sp)
+                            }
                         }
                     }
                 }
@@ -320,6 +335,34 @@ fun NotificationCenterScreen(
                         modifier = Modifier.fillMaxWidth().weight(1f)
                     )
                 }
+            }
+        )
+    }
+
+    deleteConfirmId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { deleteConfirmId = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteConfirmId = null
+                    val notificationToDelete = notifications.find { it.id == id }
+                    if (notificationToDelete != null) {
+                        onDelete(notificationToDelete)
+                    }
+                }) {
+                    Text(if (isGujarati) "હા, ડિલીટ કરો" else "Yes, Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteConfirmId = null }) {
+                    Text(if (isGujarati) "નહીં" else "Cancel")
+                }
+            },
+            title = {
+                Text(text = if (isGujarati) "આ સૂચના ડિલીટ કરશો?" else "Delete this notice?")
+            },
+            text = {
+                Text(text = deleteConfirmTitle)
             }
         )
     }

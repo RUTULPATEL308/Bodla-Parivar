@@ -138,6 +138,8 @@ fun HomeScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = WarmWhiteSurface,
                             unfocusedContainerColor = WarmWhiteSurface,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
                             focusedBorderColor = SaffronPrimary,
                             unfocusedBorderColor = BorderStroke
                         ),

@@ -13,7 +13,7 @@ type RecordRow = Record<string, any>;
 
 const cardClass = 'rounded-2xl border border-[#e8dfd2] bg-[#fffdf8] p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900';
 const titleClass = 'text-base font-semibold text-slate-900 dark:text-white';
-const inputClass = 'w-full rounded-xl border border-[#e8dfd2] bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white';
+const inputClass = 'w-full rounded-xl border border-[#e8dfd2] bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-amber-500';
 
 function EmptyMessage({ children }: { children: string }) {
   return <div className={`${cardClass} py-10 text-center text-sm text-slate-500`}>{children}</div>;

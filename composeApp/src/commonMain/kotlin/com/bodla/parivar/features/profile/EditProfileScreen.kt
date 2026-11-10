@@ -50,7 +50,7 @@ fun EditProfileScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Text(text = "←", fontSize = 22.sp, color = TextPrimary) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface)
+                colors = bodlaTopAppBarColors()
             )
         },
         containerColor = CreamBackground,
@@ -64,9 +64,9 @@ fun EditProfileScreen(
                 BodlaCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(text = if (lang == AppLanguage.GUJARATI) "પ્રોફાઇલ અપડેટ" else "Update Profile", style = BodlaCardTitle, color = TextPrimary)
-                        OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "પૂરું નામ" else "Full Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = editPhone, onValueChange = { editPhone = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "ફોન" else "Phone") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = editAddress, onValueChange = { editAddress = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "સરનામું" else "Address") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "પૂરું નામ" else "Full Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = bodlaTextFieldColors(), textStyle = BodlaBody.copy(color = TextPrimary))
+                        OutlinedTextField(value = editPhone, onValueChange = { editPhone = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "ફોન" else "Phone") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = bodlaTextFieldColors(), textStyle = BodlaBody.copy(color = TextPrimary))
+                        OutlinedTextField(value = editAddress, onValueChange = { editAddress = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "સરનામું" else "Address") }, modifier = Modifier.fillMaxWidth(), colors = bodlaTextFieldColors(), textStyle = BodlaBody.copy(color = TextPrimary))
                         BodlaButton(
                             text = if (lang == AppLanguage.GUJARATI) "પ્રોફાઇલ સેવ કરો" else "Save Profile",
                             onClick = {
@@ -98,8 +98,8 @@ fun EditProfileScreen(
                 BodlaCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(text = if (lang == AppLanguage.GUJARATI) "પાસવર્ડ બદલો" else "Change Password", style = BodlaCardTitle, color = TextPrimary)
-                        OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "નવો પાસવર્ડ" else "New Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "પાસવર્ડ પુષ્ટિ" else "Confirm Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "નવો પાસવર્ડ" else "New Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), colors = bodlaTextFieldColors(), textStyle = BodlaBody.copy(color = TextPrimary))
+                        OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "પાસવર્ડ પુષ્ટિ" else "Confirm Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), colors = bodlaTextFieldColors(), textStyle = BodlaBody.copy(color = TextPrimary))
                         BodlaButton(
                             text = if (lang == AppLanguage.GUJARATI) "પાસવર્ડ બદલો" else "Update Password",
                             onClick = {

@@ -508,6 +508,24 @@ class NoticeRepositoryImpl(
             Result.failure(e)
         }
     }
+
+    override suspend fun deleteNotification(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val response = httpClient.post(Endpoints.RPC_DELETE_NOTIFICATION) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("p_notification_id", id) }.toString())
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception("HTTP ${response.status} deleting notification: ${body.take(300)}"))
+            }
+        } catch (e: Exception) {
+            Napier.e("delete notification error", e)
+            Result.failure(e)
+        }
+    }
 }
 
 // ==============================================================================

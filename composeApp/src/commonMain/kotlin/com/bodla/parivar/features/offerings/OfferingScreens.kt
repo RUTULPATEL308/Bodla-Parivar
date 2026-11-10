@@ -33,6 +33,7 @@ import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.localization.Strings
 import com.bodla.parivar.core.navigation.Screen
+import com.bodla.parivar.core.ui.BodlaOutlinedTextField
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.domain.model.Offering
@@ -183,7 +184,7 @@ fun OfferingListScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                        OutlinedTextField(
+                        BodlaOutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             modifier = Modifier.fillMaxWidth(),
@@ -900,7 +901,7 @@ fun OfferingDetailScreen(
                                         color = TextSecondary
                                     )
 
-                                    OutlinedTextField(
+                                    BodlaOutlinedTextField(
                                         value = winnerNameInput,
                                         onValueChange = {
                                             winnerNameInput = it
@@ -1114,7 +1115,7 @@ fun OfferingDetailScreen(
                                 color = TextSecondary
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedTextField(
+                            BodlaOutlinedTextField(
                                 value = adminBidderName,
                                 onValueChange = { adminBidderName = it; adminActionError = null },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1122,7 +1123,7 @@ fun OfferingDetailScreen(
                                 singleLine = true
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedTextField(
+                            BodlaOutlinedTextField(
                                 value = adminBidAmount,
                                 onValueChange = { adminBidAmount = it; adminActionError = null },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1197,7 +1198,9 @@ fun OfferingDetailScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text(if (lang == AppLanguage.GUJARATI) "પ્રદર્શિત વિજેતા નામ" else "Winner display name") },
                                     supportingText = { Text(if (lang == AppLanguage.GUJARATI) "૨ થી ૬૦ અક્ષર" else "2 to 60 characters") },
-                                    singleLine = true
+                                    singleLine = true,
+                                    colors = bodlaTextFieldColors(),
+                                    textStyle = BodlaBody.copy(color = TextPrimary)
                                 )
                                 Button(
                                     onClick = { setWinnerDisplayName() },
@@ -1620,31 +1623,9 @@ fun BidPlacementDialog(
                     readOnly = true,
                     supportingText = {
                         Text(if (lang == AppLanguage.GUJARATI) "આ નામ તમારી પ્રોફાઇલમાંથી લેવામાં આવ્યું છે" else "Taken from your profile")
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // ── Phone ────────────────────────────────────────────────
-                OutlinedTextField(
-                    value = bidderPhone.orEmpty(),
-                    onValueChange = {},
-                    label = {
-                        Text(
-                            if (lang == AppLanguage.GUJARATI)
-                                "ફોન નંબર (વૈકલ્પિક)"
-                            else
-                                "Phone (Optional)"
-                        )
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true,
-                    readOnly = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Next
-                    )
+                    colors = bodlaTextFieldColors(),
+                    textStyle = BodlaBody.copy(color = TextPrimary)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1711,7 +1692,9 @@ fun BidPlacementDialog(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
                     ),
-                    prefix = { Text("₹", color = SaffronPrimary, fontWeight = FontWeight.Bold) }
+                    prefix = { Text("₹", color = SaffronPrimary, fontWeight = FontWeight.Bold) },
+                    colors = bodlaTextFieldColors(),
+                    textStyle = BodlaBody.copy(color = TextPrimary)
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -1840,7 +1823,9 @@ fun AddOfferingScreen(
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
-                prefix = { Text("₹") }
+                prefix = { Text("₹") },
+                colors = bodlaTextFieldColors(),
+                textStyle = BodlaBody.copy(color = TextPrimary)
             )
 
             com.bodla.parivar.core.ui.GujlishTextField(

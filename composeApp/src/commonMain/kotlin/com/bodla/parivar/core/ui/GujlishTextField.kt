@@ -36,12 +36,7 @@ fun GujlishTextField(
     isError: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
-    colors: TextFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = WarmWhiteSurface,
-        unfocusedContainerColor = WarmWhiteSurface,
-        focusedBorderColor = SaffronPrimary,
-        unfocusedBorderColor = BorderStroke
-    ),
+    colors: TextFieldColors = bodlaTextFieldColors(),
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
     enabled: Boolean = true
 ) {
@@ -102,6 +97,7 @@ fun GujlishTextField(
             onValueChange(currText)
         },
         modifier = modifier,
+        textStyle = BodlaBody.copy(color = TextPrimary),
         label = label,
         placeholder = placeholder,
         leadingIcon = leadingIcon,

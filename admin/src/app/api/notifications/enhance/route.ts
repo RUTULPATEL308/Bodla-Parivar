@@ -19,11 +19,11 @@ export async function POST(request: NextRequest) {
       ? 'https://generativelanguage.googleapis.com/v1beta/openai'
       : 'https://api.openai.com/v1';
     const baseUrl = (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, '');
-    const model = process.env.AI_MODEL || (provider === 'gemini' ? 'gemini-3.8-flash' : 'gpt-4o-mini');
+    const model = process.env.AI_MODEL || (provider === 'gemini' ? 'gemini-1.5-flash' : 'gpt-4o-mini');
 
-    const systemPrompt = "You are a helpful assistant for a Gujarati community app (Bodla village). Refine the following Gujarati text for a community notice/notification. Preserve the original core intent and essential details (names, dates, places, numbers). Preserve any WhatsApp-style formatting markers (*bold*, _italic_, ~strikethrough~, code) and URLs. Do NOT add formal letter salutations, greetings, or openings. Do NOT prepend any greeting. Just refine the message text directly and return only the refined message. If title, return a crisp, catchy announcement title (max 15-20 words). If body/message, return a warm community message. Output JSON: {\"enhanced_gu\": \"...\", \"enhanced_en\": \"...\"}. No markdown, no extra commentary, raw JSON only.";
+    const systemPrompt = "You are a helpful and articulate human resident of Bodla village writing community announcements. Read the user's raw message carefully, understand its exact topic (e.g. sports, donations, meetings, personal news, festival greetings, water/electricity updates, urgent alerts, etc.), and rewrite it in natural, warm, human-like Gujarati. Avoid rigid templates or repeating the same opening/closing lines. Make it sound genuine, polite, and engaging. Preserve essential details (names, dates, times, places, numbers, URLs). Output JSON: {\"enhanced_gu\": \"...\", \"enhanced_en\": \"...\"}. No markdown, no extra commentary, raw JSON only.";
 
-    const openAiResponse = await fetch(`${baseUrl}/chat/completions`, {
+    let openAiResponse = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -31,13 +31,31 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.4,
+        temperature: 0.6,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Type: ${type}\nText: ${text}` },
         ],
       }),
     });
+
+    if (!openAiResponse.ok && provider === 'gemini' && model === 'gemini-1.5-flash') {
+      openAiResponse = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gemini-2.0-flash',
+          temperature: 0.6,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Type: ${type}\nText: ${text}` },
+          ],
+        }),
+      });
+    }
 
     if (!openAiResponse.ok) {
       const errText = await openAiResponse.text();
@@ -54,30 +72,6 @@ export async function POST(request: NextRequest) {
     const parsed = JSON.parse(content);
     let enhancedGu = parsed.enhanced_gu || text.trim();
     const enhancedEn = parsed.enhanced_en || '';
-
-    // Aggressive cleanup: if enhanced contains original text, start from there
-    const originalTrimmed = text.trim();
-    if (enhancedGu.includes(originalTrimmed) && enhancedGu !== originalTrimmed) {
-      enhancedGu = enhancedGu.slice(enhancedGu.indexOf(originalTrimmed)).trim();
-    } else {
-      const guKe = '\u0A95\u0AC7'; // કે
-      if (enhancedGu.includes(guKe + ',') || enhancedGu.includes(guKe + ' ')) {
-        const idx1 = enhancedGu.indexOf(guKe + ',');
-        const idx2 = enhancedGu.indexOf(guKe + ' ');
-        let cutIdx = -1;
-        if (idx1 !== -1 && idx2 !== -1) cutIdx = Math.min(idx1, idx2);
-        else if (idx1 !== -1) cutIdx = idx1;
-        else if (idx2 !== -1) cutIdx = idx2;
-        if (cutIdx !== -1) {
-          enhancedGu = enhancedGu.slice(cutIdx + guKe.length).trim().replace(/^[\s,;:]+/, '').trim();
-        }
-      }
-      // If still starts with salutation char (savinya = U+0AB8), use original
-      if (enhancedGu.charCodeAt(0) === 0x0AB8) {
-        enhancedGu = originalTrimmed;
-      }
-    }
-    if (!enhancedGu) enhancedGu = originalTrimmed;
 
     return NextResponse.json({
       success: true,

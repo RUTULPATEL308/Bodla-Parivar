@@ -57,9 +57,9 @@ fun ResultUploadScreen(repository: ResultUploadRepository, canManage: Boolean, o
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("પરિણામ અપલોડ", style = BodlaPageTitle) }, navigationIcon = {
+            TopAppBar(title = { Text("પરિણામ અપલોડ", style = BodlaPageTitle, color = TextPrimary) }, navigationIcon = {
                 IconButton(onClick = onBack) { Text("←", fontSize = 22.sp, color = TextPrimary) }
-            }, colors = TopAppBarDefaults.topAppBarColors(containerColor = WarmWhiteSurface))
+            }, colors = bodlaTopAppBarColors())
         },
         containerColor = CreamBackground,
         modifier = modifier
