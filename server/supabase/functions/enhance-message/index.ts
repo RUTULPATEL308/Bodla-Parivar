@@ -42,11 +42,11 @@ serve(async (req) => {
       ? "https://generativelanguage.googleapis.com/v1beta/openai"
       : "https://api.openai.com/v1";
     const baseUrl = (Deno.env.get("AI_BASE_URL") || defaultBaseUrl).replace(/\/$/, "");
-    const model = Deno.env.get("AI_MODEL") || (provider === "gemini" ? "gemini-3.8-flash" : "gpt-4o-mini");
+    const model = Deno.env.get("AI_MODEL") || (provider === "gemini" ? "gemini-1.5-flash" : "gpt-4o-mini");
 
     const systemPrompt = "You are a helpful assistant for a Gujarati community app (Bodla village). Refine the following Gujarati text for a community notice/notification. Preserve the original core intent and essential details (names, dates, places, numbers). Preserve WhatsApp-style formatting markers (*bold*, _italic_, ~strikethrough~) and URLs. Do NOT add formal letter salutations, greetings, openings, or signatures. Do NOT prepend any greeting. If title is requested, return a crisp announcement title of 5-8 words. If body/message is requested, return a warm, readable community message. Output JSON: {\"enhanced_gu\":\"...\",\"enhanced_en\":\"...\"}. Return raw JSON only with no markdown or extra commentary.";
 
-    const response = await fetchWithTransientRetries(`${baseUrl}/chat/completions`, {
+    let response = await fetchWithTransientRetries(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
@@ -61,6 +61,27 @@ serve(async (req) => {
         ],
       }),
     });
+
+    // Fallback model retry if primary model returns 404 or invalid model
+    if (!response.ok && provider === "gemini" && model === "gemini-1.5-flash") {
+      const fallbackModel = "gemini-2.0-flash";
+      console.log(`Primary model ${model} failed, retrying with fallback model ${fallbackModel}`);
+      response = await fetchWithTransientRetries(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: fallbackModel,
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Type: ${type || "body"}\nText: ${text}` },
+          ],
+        }),
+      });
+    }
 
     if (!response.ok) {
       const errText = await response.text();
@@ -88,11 +109,9 @@ serve(async (req) => {
 
     // Aggressive cleanup: strip any salutation prefix.
     const originalTrimmed = text.trim();
-    // If enhanced text contains the original text, start from there (most reliable)
     if (enhancedGu.includes(originalTrimmed) && enhancedGu !== originalTrimmed) {
       enhancedGu = enhancedGu.slice(enhancedGu.indexOf(originalTrimmed)).trim();
     } else {
-      // Otherwise, strip everything up to "ke," or "ke " if starts with salutation
       const guKe = "\u0A95\u0AC7"; // કે
       if (enhancedGu.includes(guKe + ",") || enhancedGu.includes(guKe + " ")) {
         const idx1 = enhancedGu.indexOf(guKe + ",");
@@ -103,11 +122,9 @@ serve(async (req) => {
         else if (idx2 !== -1) cutIdx = idx2;
         if (cutIdx !== -1) {
           enhancedGu = enhancedGu.slice(cutIdx + guKe.length).trim();
-          // remove leading comma/space
           enhancedGu = enhancedGu.replace(/^[\s,;:]+/, "").trim();
         }
       }
-      // If still starts with salutation char (savinya = starts with U+0AB8), use original
       if (enhancedGu.charCodeAt(0) === 0x0AB8) {
         enhancedGu = originalTrimmed;
       }
