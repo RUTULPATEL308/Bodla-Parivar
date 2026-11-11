@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
-import AdminShell from '@/components/AdminShell';
+import LayoutClient from '@/components/LayoutClient';
 
 const gujaratiFont = localFont({
   src: '../../public/fonts/AnekGujarati-Gujarati.woff2',
@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="gu" className={`${gujaratiFont.variable} ${latinFont.variable}`}>
       <body className="bg-slate-50 min-h-screen text-slate-900 flex font-sans antialiased selection:bg-amber-100 selection:text-amber-900">
-        <AdminShell>{children}</AdminShell>
+        <LayoutClient>{children}</LayoutClient>
       </body>
     </html>
   );
