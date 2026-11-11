@@ -70,6 +70,6 @@ We may update these Terms from time to time. We will notify you of material chan
 
 If you have questions about these Terms, contact us:
 
-**Email:** privacy@bodlaparivar.org  
+**Email:** rutulpatel308@gmail.com 
 **App:** Bodla Parivar  
 **Package ID:** com.bodla.parivar
