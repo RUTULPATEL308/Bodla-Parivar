@@ -994,7 +994,7 @@ export function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besan
               <span className="h-px flex-1" style={{ backgroundColor: `${posterColors.gold}B3` }} />
             </div>
             <div className="mt-[6px] w-[48%] rounded-md px-2 py-[3px]" style={{ backgroundColor: 'rgba(255,255,255,.42)' }}>
-              <img src="/bodla_parivar_logo.jpg" alt="Bodla Parivar" className="h-[32px] w-full object-contain" />
+              <img src="/bodla_parivar_logo.png" alt="Bodla Parivar" className="h-[32px] w-full object-contain" />
             </div>
           </div>
         </article>

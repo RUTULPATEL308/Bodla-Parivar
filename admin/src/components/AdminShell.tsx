@@ -412,7 +412,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           </div>
 
           <Image
-            src="/bodla_parivar_logo.jpg"
+            src="/bodla_parivar_logo.png"
             alt="Bodla Parivar"
             width={1069}
             height={258}

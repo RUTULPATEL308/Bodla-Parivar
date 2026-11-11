@@ -13,4 +13,8 @@ plugins {
 allprojects {
     group = "com.bodla.parivar"
     version = "1.0.0"
+
+    if (tasks.findByName("prepareKotlinBuildScriptModel") == null) {
+        tasks.register("prepareKotlinBuildScriptModel")
+    }
 }
