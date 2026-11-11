@@ -335,7 +335,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
     <div className="flex min-h-screen w-full min-w-0 flex-1 bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
       <aside className="hidden w-72 shrink-0 border-r border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900 md:flex md:flex-col">
         <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white p-5 dark:border-slate-800 dark:from-slate-850 dark:to-slate-900">
-          <Image src="/bodla_parivar_logo.png" alt="Bodla Parivar" width={1069} height={258} className="h-auto w-full object-contain dark:brightness-110" priority />
+          <Image src="/bodla_parivar_logo.jpg" alt="Bodla Parivar" width={1069} height={258} className="h-auto w-full object-contain dark:brightness-110" priority />
           <div className="mt-3 flex justify-center"><span className="inline-flex items-center gap-1.5 rounded-full bg-navy-50 px-2.5 py-1 text-[11px] font-bold tracking-wide text-navy-800 dark:bg-sky-950/80 dark:text-sky-300"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" /> {roleLabel.replaceAll('_', ' ')}</span></div>
         </div>
         <nav aria-label="Member portal" className="flex-1 space-y-1 overflow-y-auto p-3">
@@ -351,7 +351,7 @@ export default function MemberPortal({ email, fullName, onSignOut, features, rol
       <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] backdrop-blur-md sm:px-6 dark:border-slate-800/80 dark:bg-slate-900/95">
         <div className="flex items-center gap-3">
           <Image
-            src="/bodla_parivar_logo.png"
+            src="/bodla_parivar_logo.jpg"
             alt="Bodla Parivar"
             width={1069}
             height={258}

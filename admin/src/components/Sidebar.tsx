@@ -77,7 +77,7 @@ export default function Sidebar() {
       <div className="p-5 border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white dark:border-slate-800 dark:from-slate-850 dark:to-slate-900">
         <div className="flex flex-col items-center gap-2">
           <NextImage
-            src="/bodla_parivar_logo.png"
+            src="/bodla_parivar_logo.jpg"
             alt="બોદલા પરિવાર"
             width={1069}
             height={258}
