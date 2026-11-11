@@ -25,6 +25,7 @@ import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.localization.Strings
 import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
+import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.*
 import com.bodla.parivar.domain.model.Profile
 
@@ -248,11 +249,16 @@ fun ProfileScreen(
             // Menu Items List
             item {
                 BodlaCard {
-                    val menuItems = listOf(
+                    val deleteAccountUrl = "https://yourdomain.com/delete-account" // Host your delete-account.html here
+
+                    val menuItems = mutableListOf(
                         Pair(if (lang == AppLanguage.GUJARATI) "✏️ પ્રોફાઇલ અપડેટ" else "✏️ Edit Profile", { onNavigate(Screen.EditProfile) }),
                         Pair("✍ " + Strings.myComplaints(lang), { onNavigate(Screen.Complaints) }),
                         Pair("🙏 " + Strings.myOfferings(lang), { onNavigate(Screen.Offerings) }),
                         Pair("🏪 " + (if (lang == AppLanguage.GUJARATI) "મારા વ્યવસાયો" else "My Businesses"), { onNavigate(Screen.Directory) }),
+                        Pair("🗑️ " + if (lang == AppLanguage.GUJARATI) "ખાતું ડિલીટ કરો" else "Delete My Account", {
+                            PlatformOpenUrl(deleteAccountUrl)
+                        }),
                         Pair("📞 " + Strings.serviceEmergency(lang), { onNavigate(Screen.Emergency) })
                     )
 
