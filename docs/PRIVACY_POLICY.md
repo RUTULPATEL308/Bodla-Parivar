@@ -84,6 +84,6 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 
 If you have questions about this Privacy Policy or want to delete your data, contact us:
 
-**Email:** privacy@bodlaparivar.org  
+**Email:** rutulpatel308@gmail.com  
 **App:** Bodla Parivar  
 **Package ID:** com.bodla.parivar
