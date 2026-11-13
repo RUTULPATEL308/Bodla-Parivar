@@ -679,70 +679,6 @@ private fun enhanceNoticeMessage(text: String): Pair<String, String> {
     if (trimmed.isBlank()) return Pair(trimmed, "")
     val lower = trimmed.lowercase()
 
-    // ============ RANDOMIZED GUJARATI OPENINGS (never same twice) ============
-    val guOpenings = listOf(
-        "આથી બોદલા ગામના તમામ ગ્રામજનોને સંકલ્પપૂર્વક જણાવવું છે કે,",
-        "બોદલા પરિવારના તમામ સભ્યો અને ગ્રામજન બાંધવને સહર્ષ સૂચના આપવામાં આવે છે કે,",
-        "આ દ્વારા બોદલા ગ્રામના તમામ રહેવાસીઓને સૂચનીએ જાણ કરવામાં આવે છે કે,",
-        "બોદલા ગ્રામપંચાયત તરફથી તમામ ગ્રામજનોને સમાવીલ જણાવવામાં આવે છે કે,",
-        "આ જાહેરાત બોદલા ગામના તમામ લોકો માટે છે કે,",
-        "આ જાહેરાત બોદલા પરિવારના તમામ સભ્યો માટે મહત્ત્વપૂર્ણ છે કે,"
-    )
-
-    // ============ RANDOMIZED GUJARATI BODY STARTERS ============
-    val guBodyStarts = listOf(
-        "ગ્રામજનોને જાણ કરવું છે કે, ",
-        "ગ્રામને જણાવવામાં આવે છે કે, ",
-        "તમામ રહેવાસીઓ માટે સૂચના છે કે, ",
-        "જાહેરાત કરવામાં આવે છે કે, ",
-        "તમામ સભ્યોને નોંધ લેવા માટે જણાવવું છે કે, ",
-        "ગ્રામજનોની સૂચના છે કે, "
-    )
-
-    // ============ RANDOMIZED GUJARATI CLOSINGS ============
-    val guClosings = listOf(
-        "આપ સૌએ આ અંગે યોગ્ય નોંધ લેવી જોઈએ. આપ સૌનું સ્વાગત છે.",
-        "તમામ ગ્રામજનોમાં પ્રાર્થના છે કે આ સૂચનાનું પાલન કરશો.",
-        "આપ સૌના સહકાર અને સહભાગિતા માટે હાર્દિક આભાર.",
-        "કૃપા કરીને આ અંગે જરૂરી સહયોગ આપશો.",
-        "આપ સૌ એ આ જાહેરાતનું નોંધ લેવા વિનંતી છે.",
-        "તમામ લોકો આ સૂચનાએ તુરંત ધ્યાન આપશે."
-    )
-
-    // ============ RANDOMIZED ENGLISH OPENINGS ============
-    val enOpenings = listOf(
-        "This notice is hereby issued to all Bodla Parivar members and village residents:",
-        "Bodla Parivar community announcement for all members:",
-        "This public notice is issued to all Bodla village residents:",
-        "Bodla Gram Panchayat informs all members as follows:",
-        "This announcement is for all Bodla Parivar members:",
-        "Important community notice from Bodla Parivar:"
-    )
-
-    // ============ RANDOMIZED ENGLISH BODY STARTERS ============
-    val enBodyStarts = listOf(
-        "It is hereby informed that, ",
-        "Notice is given that, ",
-        "All residents are advised that, ",
-        "It is announced that, ",
-        "All members are requested to note that, ",
-        "The community is informed that, "
-    )
-
-    // ============ RANDOMIZED ENGLISH CLOSINGS ============
-    val enClosings = listOf(
-        "All members are requested to take due note of this.",
-        "We pray all members comply with this notice.",
-        "Thank you for your cooperation and participation.",
-        "Please extend your necessary support in this matter.",
-        "All residents are requested to take note of this announcement.",
-        "Everyone is asked to pay immediate attention to this notice."
-    )
-
-    val rndOpen = Random.nextInt(guOpenings.size)
-    val rndBody = Random.nextInt(guBodyStarts.size)
-    val rndClose = Random.nextInt(guClosings.size)
-
     // Detect notice type from content keywords
     val isTest = lower.contains("ટેસ્ટ") || lower.contains("test")
     val isDeath = lower.contains("બેસણું") || lower.contains("અવસાન") || lower.contains("દુઃખ") || lower.contains("શોક") || lower.contains("death") || lower.contains("condolence") || lower.contains("besanu")
@@ -754,44 +690,54 @@ private fun enhanceNoticeMessage(text: String): Pair<String, String> {
     val isEmergency = lower.contains("અગત્યની") || lower.contains("ઉપડવું") || lower.contains("emergency") || lower.contains("urgent")
     val isInvite = lower.contains("જમવા") || lower.contains("જમવાનું") || lower.contains("invite") || lower.contains("પૂજા") || lower.contains("અનુષ્ઠાન")
 
-    // Pick random indices for variation (different every call)
-    val oi = rndOpen
-    val bi = rndBody
-    val ci = rndClose
+    // Gujarati opening salutation
+    val guOpening = "આથી બોદલા ગામના તમામ ગ્રામજનોને સુચનાએ જણાવવામાં આવે છે કે,"
+    val guClosing = "આપ સૌએ આ અંગે યોગ્ય નોંધ લેવા નમ્ર વિનંતી છે."
+
+    // English opening salutation
+    val enOpening = "Notice to all Bodla Parivar members and village residents:"
+    val enClosing = "All members are requested to take note and cooperate."
 
     // Content-based body messages (Gujarati + English)
+    // For longer messages (>20 chars), keep user's original text as body
+    // For very short messages (<20 chars), use formal templates
     val guBody = when {
-        isTest -> "આ એક ટેસ્ટ મેસેજ છે જે એપની કાર્યક્ષમતા ચકાસવા માટે મોકલવામાં આવ્યો છે."
-        isDeath -> "શોકગ્રસ્ત પરિવાર માટે બેસણું રાખવામાં આવ્યું છે. તમામ ગ્રામજનોએ શોકગ્રસ્ત પરિવારને સાંત્વના આપવા હાજરી આપવી જોઈએ."
-        isWater -> "જરૂરી સમારકામ કારણે પાણી પુરવઠો અસરગ્રસ્ત રહેશે. આપ સૌને સહકાર આપવા વિનંતી છે."
-        isElectricity -> "વીજળી સેવામાં ખલેલ પડી શકે છે. આપ સૌને સહકાર આપવા વિનંતી છે."
-        isMeeting -> "એક મહત્ત્વપૂર્ણ સભા બોલાવવામાં આવી છે. તમારી હાજરી જરૂરી છે."
-        isFestival -> "આ ઉત્સવની શુભકામનાઓ. બધાને ખુશીઓ અને સંપદ મળે."
-        isHealth -> "બોદલા ગામના તમામ રહેવાસીઓ માટે તબીબી સેવા સુવિધા ઉપલબ્ધ કરાવવામાં આવશે."
-        isEmergency -> "એક અગત્યની પરિસ્થિતિ ઉદભવી છે. તમામ રહેવાસીઓએ સૂચનાઓનું પાલન કરવું જરૂરી છે."
-        isInvite -> "તમારે આ જમવા/પૂજા/અનુષ્ઠાનમાં હાર્દિક નિમંત્રિત છો. આપની હાજરી આપીને અમને ગોરવવાનું કરશે."
-        lower.length < 20 -> "$trimmed માટે વિશેષ સૂચના આપવામાં આવે છે."
+        lower.length < 20 -> when {
+            isTest -> "આ એક ટેસ્ટ સંદેશ છે જે એપની કાર્યક્ષમતા ચકાસવા માટે મોકલવામાં આવ્યો છે."
+            isDeath -> "શોકગ્રસ્ત પરિવાર માટે બેસણું રાખવામાં આવ્યું છે. તમામ ગ્રામજનોએ શોકગ્રસ્ત પરિવારને સાંત્વના આપવા હાજરી આપવી જોઈએ."
+            isWater -> "જરૂરી કામગીરીને કારણે પાણીનો પુરવઠો થોડા સમય માટે ખોરવાઈ શકે છે. કૃપા કરીને જરૂરી પાણીનો સંગ્રહ અગાઉથી કરી લેશો."
+            isElectricity -> "જરૂરી સમારકામને કારણે વીજળી સેવામાં ખલેલ પડી શકે છે. તમામ રહેવાસીઓએ વીજળી યોગ્ય રીતે ઉપયોગ કરવી જોઈએ."
+            isMeeting -> "એક મહત્ત્વપૂર્ણ સભા બોલાવવામાં આવી છે. તમામ સભ્યોની હાજરી અનિવાર્ય છે."
+            isFestival -> "આ ઉત્સવની શુભકામનાઓ. બધાને ખુશીઓ, સમૃદ્ધિ અને સૌભાગ્ય મળે."
+            isHealth -> "બોદલા ગામના તમામ રહેવાસીઓ માટે તબીબી સેવા સુવિધા ઉપલબ્ધ કરાવવામાં આવશે."
+            isEmergency -> "એક અગત્યની પરિસ્થિતિ ઉદભવી છે. તમામ રહેવાસીઓએ સૂચનાઓનું કડક પાલન કરવું અને સુરક્ષિત રહેવું જરૂરી છે."
+            isInvite -> "તમારે આ જમવા/પૂજા/અનુષ્ઠાનમાં હાર્દિક નિમંત્રિત છો. આપની હાજરી આપીને અમને ગૌરવવાનું કરશે."
+            else -> "$trimmed માટે વિશેષ સૂચના આપવામાં આવે છે."
+        }
         else -> trimmed
     }
 
     val enBody = when {
-        isTest -> "This is a test message to verify application functionality."
-        isDeath -> "A condolence gathering (besanu) has been arranged. All community members are requested to attend and offer condolences to the bereaved family."
-        isWater -> "Water supply will be affected due to essential repair work. Your cooperation is requested."
-        isElectricity -> "Power supply may face interruption. Your cooperation is requested."
-        isMeeting -> "An important meeting has been called. Your presence is required."
-        isFestival -> "Festival greetings to all. May everyone be blessed with joy and prosperity."
-        isHealth -> "Medical health services will be made available for all Bodla village residents."
-        isEmergency -> "An emergency situation has arisen. All residents must comply with the instructions immediately."
-        isInvite -> "You are cordially invited to this meal/puja/ceremony. Your presence would honor us."
-        lower.length < 20 -> "Special notice regarding $trimmed."
+        lower.length < 20 -> when {
+            isTest -> "This is a test message to verify application functionality."
+            isDeath -> "A condolence gathering (besanu) has been arranged. All community members are requested to attend and offer condolences to the bereaved family."
+            isWater -> "Due to essential maintenance work, water supply may be temporarily disrupted. Please store necessary water in advance."
+            isElectricity -> "Due to essential maintenance work, power supply may be temporarily disrupted. Please use electricity wisely."
+            isMeeting -> "An important meeting has been called. Attendance of all members is mandatory."
+            isFestival -> "Festival greetings to all. May everyone be blessed with joy and prosperity."
+            isHealth -> "Medical health services will be made available for all Bodla village residents."
+            isEmergency -> "An emergency situation has arisen. All residents must strictly comply with instructions and stay safe."
+            isInvite -> "You are cordially invited to this meal/puja/ceremony. Your presence would honor us."
+            else -> "Special notice regarding $trimmed."
+        }
         else -> trimmed
     }
 
-    // Build Gujarati message with random mix of opening + body + closing
-    val gu = "${guOpenings[oi]} ${guBodyStarts[bi]}${guBody} ${guClosings[ci]}"
+    // Build Gujarati message: opening + body + closing
+    val gu = "$guOpening $guBody $guClosing"
 
-    val en = "${enOpenings[oi]} ${enBodyStarts[bi]}${enBody} ${enClosings[ci]}"
+    // Build English message: opening + body + closing
+    val en = "$enOpening $enBody $enClosing"
 
     return Pair(gu, en)
 }

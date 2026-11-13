@@ -123,7 +123,7 @@ fun MainScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var lastNotifId by remember { mutableStateOf<String?>(null) }
     var topNotificationMessage by remember { mutableStateOf<String?>(null) }
-    var pendingNoticeId by remember { mutableStateOf<String?>(null) }
+    var pendingNoticeId by remember { mutableStateOf<String?>(PendingNotices.peek()) }
     var deepLinkedNotice by remember { mutableStateOf<Notice?>(null) }
     var sessionReady by remember { mutableStateOf(false) }
     var latestNotifications by remember { mutableStateOf<List<AppNotification>>(emptyList()) }
@@ -135,6 +135,10 @@ fun MainScreen(
     // A notification tap can arrive while the app is already running, so the
     // target is observed continuously instead of only once at start-up.
     LaunchedEffect(Unit) {
+        PendingNotices.peek()?.let { posted ->
+            pendingNoticeId = posted
+            PendingNotices.consume()
+        }
         PendingNotices.pendingNoticeId.collect { posted ->
             val noticeId = posted?.takeIf { it.isNotBlank() } ?: return@collect
             pendingNoticeId = noticeId
@@ -163,12 +167,17 @@ fun MainScreen(
                     .onFailure { Napier.w("MainScreen: Could not refresh notifications", it) }
             }
 
+            val hasPendingNotice = PendingNotices.peek() != null || pendingNoticeId != null
             val user = runCatching { AppContainer.authRepository.getCurrentUser() }.getOrNull()
             if (user != null) {
                 currentUser = user
                 val isAdminUser = user.hasAdminDashboardAccess()
-                currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                // Sync all community data from server FIRST so deleted items are removed
+                // from local SQLDelight cache before the user sees any screen content.
                 refreshCommunityData()
+                if (!hasPendingNotice) {
+                    currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                }
                 // Auto-sync pending uploads on cold start so local changes reach the server
                 runCatching { AppContainer.syncEngine.syncAll() }
                     .onSuccess { Napier.d("MainScreen: Cold-start sync completed") }
@@ -181,10 +190,14 @@ fun MainScreen(
                 if (cachedProfile != null) {
                     currentUser = cachedProfile
                     val isAdminUser = cachedProfile.isAdmin || cachedProfile.roles.any { role: String -> role.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN") }
-                    currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                    if (!hasPendingNotice) {
+                        currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
+                    }
                 } else {
                     currentUser = null
-                    currentScreen = Screen.Login
+                    if (!hasPendingNotice) {
+                        currentScreen = Screen.Login
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -216,19 +229,40 @@ fun MainScreen(
     // Open the notice a notification tap targeted. This waits for the session
     // so the deep link is not overwritten by the start-up screen reset.
     LaunchedEffect(pendingNoticeId, sessionReady, currentUser) {
-        val noticeId = pendingNoticeId ?: return@LaunchedEffect
+        val rawId = pendingNoticeId ?: return@LaunchedEffect
         if (!sessionReady) return@LaunchedEffect
-        if (currentUser == null) {
+        val token = AppContainer.tokenStorage.getToken()
+        if (token.isNullOrBlank()) {
             // Sign-in is required first; the pending id is kept so the effect
-            // re-runs and opens the notice once the session is active.
+            // re-runs and opens the target once the session is active.
             currentScreen = Screen.Login
             return@LaunchedEffect
         }
+
+        // Sync notices from server so the just-published notice is in local DB
+        runCatching { AppContainer.noticeRepository.refreshNotices() }
+        runCatching { loadLatestNotifications() }
+            .onSuccess { latestNotifications = it }
+
+        if (rawId.startsWith("NOTIFICATION_CENTER:")) {
+            currentScreen = Screen.Notifications
+        } else {
+            // Try to resolve the notice from local DB
+            var notice = AppContainer.noticeRepository.getNoticeById(rawId)
+            if (notice == null) {
+                // Notice may not be synced yet; refresh once more and retry
+                runCatching { AppContainer.noticeRepository.refreshNotices() }
+                notice = AppContainer.noticeRepository.getNoticeById(rawId)
+            }
+            if (notice != null) {
+                deepLinkedNotice = notice
+                currentScreen = Screen.NoticeDetail(rawId)
+            } else {
+                // Fallback: still open NoticeDetail screen; it will fetch by ID
+                currentScreen = Screen.NoticeDetail(rawId)
+            }
+        }
         pendingNoticeId = null
-        // Make sure the notice is cached before the detail screen resolves it.
-        AppContainer.noticeRepository.refreshNotices()
-        deepLinkedNotice = AppContainer.noticeRepository.getNoticeById(noticeId)
-        currentScreen = Screen.NoticeDetail(noticeId)
     }
 
     val pullRefreshConnection = remember {
@@ -686,6 +720,7 @@ fun MainScreen(
 
                         is Screen.Notifications -> NotificationCenterScreen(
                             notifications = latestNotifications,
+                            currentProfile = currentUser,
                             onBack = { currentScreen = defaultHome },
                             onNotificationClick = { notification ->
                                 val targetId = notification.referenceId 

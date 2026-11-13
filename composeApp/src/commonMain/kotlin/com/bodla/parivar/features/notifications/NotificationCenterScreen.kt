@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.navigation.Screen
+import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.core.theme.*
 import coil3.compose.AsyncImage
 import com.bodla.parivar.features.notices.NoticeAttachmentPreview
@@ -66,6 +67,7 @@ data class AppNotification(
     @SerialName("body_gu") val bodyGu: String? = null,
     @SerialName("body_en") val bodyEn: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("created_by") val createdBy: String? = null,
     @SerialName("reference_id") val referenceId: String? = null,
     val type: String? = null,
     val payload: JsonObject? = null,
@@ -77,6 +79,7 @@ data class AppNotification(
 @Composable
 fun NotificationCenterScreen(
     notifications: List<AppNotification>,
+    currentProfile: Profile?,
     onBack: () -> Unit,
     onNotificationClick: (AppNotification) -> Unit = {},
     onDelete: (AppNotification) -> Unit = {},
@@ -266,11 +269,19 @@ fun NotificationCenterScreen(
                                     Text(text = createdAt, style = BodlaCaption, color = TextTertiary)
                                 }
                             }
+                            val canDelete = currentProfile?.let { profile ->
+                                profile.isAdmin ||
+                                profile.isStaff ||
+                                profile.roles.any { it.trim().uppercase() in setOf("ADMIN", "SUPER_ADMIN", "STAFF", "MODERATOR", "CONTENT_MANAGER") } ||
+                                (notification.createdBy?.isNotBlank() == true &&
+                                    (notification.createdBy == profile.id || notification.createdBy == profile.authUserId))
+                            } == false
                             IconButton(
                                 onClick = {
                                     deleteConfirmId = notification.id
                                     deleteConfirmTitle = title
-                                }
+                                },
+                                enabled = canDelete
                             ) {
                                 Text(text = "🗑️", fontSize = 18.sp)
                             }

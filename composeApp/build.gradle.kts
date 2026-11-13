@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.sqlDelight)
+    alias(libs.plugins.googleServices) apply false
     // Firebase plugin is applied only when google-services.json exists.
     // This avoids CI failures in forks/PRs where the secret is unavailable.
 }
@@ -105,14 +106,14 @@ kotlin {
 
 android {
     namespace = "com.bodla.parivar"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bodla.parivar"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 100126
-        versionName = "10.01.26"
+        targetSdk = 36
+        versionCode = 100128
+        versionName = "10.01.28"
     }
 
     packaging {
@@ -121,10 +122,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = project.file("upload-keystore.jks")
+            storePassword = "bodla123"
+            keyAlias = "upload"
+            keyPassword = "bodla123"
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
             proguardFiles("proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -140,4 +151,8 @@ sqldelight {
             packageName.set("com.bodla.parivar.database")
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "com.bodla.parivar.composeapp.generated.resources"
 }

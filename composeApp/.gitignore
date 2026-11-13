@@ -1,0 +1,18 @@
+# Signing keystore - DO NOT COMMIT
+*.jks
+*.keystore
+*.key
+
+# Build outputs
+build/
+out/
+
+# Gradle
+.gradle/
+
+# Local properties
+local.properties
+
+# IDE
+.idea/
+*.iml

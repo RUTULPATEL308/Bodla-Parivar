@@ -18,7 +18,8 @@ fun NoticeDto.toDomain(): Notice = Notice(
     isPinned = isPinned,
     status = status,
     publishAt = publishAt,
-    createdAt = createdAt
+    createdAt = createdAt,
+    publishedById = publishedBy
 )
 
 fun CachedNotice.toDomain(): Notice = Notice(
@@ -34,7 +35,8 @@ fun CachedNotice.toDomain(): Notice = Notice(
     isPinned = isPinned == 1L,
     status = status,
     publishAt = publishAt,
-    createdAt = createdAt
+    createdAt = createdAt,
+    publishedById = publishedById
 )
 
 // --- Event Mappers ---

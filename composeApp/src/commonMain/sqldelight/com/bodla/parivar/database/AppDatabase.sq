@@ -44,7 +44,8 @@ CREATE TABLE CachedNotice (
     isPinned INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL,
     publishAt TEXT,
-    createdAt TEXT NOT NULL
+    createdAt TEXT NOT NULL,
+    publishedById TEXT
 );
 
 selectAllNotices:
@@ -59,8 +60,8 @@ SELECT * FROM CachedNotice WHERE id = ?;
 insertOrReplaceNotice:
 INSERT OR REPLACE INTO CachedNotice(
     id, titleGu, titleEn, descriptionGu, descriptionEn,
-    categoryNameGu, categoryNameEn, imageUrl, attachmentUrl, isPinned, status, publishAt, createdAt
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    categoryNameGu, categoryNameEn, imageUrl, attachmentUrl, isPinned, status, publishAt, createdAt, publishedById
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteNotice:
 DELETE FROM CachedNotice WHERE id = ?;

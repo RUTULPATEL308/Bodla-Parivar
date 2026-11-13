@@ -12,6 +12,7 @@ interface AuthRepository {
     suspend fun updateProfile(profile: Profile): Result<Profile>
     suspend fun updatePassword(newPassword: String): Result<Unit>
     suspend fun logout(): Result<Unit>
+    suspend fun deleteAccount(): Result<Unit>
 }
 
 interface NoticeRepository {
@@ -49,9 +50,11 @@ interface OfferingRepository {
     suspend fun getAllOfferingBids(): Result<List<OfferingBid>>
     suspend fun updateOfferingBidStatus(offeringId: String, bid: OfferingBid, status: String): Result<Unit>
     suspend fun deleteOfferingBid(offeringId: String, bidId: String): Result<Unit>
+    suspend fun editOfferingBid(offeringId: String, bidId: String, bidderName: String, amount: Double): Result<Unit>
     suspend fun addStaffOfferingBid(offeringId: String, bidderName: String, amount: Double): Result<Unit>
     suspend fun callOfferingBid(offeringId: String, winnerName: String? = null): Result<Int>
     suspend fun adminSetWinnerDisplayName(offeringId: String, name: String): Result<Unit>
+    suspend fun editOfferingWinningAmount(offeringId: String, newAmount: Double): Result<Unit>
     suspend fun isCurrentUserWinner(offeringId: String): Result<Boolean>
     suspend fun submitWinnerDisplayName(offeringId: String, name: String): Result<Unit>
     suspend fun getServerTimeOffsetMillis(): Result<Long>

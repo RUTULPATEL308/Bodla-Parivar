@@ -35,11 +35,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AndroidPlatform.appContext = applicationContext
         AndroidPlatform.currentActivityRef = WeakReference(this)
-        val noticeId = intent?.getStringExtra("reference_id")
-            ?: intent?.getStringExtra("referenceId")
-            ?: intent?.getStringExtra("notice_id")
-            ?: intent?.getStringExtra("noticeId")
-        PendingNotices.post(noticeId)
+        handleNotificationIntent(intent)
         createVillageNotificationChannel()
         requestNotificationPermission()
 
@@ -66,11 +62,37 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        if (intent == null) return
+        val extras = intent.extras
+        if (extras != null) {
+            for (key in extras.keySet()) {
+                Napier.d("Notification Intent extra: $key = ${extras.get(key)?.toString()}", tag = "FCM")
+            }
+        }
         val noticeId = intent.getStringExtra("reference_id")
             ?: intent.getStringExtra("referenceId")
             ?: intent.getStringExtra("notice_id")
             ?: intent.getStringExtra("noticeId")
-        PendingNotices.post(noticeId)
+            ?: intent.getStringExtra("id")
+            ?: intent.getStringExtra("gcm.notification.reference_id")
+            ?: intent.getStringExtra("data.reference_id")
+        if (!noticeId.isNullOrBlank()) {
+            PendingNotices.post(noticeId)
+        } else {
+            val notificationId = intent.getStringExtra("notification_id")
+                ?: intent.getStringExtra("notificationId")
+                ?: intent.getStringExtra("gcm.notification.notification_id")
+                ?: intent.getStringExtra("data.notification_id")
+            if (!notificationId.isNullOrBlank()) {
+                PendingNotices.post("NOTIFICATION_CENTER:$notificationId")
+            } else if (extras?.containsKey("notification") == true || extras?.containsKey("google.message_id") == true || intent.getStringExtra("type") != null) {
+                PendingNotices.post("NOTIFICATION_CENTER:general")
+            }
+        }
     }
 
     override fun onResume() {

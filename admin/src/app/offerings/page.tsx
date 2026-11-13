@@ -103,6 +103,20 @@ export default function AdminOfferingsPage() {
   const [adminWinnerName, setAdminWinnerName] = useState('');
   const [adminWinnerNameError, setAdminWinnerNameError] = useState<string | null>(null);
   const [isSavingAdminWinnerName, setIsSavingAdminWinnerName] = useState(false);
+
+  // Edit winning bid amount state (only when bidding is closed)
+  const [editWinningAmount, setEditWinningAmount] = useState('');
+  const [isSavingEditWinningAmount, setIsSavingEditWinningAmount] = useState(false);
+  const [editWinningAmountError, setEditWinningAmountError] = useState<string | null>(null);
+
+  // Edit bid dialog state (only when bidding is closed)
+  const [editBidDialog, setEditBidDialog] = useState(false);
+  const [editBidId, setEditBidId] = useState<string | null>(null);
+  const [editBidOfferingId, setEditBidOfferingId] = useState<string | null>(null);
+  const [editBidderName, setEditBidderName] = useState('');
+  const [editBidAmount, setEditBidAmount] = useState('');
+  const [isSavingEditBid, setIsSavingEditBid] = useState(false);
+  const [editBidError, setEditBidError] = useState<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
 
   // New Offering Form
@@ -511,6 +525,65 @@ export default function AdminOfferingsPage() {
     setSelectedOffering(current => current?.id === offering.id ? null : current);
   };
 
+  const handleEditBid = async (bidId: string, offeringId: string, newBidderName: string, newAmount: number) => {
+    if (!isSupabaseConfigured) {
+      alert('Bid editing is unavailable because Supabase is not configured.');
+      return;
+    }
+    const cleanedName = newBidderName.trim();
+    if (!cleanedName) {
+      setEditBidError('Bidder name is required.');
+      return;
+    }
+    if (!Number.isFinite(newAmount) || newAmount <= 0) {
+      setEditBidError('Amount must be a positive number.');
+      return;
+    }
+
+    setIsSavingEditBid(true);
+    setEditBidError(null);
+
+    // Call the RPC to edit the bid (server-side checks bidding is closed + staff access)
+    const { data, error } = await supabase.rpc('admin_edit_offering_bid', {
+      p_bid_id: bidId,
+      p_new_bidder_name: cleanedName,
+      p_new_amount: newAmount
+    });
+
+    if (error) {
+      setIsSavingEditBid(false);
+      setEditBidError(error.message || 'Failed to edit bid.');
+      return;
+    }
+
+    const result = data as any;
+    if (!result?.success) {
+      setIsSavingEditBid(false);
+      setEditBidError(result?.error || 'Failed to edit bid.');
+      return;
+    }
+
+    // Update local state
+    setBids(prev => ({
+      ...prev,
+      [offeringId]: (prev[offeringId] || []).map(b =>
+        b.id === bidId ? { ...b, bidder_name: cleanedName, amount: newAmount } : b
+      )
+    }));
+
+    // Update selected offering if needed
+    if (selectedOffering?.id === offeringId && selectedOffering.winning_bid_amount === newAmount) {
+      setSelectedOffering(prev => prev ? { ...prev, winning_bid_amount: newAmount } : prev);
+    }
+
+    setEditBidDialog(false);
+    setEditBidId(null);
+    setEditBidderName('');
+    setEditBidAmount('');
+    setIsSavingEditBid(false);
+    void refreshSnapshotRef.current?.();
+  };
+
   const handleAddInPersonBid = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedOffering) return;
@@ -695,7 +768,12 @@ export default function AdminOfferingsPage() {
   // Selected offering's bids (sorted newest first)
   const selectedBids = selectedOffering
     ? (bids[selectedOffering.id] || []).slice().sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        (a, b) => {
+          if (selectedOffering.status === 'COMPLETED') {
+            return b.amount - a.amount;
+          }
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
       )
     : [];
 
@@ -707,10 +785,7 @@ export default function AdminOfferingsPage() {
   const winnerNameDeadline = currentSelectedOffering?.winner_name_deadline_at
     ? Date.parse(currentSelectedOffering.winner_name_deadline_at)
     : Number.NaN;
-  const canAdminSetWinnerName = currentSelectedOffering?.winner_name_status === 'AWAITING_ADMIN'
-    || (currentSelectedOffering?.winner_name_status === 'AWAITING_WINNER'
-      && Number.isFinite(winnerNameDeadline)
-      && clockNow >= winnerNameDeadline);
+  const canAdminSetWinnerName = currentSelectedOffering?.status === 'COMPLETED';
 
   useEffect(() => {
     if (currentSelectedOffering?.winner_name_status !== 'AWAITING_WINNER' || !Number.isFinite(winnerNameDeadline)) return;
@@ -750,6 +825,43 @@ export default function AdminOfferingsPage() {
       : prev
     );
     setAdminWinnerName('');
+    void refreshSnapshotRef.current?.();
+  };
+
+  const handleEditWinningAmount = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (!currentSelectedOffering || isSavingEditWinningAmount) return;
+
+    const newAmount = parseFloat(editWinningAmount);
+    if (!Number.isFinite(newAmount) || newAmount <= 0) {
+      setEditWinningAmountError('Please enter a valid positive amount.');
+      return;
+    }
+
+    setIsSavingEditWinningAmount(true);
+    setEditWinningAmountError(null);
+
+    const { error } = await supabase.rpc('admin_edit_offering_winning_amount', {
+      p_offering_id: currentSelectedOffering.id,
+      p_new_amount: newAmount
+    });
+
+    setIsSavingEditWinningAmount(false);
+
+    if (error) {
+      setEditWinningAmountError(error.message || 'Failed to update winning amount.');
+      return;
+    }
+
+    setOfferings(prev => prev.map(offering => offering.id === currentSelectedOffering.id
+      ? { ...offering, winning_bid_amount: newAmount }
+      : offering
+    ));
+    setSelectedOffering(prev => prev?.id === currentSelectedOffering.id
+      ? { ...prev, winning_bid_amount: newAmount }
+      : prev
+    );
+    setEditWinningAmount('');
     void refreshSnapshotRef.current?.();
   };
 
@@ -1190,10 +1302,39 @@ export default function AdminOfferingsPage() {
                         <strong>{currentSelectedOffering.winner_profile_name ?? winnerLabels.profileNameUnavailable}</strong>
                       </div>
                       {currentSelectedOffering.winning_bid_amount !== null && (
-                        <div>
+                        <div className="flex items-center gap-2">
                           <span className="font-semibold text-brand-text">{winnerLabels.winningAmount}</span>{' '}
                           <strong>₹{currentSelectedOffering.winning_bid_amount.toLocaleString('en-IN')}</strong>
+                          {canAdminSetWinnerName && (
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={editWinningAmount}
+                              onChange={e => setEditWinningAmount(e.target.value)}
+                              placeholder="₹0"
+                              className="w-24 px-2 py-1 rounded border border-brand-border bg-white text-sm text-brand-text focus:outline-none focus:border-saffron"
+                            />
+                          )}
                         </div>
+                      )}
+                      {canAdminSetWinnerName && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              if (!currentSelectedOffering) return;
+                              handleEditWinningAmount(event);
+                            }}
+                            disabled={isSavingEditWinningAmount || !editWinningAmount || parseFloat(editWinningAmount) <= 0}
+                            className="text-xs font-bold text-saffron hover:text-amber-600 transition"
+                          >
+                            Save Amount
+                          </button>
+                        </div>
+                      )}
+                      {editWinningAmountError && (
+                        <p className="text-xs text-rose-700">{editWinningAmountError}</p>
                       )}
                     </div>
                     {canAdminSetWinnerName && (
@@ -1320,6 +1461,24 @@ export default function AdminOfferingsPage() {
                         >
                           <Trash2 className="w-3.5 h-3.5" />Delete bid
                         </button>
+                        {currentSelectedOffering?.status === 'COMPLETED' && bid.status !== 'REJECTED' && (
+                          <button
+                            type="button"
+                            title="Edit bidder name and amount"
+                            aria-label={`Edit bid from ${bid.bidder_name}`}
+                            onClick={() => {
+                              setEditBidId(bid.id);
+                              setEditBidOfferingId(selectedOffering.id);
+                              setEditBidderName(bid.bidder_name);
+                              setEditBidAmount(bid.amount.toString());
+                              setEditBidError(null);
+                              setEditBidDialog(true);
+                            }}
+                            className="flex min-h-9 shrink-0 items-center gap-1 px-2.5 py-1.5 text-saffron bg-saffron-50 hover:bg-saffron-100 border border-saffron-200 rounded-lg text-[11px] font-semibold transition"
+                          >
+                            <User className="w-3.5 h-3.5" />Edit bid
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1434,7 +1593,84 @@ export default function AdminOfferingsPage() {
           </div>
         </div>
       )}
-
+      
+      {/* ════════════════════════════════════════════════════════════════
+          Modal: Edit Bid (only when bidding is closed)
+      ════════════════════════════════════════════════════════════════ */}
+      {editBidDialog && editBidId && editBidOfferingId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-brand-border rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between border-b border-brand-border pb-3">
+              <h2 className="text-base font-bold text-brand-text font-gujarati">
+                <User className="w-4 h-4 text-saffron" />
+                Edit Bid
+              </h2>
+              <button onClick={() => setEditBidDialog(false)} className="p-1.5 rounded-lg hover:bg-brand-border text-brand-muted">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="pt-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-brand-text mb-1">
+                  બોલી આપનારનું નામ / Bidder Name
+                </label>
+                <input
+                  required
+                  value={editBidderName}
+                  onChange={e => setEditBidderName(e.target.value)}
+                  className="w-full pl-3 pr-4 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-brand-text mb-1">
+                  બોલી રકમ (₹) / Bid Amount (₹)
+                </label>
+                <input
+                  required
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={editBidAmount}
+                  onChange={e => setEditBidAmount(e.target.value)}
+                  className="w-full pl-3 pr-4 py-2 rounded-lg border border-brand-border bg-white text-sm focus:outline-none focus:border-saffron"
+                />
+              </div>
+              {editBidError && (
+                <p role="alert" className="text-xs text-rose-700">{editBidError}</p>
+              )}
+              <div className="pt-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditBidDialog(false)}
+                  className="px-4 py-2 rounded-lg border border-brand-border text-brand-text text-xs font-semibold hover:bg-cream transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!editBidId || !editBidOfferingId) return;
+                    handleEditBid(editBidId, editBidOfferingId, editBidderName, parseFloat(editBidAmount));
+                  }}
+                  disabled={isSavingEditBid || !editBidderName.trim() || !editBidAmount || parseFloat(editBidAmount) <= 0}
+                  className="px-4 py-2 rounded-lg bg-saffron text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSavingEditBid ? (
+                    <span className="flex items-center gap-1.5">
+                      <Radio className="w-3 h-3 animate-pulse" /> Saving…
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <User className="w-3 h-3" /> Save Changes
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Marquee animation style */}
       <style jsx global>{`
         @keyframes marquee {

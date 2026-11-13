@@ -130,4 +130,10 @@ object Endpoints {
 
     val RPC_DELETE_NOTIFICATION: String
         get() = "$REST_BASE_URL/rpc/delete_notification"
+
+    val RPC_ADMIN_EDIT_OFFERING_BID: String
+        get() = "$REST_BASE_URL/rpc/admin_edit_offering_bid"
+
+    val RPC_ADMIN_EDIT_WINNING_AMOUNT: String
+        get() = "$REST_BASE_URL/rpc/admin_edit_offering_winning_amount"
 }

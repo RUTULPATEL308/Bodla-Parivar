@@ -20,5 +20,7 @@ object PendingNotices {
         _pendingNoticeId.value = id
     }
 
+    fun peek(): String? = _pendingNoticeId.value
+
     fun consume(): String? = _pendingNoticeId.value.also { _pendingNoticeId.value = null }
 }

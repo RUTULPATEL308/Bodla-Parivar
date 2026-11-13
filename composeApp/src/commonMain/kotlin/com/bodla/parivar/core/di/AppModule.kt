@@ -19,8 +19,8 @@ val appModule: Module = module {
     single { KtorClientFactory.create { get<TokenStorage>().getToken() } }
     single { SyncEngine(get(), get(), get()) }
 
-    single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
-    single<NoticeRepository> { NoticeRepositoryImpl(get(), get()) }
+    single<AuthRepository> { AuthRepositoryImpl(get(), get(), get()) }
+    single<NoticeRepository> { NoticeRepositoryImpl(get(), get(), get(), get()) }
     single<EventRepository> { EventRepositoryImpl(get(), get()) }
     single<BusinessRepository> { BusinessRepositoryImpl(get(), get()) }
     single<OfferingRepository> { OfferingRepositoryImpl(get(), get(), get(), get()) }
@@ -47,8 +47,8 @@ object AppContainer {
     val httpClient by lazy { KtorClientFactory.create { tokenStorage.getToken() } }
     val syncEngine by lazy { SyncEngine(database, httpClient, tokenStorage) }
 
-    val authRepository: AuthRepository by lazy { AuthRepositoryImpl(httpClient, tokenStorage) }
-    val noticeRepository: NoticeRepository by lazy { NoticeRepositoryImpl(database, httpClient) }
+    val authRepository: AuthRepository by lazy { AuthRepositoryImpl(httpClient, tokenStorage, database) }
+    val noticeRepository: NoticeRepository by lazy { NoticeRepositoryImpl(database, httpClient, tokenStorage, syncEngine) }
     val eventRepository: EventRepository by lazy { EventRepositoryImpl(database, httpClient) }
     val businessRepository: BusinessRepository by lazy { BusinessRepositoryImpl(database, httpClient) }
     val offeringRepository: OfferingRepository by lazy { OfferingRepositoryImpl(database, httpClient, syncEngine, tokenStorage) }

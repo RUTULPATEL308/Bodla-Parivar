@@ -26,6 +26,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
@@ -77,7 +78,8 @@ private fun friendlyAuthError(status: Int, body: String): String {
 // ==============================================================================
 class AuthRepositoryImpl(
     private val httpClient: HttpClient,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val database: AppDatabase? = null
 ) : AuthRepository {
 
     private data class AuthData(
@@ -311,7 +313,40 @@ class AuthRepositoryImpl(
         }
         tokenStorage.clearToken()
         cachedProfile = null
+        database?.transaction {
+            database.appDatabaseQueries.clearNotices()
+            database.appDatabaseQueries.clearEvents()
+            database.appDatabaseQueries.clearBusinesses()
+            database.appDatabaseQueries.clearOfferings()
+            database.appDatabaseQueries.clearEmergencyContacts()
+            database.appDatabaseQueries.clearPlaces()
+        }
         Result.success(Unit)
+    }
+
+    override suspend fun deleteAccount(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage.getToken()
+            if (token.isNullOrBlank()) {
+                return@withContext Result.failure(IllegalStateException("Not signed in"))
+            }
+            val response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/delete_account") {
+                contentType(ContentType.Application.Json)
+                headers.remove(HttpHeaders.Authorization)
+                header(HttpHeaders.Authorization, "Bearer $token")
+                setBody("{}")
+            }
+            if (response.status.isSuccess()) {
+                logout()
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception("Could not delete account: ${friendlyAuthError(response.status.value, body)}"))
+            }
+        } catch (e: Exception) {
+            Napier.e("AuthRepository: Delete account error", e)
+            Result.failure(e)
+        }
     }
 
     private suspend fun fetchProfileByAuthId(authUserId: String): Profile? {
@@ -421,7 +456,9 @@ class AuthRepositoryImpl(
 // ==============================================================================
 class NoticeRepositoryImpl(
     private val database: AppDatabase,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val tokenStorage: TokenStorage? = null,
+    private val syncEngine: SyncEngine? = null
 ) : NoticeRepository {
 
     override fun getNotices(): Flow<List<Notice>> {
@@ -461,7 +498,8 @@ class NoticeRepositoryImpl(
                             isPinned = if (dto.isPinned) 1L else 0L,
                             status = dto.status,
                             publishAt = dto.publishAt,
-                            createdAt = dto.createdAt
+                            createdAt = dto.createdAt,
+                            publishedById = dto.publishedBy
                         )
                     }
                 }
@@ -492,9 +530,25 @@ class NoticeRepositoryImpl(
 
     override suspend fun deleteNotice(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/delete_notice") {
+            val token = tokenStorage?.getToken()
+            var response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/delete_notice") {
                 contentType(ContentType.Application.Json)
+                if (!token.isNullOrBlank()) {
+                    headers.remove(HttpHeaders.Authorization)
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 setBody(buildJsonObject { put("p_notice_id", id) }.toString())
+            }
+            if (response.status == HttpStatusCode.Unauthorized && tokenStorage != null) {
+                val refreshed = syncEngine?.refreshAccessTokenIfStale(token)
+                if (!refreshed.isNullOrBlank()) {
+                    response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/delete_notice") {
+                        contentType(ContentType.Application.Json)
+                        headers.remove(HttpHeaders.Authorization)
+                        header(HttpHeaders.Authorization, "Bearer $refreshed")
+                        setBody(buildJsonObject { put("p_notice_id", id) }.toString())
+                    }
+                }
             }
             if (response.status.isSuccess()) {
                 database.appDatabaseQueries.deleteNotice(id)
@@ -511,9 +565,25 @@ class NoticeRepositoryImpl(
 
     override suspend fun deleteNotification(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient.post(Endpoints.RPC_DELETE_NOTIFICATION) {
+            val token = tokenStorage?.getToken()
+            var response = httpClient.post(Endpoints.RPC_DELETE_NOTIFICATION) {
                 contentType(ContentType.Application.Json)
+                if (!token.isNullOrBlank()) {
+                    headers.remove(HttpHeaders.Authorization)
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 setBody(buildJsonObject { put("p_notification_id", id) }.toString())
+            }
+            if (response.status == HttpStatusCode.Unauthorized && tokenStorage != null) {
+                val refreshed = syncEngine?.refreshAccessTokenIfStale(token)
+                if (!refreshed.isNullOrBlank()) {
+                    response = httpClient.post(Endpoints.RPC_DELETE_NOTIFICATION) {
+                        contentType(ContentType.Application.Json)
+                        headers.remove(HttpHeaders.Authorization)
+                        header(HttpHeaders.Authorization, "Bearer $refreshed")
+                        setBody(buildJsonObject { put("p_notification_id", id) }.toString())
+                    }
+                }
             }
             if (response.status.isSuccess()) {
                 Result.success(Unit)
@@ -558,6 +628,7 @@ class EventRepositoryImpl(
             if (response.status.isSuccess()) {
                 val dtos = response.body<List<EventDto>>()
                 database.transaction {
+                    database.appDatabaseQueries.clearEvents()
                     for (dto in dtos) {
                         database.appDatabaseQueries.insertOrReplaceEvent(
                             id = dto.id,
@@ -617,6 +688,7 @@ class BusinessRepositoryImpl(
             if (response.status.isSuccess()) {
                 val dtos = response.body<List<BusinessDto>>()
                 database.transaction {
+                    database.appDatabaseQueries.clearBusinesses()
                     for (dto in dtos) {
                         database.appDatabaseQueries.insertOrReplaceBusiness(
                             id = dto.id,
@@ -1245,6 +1317,59 @@ class OfferingRepositoryImpl(
         }
     }
 
+    override suspend fun editOfferingBid(offeringId: String, bidId: String, bidderName: String, amount: Double): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage?.getToken()
+            var response = httpClient.post(Endpoints.RPC_ADMIN_EDIT_OFFERING_BID) {
+                contentType(ContentType.Application.Json)
+                if (!token.isNullOrBlank()) {
+                    headers.remove(HttpHeaders.Authorization)
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
+                setBody(buildJsonObject {
+                    put("p_bid_id", bidId)
+                    put("p_new_bidder_name", bidderName.trim())
+                    put("p_new_amount", amount)
+                }.toString())
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception("HTTP ${response.status} editing bid: ${body.take(300)}"))
+            }
+        } catch (e: Exception) {
+            Napier.e("edit bid error", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun editOfferingWinningAmount(offeringId: String, newAmount: Double): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage?.getToken()
+            var response = httpClient.post(Endpoints.RPC_ADMIN_EDIT_WINNING_AMOUNT) {
+                contentType(ContentType.Application.Json)
+                if (!token.isNullOrBlank()) {
+                    headers.remove(HttpHeaders.Authorization)
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
+                setBody(buildJsonObject {
+                    put("p_offering_id", offeringId)
+                    put("p_new_amount", newAmount)
+                }.toString())
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception("HTTP ${response.status} editing winning amount: ${body.take(300)}"))
+            }
+        } catch (e: Exception) {
+            Napier.e("edit winning amount error", e)
+            Result.failure(e)
+        }
+    }
+
 }
 
 // ==============================================================================
@@ -1524,6 +1649,7 @@ class EmergencyRepositoryImpl(
             if (response.status.isSuccess()) {
                 val dtos = response.body<List<EmergencyContactDto>>()
                 database.transaction {
+                    database.appDatabaseQueries.clearEmergencyContacts()
                     for (dto in dtos) {
                         database.appDatabaseQueries.insertOrReplaceEmergencyContact(
                             id = dto.id,

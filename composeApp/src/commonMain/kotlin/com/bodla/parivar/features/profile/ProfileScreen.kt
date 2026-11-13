@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -248,16 +249,22 @@ fun ProfileScreen(
 
             // Menu Items List
             item {
-                BodlaCard {
-                    val deleteAccountUrl = "https://yourdomain.com/delete-account" // Host your delete-account.html here
+                var showDeleteAccountDialog by remember { mutableStateOf(false) }
+                var isDeletingAccount by remember { mutableStateOf(false) }
+                val coroutineScope = rememberCoroutineScope()
 
+                BodlaCard {
                     val menuItems = mutableListOf(
                         Pair(if (lang == AppLanguage.GUJARATI) "✏️ પ્રોફાઇલ અપડેટ" else "✏️ Edit Profile", { onNavigate(Screen.EditProfile) }),
                         Pair("✍ " + Strings.myComplaints(lang), { onNavigate(Screen.Complaints) }),
                         Pair("🙏 " + Strings.myOfferings(lang), { onNavigate(Screen.Offerings) }),
                         Pair("🏪 " + (if (lang == AppLanguage.GUJARATI) "મારા વ્યવસાયો" else "My Businesses"), { onNavigate(Screen.Directory) }),
                         Pair("🗑️ " + if (lang == AppLanguage.GUJARATI) "ખાતું ડિલીટ કરો" else "Delete My Account", {
-                            PlatformOpenUrl(deleteAccountUrl)
+                            if (profile != null) {
+                                showDeleteAccountDialog = true
+                            } else {
+                                onNavigate(Screen.Login)
+                            }
                         }),
                         Pair("📞 " + Strings.serviceEmergency(lang), { onNavigate(Screen.Emergency) })
                     )
@@ -280,6 +287,47 @@ fun ProfileScreen(
                         }
                     }
                 }
+
+                if (showDeleteAccountDialog) {
+                    AlertDialog(
+                        onDismissRequest = { if (!isDeletingAccount) showDeleteAccountDialog = false },
+                        title = { Text(if (lang == AppLanguage.GUJARATI) "ખાતું ડિલીટ કરવું છે?" else "Delete Account?") },
+                        text = {
+                            Text(
+                                if (lang == AppLanguage.GUJARATI)
+                                    "તમારું ખાતું અને બધો ડેટા કાયમી ધોરણે ડિલીટ થઈ જશે. આ ક્રિયા પાછી ખેંચી શકાતી નથી."
+                                else
+                                    "Your account and all associated data will be permanently deleted. This action cannot be undone."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                enabled = !isDeletingAccount,
+                                onClick = {
+                                    isDeletingAccount = true
+                                    coroutineScope.launch {
+                                        val result = AppContainer.authRepository.deleteAccount()
+                                        isDeletingAccount = false
+                                        showDeleteAccountDialog = false
+                                        if (result.isSuccess) {
+                                            onLogout()
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text(if (lang == AppLanguage.GUJARATI) "હા, ડિલીટ કરો" else "Delete", color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                enabled = !isDeletingAccount,
+                                onClick = { showDeleteAccountDialog = false }
+                            ) {
+                                Text(if (lang == AppLanguage.GUJARATI) "રદ કરો" else "Cancel")
+                            }
+                        }
+                    )
+                }
             }
 
             // Logout Button (Only if logged in)
@@ -299,7 +347,7 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = "Version 10.01.26", style = BodlaCaption, color = TextSecondary)
+                    Text(text = "Version 10.01.28", style = BodlaCaption, color = TextSecondary)
                     Text(text = "Developed by Rutul Patel", style = BodlaCaption, color = TextSecondary)
                 }
             }

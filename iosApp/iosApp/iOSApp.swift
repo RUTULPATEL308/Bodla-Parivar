@@ -76,7 +76,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func handleNotificationPayload(_ userInfo: [AnyHashable: Any]) {
-        if let referenceId = userInfo["reference_id"] as? String, !referenceId.isEmpty {
+        var referenceId: String?
+        // Try top-level first (FCM data payload on iOS surfaces data keys at top level)
+        if let rid = userInfo["reference_id"] as? String, !rid.isEmpty {
+            referenceId = rid
+        } else if let dataDict = userInfo["data"] as? [String: Any],
+                  let rid = dataDict["reference_id"] as? String, !rid.isEmpty {
+            referenceId = rid
+        }
+        if let referenceId = referenceId {
             IOSPlatform.shared.postPendingNoticeId(noticeId: referenceId)
         }
     }

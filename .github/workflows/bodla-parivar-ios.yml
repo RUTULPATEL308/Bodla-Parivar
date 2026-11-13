@@ -86,8 +86,8 @@ jobs:
       - name: Upload IPA to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ios-v10.01.26-${{ github.run_number }}
-          name: Bodla-Parivar iOS v10.01.26-${{ github.run_number }}
+          tag_name: ios-v10.01.28-${{ github.run_number }}
+          name: Bodla-Parivar iOS v10.01.28-${{ github.run_number }}
           body: |
             Bodla-Parivar iOS Build v10.01.26
 

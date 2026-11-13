@@ -15,20 +15,21 @@ actual class DatabaseDriverFactory {
         val dbFile = context.getDatabasePath("bodla_parivar.db")
         if (dbFile.exists()) {
             try {
-                val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-                val cursor = db.rawQuery("PRAGMA table_info(CachedNotice);", null)
+                val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
                 var hasPublishedById = false
-                while (cursor.moveToNext()) {
-                    val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
-                    if (name == "publishedById") {
-                        hasPublishedById = true
-                        break
+                try {
+                    val cursor = db.rawQuery("PRAGMA table_info(CachedNotice);", null)
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                        if (name == "publishedById") {
+                            hasPublishedById = true
+                            break
+                        }
                     }
-                }
-                cursor.close()
+                    cursor.close()
+                } catch (_: Exception) {}
                 db.close()
-                // Old schema had publishedById column; new schema doesn't. Recreate DB if old schema detected.
-                if (hasPublishedById) {
+                if (!hasPublishedById) {
                     context.deleteDatabase("bodla_parivar.db")
                 }
             } catch (_: Exception) {

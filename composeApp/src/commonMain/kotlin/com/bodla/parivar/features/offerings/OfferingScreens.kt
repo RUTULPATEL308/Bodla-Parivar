@@ -1242,7 +1242,11 @@ fun OfferingDetailScreen(
                 }
 
                 items(
-                    visibleBids.sortedByDescending { it.createdAt },
+                    if (currentOffering.status == "COMPLETED") {
+                        visibleBids.sortedByDescending { it.amount }
+                    } else {
+                        visibleBids.sortedByDescending { it.createdAt }
+                    },
                     key = { it.id }
                 ) { bid ->
                     BidHistoryItem(
