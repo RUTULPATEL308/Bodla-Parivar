@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         handleNotificationIntent(intent)
         createVillageNotificationChannel()
         requestNotificationPermission()
+        TokenManager.registerIfNeeded(this)
 
         // Subscribe to global topic for push broadcast notifications
         try {
@@ -116,6 +117,8 @@ class MainActivity : ComponentActivity() {
         ).apply {
             description = "New notices and community updates"
             enableVibration(true)
+            setShowBadge(true)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             setSound(
                 RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
                 AudioAttributes.Builder()

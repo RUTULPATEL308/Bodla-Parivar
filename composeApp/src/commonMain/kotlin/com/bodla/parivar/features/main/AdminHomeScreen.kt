@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,16 +33,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bodla.parivar.core.di.AppContainer
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.navigation.Screen
 import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.AppIconContainer
+import com.bodla.parivar.core.ui.BodlaButton
 import com.bodla.parivar.core.ui.BodlaOutlinedButton
 import com.bodla.parivar.domain.model.Notice
 import com.bodla.parivar.domain.model.Offering
 import com.bodla.parivar.domain.model.Profile
 import com.bodla.parivar.domain.repository.AuthRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,14 +88,14 @@ fun AdminHomeScreen(
         if (profile?.isStaff == true || canAccess("navratri")) {
             add(Triple(if (isGujarati) "નવરાત્રી" else "Navratri", "✨", Screen.Navratri))
         }
-        if (profile?.isStaff == true || canAccess("complaints")) add(Triple(if (isGujarati) "ફરિયાદો" else "Complaints", "✍️", Screen.Complaints))
-        if (profile?.isStaff == true || canAccess("emergency_contacts")) add(Triple(if (isGujarati) "તાત્કાલિક સંપર્ક" else "Emergency contacts", "🚨", Screen.Emergency))
         if (profile?.isStaff == true || canAccess("village_history")) add(Triple(if (isGujarati) "ગામનો ઇતિહાસ" else "Village history", "📖", Screen.VillageHistory))
         add(Triple(if (isGujarati) "પરિણામ" else "Results", "🎓", Screen.ResultUpload))
         add(Triple(if (isGujarati) "અંતિમ યાત્રા પોસ્ટ" else "Antim Yatra Post", "🕯️", Screen.NoticeDesign))
         add(Triple(if (isGujarati) "બેસણું પોસ્ટ" else "Besanu Post", "🕊️", Screen.BesanuDesign))
         add(Triple(if (isGujarati) "રહેવાસી હોમ" else "Resident home", "🏠", Screen.Home))
     }
+    var pendingNotices by remember { mutableStateOf<List<Notice>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
     val filteredActions = dashboardActions.filter { (title, _, _) ->
         title.contains(dashboardSearch.trim(), ignoreCase = true)
     }
@@ -102,6 +106,8 @@ fun AdminHomeScreen(
                 .onSuccess { memberCount = it.size }
                 .onFailure { memberLoadFailed = true }
         }
+        runCatching { AppContainer.noticeRepository.getPendingNotices() }
+            .onSuccess { pendingNotices = it.getOrDefault(emptyList()) }
     }
 
     Scaffold(
@@ -121,11 +127,6 @@ fun AdminHomeScreen(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = if (isGujarati) "બોદલા ગ્રામ પંચાયત અને સમુદાય" else "BODLA VILLAGE ADMINISTRATION",
-                        style = BodlaCaption.copy(fontWeight = FontWeight.Bold),
-                        color = SaffronPrimary
-                    )
                     Text(
                         text = if (isGujarati) "નમસ્કાર, ${profile?.fullName.orEmpty()}" else "Welcome, ${profile?.fullName.orEmpty()}",
                         style = BodlaPageTitle,
@@ -219,6 +220,85 @@ fun AdminHomeScreen(
                             modifier = Modifier.weight(1f),
                             accent = pendingOfferings.isNotEmpty()
                         )
+                    }
+                }
+            }
+
+            if (isAdmin || isModerator || isContentManager || profile?.isStaff == true) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = if (isGujarati) "મંજૂરી માટે બાકી નોટિસો (Pending Notices)" else "Pending Notices for Approval",
+                            style = BodlaSection,
+                            color = TextPrimary
+                        )
+                        if (pendingNotices.isEmpty()) {
+                            Text(
+                                text = if (isGujarati) "હાલમાં કોઈ નોટિસ મંજૂરી માટે બાકી નથી." else "No notices awaiting approval.",
+                                style = BodlaBody,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        } else {
+                            pendingNotices.forEach { notice ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
+                                    border = CardDefaults.outlinedCardBorder().copy(
+                                        brush = androidx.compose.ui.graphics.SolidColor(GoldenAccent)
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = if (isGujarati) notice.titleGu else notice.titleEn,
+                                            style = BodlaCardTitle,
+                                            color = TextPrimary
+                                        )
+                                        val desc = if (isGujarati) notice.descriptionGu else notice.descriptionEn
+                                        if (!desc.isNullOrBlank()) {
+                                            Text(
+                                                text = desc,
+                                                style = BodlaBody.copy(fontSize = 13.sp),
+                                                color = TextSecondary,
+                                                maxLines = 3,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            BodlaButton(
+                                                text = if (isGujarati) "મંજૂર કરો (Approve)" else "Approve",
+                                                onClick = {
+                                                    coroutineScope.launch {
+                                                        AppContainer.noticeRepository.approveNotice(notice.id)
+                                                            .onSuccess {
+                                                                pendingNotices = pendingNotices.filter { it.id != notice.id }
+                                                                AppContainer.noticeRepository.refreshNotices()
+                                                            }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            BodlaOutlinedButton(
+                                                text = if (isGujarati) "ડિલીટ (Delete)" else "Delete",
+                                                onClick = {
+                                                    coroutineScope.launch {
+                                                        AppContainer.noticeRepository.deleteNotice(notice.id)
+                                                            .onSuccess {
+                                                                pendingNotices = pendingNotices.filter { it.id != notice.id }
+                                                            }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

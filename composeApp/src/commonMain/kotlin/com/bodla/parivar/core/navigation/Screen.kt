@@ -23,6 +23,7 @@ sealed class Screen(val route: String) {
     data object Complaints : Screen("complaints")
     data object CreateComplaint : Screen("create_complaint")
     data object SendNotification : Screen("send_notification")
+    data object AdminNoticeApproval : Screen("admin_notice_approval")
     data object ResultUpload : Screen("result_upload")
     data object Emergency : Screen("emergency")
     data object Places : Screen("places")

@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import PendingNoticesList from '@/components/PendingNoticesList';
 import { AlertCircle, ExternalLink, LoaderCircle, MapPin, Phone, Trash2 } from 'lucide-react';
 import { useAdminLanguage } from '@/components/AdminLanguageContext';
 import { GujlishInput, GujlishTextarea } from '@/components/GujlishInput';
 import html2canvas from 'html2canvas';
 
-export type MemberSection = 'overview' | 'profile' | 'notices' | 'events' | 'complaints' | 'history' | 'settings' | 'navratri' | 'offerings' | 'emergency' | 'gallery' | 'notifications' | 'directory' | 'result_uploads' | 'notice_design' | 'besanu_design';
+export type MemberSection = 'overview' | 'profile' | 'notices' | 'pending_notices' | 'events' | 'complaints' | 'history' | 'settings' | 'navratri' | 'offerings' | 'emergency' | 'gallery' | 'notifications' | 'directory' | 'result_uploads' | 'notice_design' | 'besanu_design';
 
 type RecordRow = Record<string, any>;
 
@@ -56,6 +57,7 @@ export default function MemberFeatureViews({ section, fullName }: { section: Mem
   if (section === 'history') return <VillageHistoryView />;
   if (section === 'result_uploads') return <ResultUploadsView />;
   if (section === 'notice_design') return <MobileParityFuneralDesignView kind="antim" />;
+  if (section === 'pending_notices') return <PendingNoticesList />;
   if (section === 'besanu_design') return <MobileParityFuneralDesignView kind="besanu" />;
   return null;
 }

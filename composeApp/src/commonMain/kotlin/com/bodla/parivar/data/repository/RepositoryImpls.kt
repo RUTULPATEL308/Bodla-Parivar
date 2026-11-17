@@ -522,10 +522,42 @@ class NoticeRepositoryImpl(
     }
 
     override suspend fun getNoticeById(id: String): Notice? = withContext(Dispatchers.IO) {
-        database.appDatabaseQueries
+        val cached = database.appDatabaseQueries
             .selectNoticeById(id)
             .executeAsOneOrNull()
             ?.toDomain()
+        if (cached != null) return@withContext cached
+
+        // Fallback: Fetch directly from server by ID in case local sync hasn't arrived yet
+        try {
+            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en)&id=eq.$id")
+            if (response.status.isSuccess()) {
+                val dtos = decodeNoticeDtos(response.bodyAsText())
+                val dto = dtos.firstOrNull()
+                if (dto != null) {
+                    database.appDatabaseQueries.insertOrReplaceNotice(
+                        id = dto.id,
+                        titleGu = dto.titleGu,
+                        titleEn = dto.titleEn,
+                        descriptionGu = dto.descriptionGu ?: "",
+                        descriptionEn = dto.descriptionEn ?: "",
+                        categoryNameGu = dto.category?.nameGu,
+                        categoryNameEn = dto.category?.nameEn,
+                        imageUrl = dto.imageUrl,
+                        attachmentUrl = dto.attachmentUrl,
+                        isPinned = if (dto.isPinned) 1L else 0L,
+                        status = dto.status,
+                        publishAt = dto.publishAt,
+                        createdAt = dto.createdAt,
+                        publishedById = dto.publishedBy
+                    )
+                    return@withContext dto.toDomain()
+                }
+            }
+        } catch (e: Exception) {
+            Napier.w("NoticeRepository: Failed to fetch notice $id by ID", e)
+        }
+        null
     }
 
     override suspend fun deleteNotice(id: String): Result<Unit> = withContext(Dispatchers.IO) {
@@ -593,6 +625,69 @@ class NoticeRepositoryImpl(
             }
         } catch (e: Exception) {
             Napier.e("delete notification error", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getPendingNotices(): Result<List<Notice>> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage?.getToken()
+            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en)&status=eq.PENDING&order=created_at.desc") {
+                if (!token.isNullOrBlank()) {
+                    headers.remove(HttpHeaders.Authorization)
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
+            }
+            if (response.status.isSuccess()) {
+                val responseText = response.bodyAsText()
+                val dtos = decodeNoticeDtos(responseText)
+                Result.success(dtos.map { it.toDomain() })
+            } else {
+                Result.failure(Exception("HTTP ${response.status} fetching pending notices"))
+            }
+        } catch (e: Exception) {
+            Napier.e("NoticeRepository: Get pending notices error", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun approveNotice(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = tokenStorage?.getToken()
+            val response = httpClient.patch("${Endpoints.REST_BASE_URL}/notices?id=eq.$id") {
+                contentType(ContentType.Application.Json)
+                if (!token.isNullOrBlank()) {
+                    headers.remove(HttpHeaders.Authorization)
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
+                setBody(buildJsonObject {
+                    put("status", "PUBLISHED")
+                    put("publish_at", Clock.System.now().toString())
+                }.toString())
+            }
+            if (response.status.isSuccess()) {
+                runCatching {
+                    httpClient.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
+                        contentType(ContentType.Application.Json)
+                        if (!token.isNullOrBlank()) {
+                            headers.remove(HttpHeaders.Authorization)
+                            header(HttpHeaders.Authorization, "Bearer $token")
+                        }
+                        setBody(buildJsonObject {
+                            put("reference_id", id)
+                            put("type", "NOTICE")
+                            put("title_gu", "ગ્રામ સૂચના મંજૂર થઈ")
+                            put("body_gu", "નવી સૂચના મંજૂર અને પ્રકાશિત કરવામાં આવી છે.")
+                        }.toString())
+                    }
+                }
+                Result.success(Unit)
+            } else {
+                val body = runCatching { response.bodyAsText() }.getOrDefault("")
+                Result.failure(Exception("HTTP ${response.status} approving notice: ${body.take(300)}"))
+            }
+        } catch (e: Exception) {
+            Napier.e("NoticeRepository: Approve notice error", e)
             Result.failure(e)
         }
     }

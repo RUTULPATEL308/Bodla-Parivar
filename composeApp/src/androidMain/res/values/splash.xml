@@ -11,4 +11,14 @@
         <!-- Theme applied after splash transitions away -->
         <item name="postSplashScreenTheme">@android:style/Theme.Material.Light.NoActionBar</item>
     </style>
+
+    <!-- Transparent Floating Dialog Theme for Notice Popup Alert Activity -->
+    <style name="Theme.BodlaParivar.Dialog" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

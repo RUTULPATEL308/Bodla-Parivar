@@ -89,6 +89,7 @@ kotlin {
             implementation("androidx.core:core-splashscreen:1.0.1")
             // Firebase Cloud Messaging
             implementation(libs.firebase.messaging)
+            implementation("com.google.firebase:firebase-auth-ktx:22.3.0")
         }
 
         iosMain.dependencies {
@@ -112,8 +113,8 @@ android {
         applicationId = "com.bodla.parivar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 100128
-        versionName = "10.01.28"
+        versionCode = 100129
+        versionName = "10.01.29"
     }
 
     packaging {

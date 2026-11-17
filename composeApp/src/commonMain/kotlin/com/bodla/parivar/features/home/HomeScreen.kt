@@ -70,13 +70,24 @@ fun HomeScreen(
                 }
             }
 
-            // 1. Welcome Greeting Section
+            // 1. App Logo + Welcome Greeting Section
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Image(
+                        painter = painterResource(Res.drawable.bodla_parivar_logo),
+                        contentDescription = "Bodla Parivar Logo",
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                        ,
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = Strings.greeting(userName, lang),
                         style = BodlaPageTitle,
@@ -205,9 +216,7 @@ fun HomeScreen(
                         Triple(if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", "✨", Screen.Navratri),
                         Triple(Strings.serviceNotices(lang), "📢", Screen.Notices),
                         Triple(Strings.serviceOfferings(lang), "🙏", Screen.Offerings), // ચઢાવો
-                        Triple(Strings.serviceEmergency(lang), "🚨", Screen.Emergency),
                         Triple(Strings.serviceGallery(lang), "🖼", Screen.Gallery),
-                        Triple(Strings.serviceComplaints(lang), "✍", Screen.Complaints),
                         Triple(if (lang == AppLanguage.GUJARATI) "પરિણામ" else "Results", "🎓", Screen.ResultUpload),
                         Triple(Strings.antimYatraPost(lang), "🕯️", Screen.NoticeDesign),
                         Triple(Strings.besanuPost(lang), "🕊️", Screen.BesanuDesign)

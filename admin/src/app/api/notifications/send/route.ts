@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
           title_en: title_en || title_gu,
           description_gu: body_gu,
           description_en: body_en || body_gu,
-          status: 'PUBLISHED',
+          status: isStaff ? 'PUBLISHED' : 'PENDING',
           is_pinned: false,
           publish_at: new Date().toISOString(),
           published_by: profile.id,
@@ -115,6 +115,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'The public notice could not be created.' }, { status: 500 });
       }
       noticeId = notice.id;
+    }
+
+    if (!isStaff) {
+      return NextResponse.json({
+        success: true,
+        pending_approval: true,
+        message: 'Notice submitted successfully and is pending admin approval. It will not be published or broadcasted until approved by an administrator.'
+      });
     }
 
     // Save to the in-app history before contacting Firebase so history survives push outages.
@@ -152,44 +160,38 @@ export async function POST(request: NextRequest) {
     } = { success: true, mode: target };
 
     // 3. Dispatch Push Notification via Firebase Cloud Messaging
+    // DATA-ONLY payload: no "notification" key so onMessageReceived() is ALWAYS
+    // called even when the app is in background/killed.  The Android service
+    // builds its own notification + launches NoticeAlertActivity.
     const pushTitleGu = String(notification_title_gu ?? title_gu).slice(0, 80);
     const pushTitleEn = String(notification_title_en || title_en || title_gu).slice(0, 120);
     const pushBodyGu = String(body_gu).slice(0, 240);
     const pushBodyEn = String(body_en || body_gu).slice(0, 300);
-    const pushNotification: { title: string; body?: string; image?: string } = {
-      title: pushTitleGu,
-    };
-    const androidNotification: { channelId: string; sound: string; image?: string } = {
-      channelId: 'bodla_parivar_channel_v2',
+    const aps: { 'content-available': number; sound: string; 'mutable-content'?: number } = {
+      'content-available': 1,
       sound: 'default',
     };
-    const aps: { sound: string; 'mutable-content'?: number } = { sound: 'default' };
-    const apnsFcmOptions: { image?: string } = {};
     if (image_url) {
-      pushNotification.image = image_url;
-      androidNotification.image = image_url;
       aps['mutable-content'] = 1;
-      apnsFcmOptions.image = image_url;
     }
     const payload = {
-      notification: pushNotification,
       data: {
         title_gu: pushTitleGu,
         title_en: pushTitleEn,
         body_gu: pushBodyGu,
         body_en: pushBodyEn,
         type: String(type),
+        sender_profile_id: profile.id,
         notification_id: notification?.id ? String(notification.id) : '',
         reference_id: noticeId ? String(noticeId) : '',
         image_url: image_url ?? '',
       },
       android: {
         priority: 'high' as const,
-        notification: androidNotification,
       },
       apns: {
         payload: { aps },
-        ...(apnsFcmOptions.image ? { fcm_options: apnsFcmOptions } : {}),
+        headers: { 'apns-priority': '10' },
       },
     };
 

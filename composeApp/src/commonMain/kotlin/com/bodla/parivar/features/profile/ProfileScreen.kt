@@ -256,7 +256,6 @@ fun ProfileScreen(
                 BodlaCard {
                     val menuItems = mutableListOf(
                         Pair(if (lang == AppLanguage.GUJARATI) "✏️ પ્રોફાઇલ અપડેટ" else "✏️ Edit Profile", { onNavigate(Screen.EditProfile) }),
-                        Pair("✍ " + Strings.myComplaints(lang), { onNavigate(Screen.Complaints) }),
                         Pair("🙏 " + Strings.myOfferings(lang), { onNavigate(Screen.Offerings) }),
                         Pair("🏪 " + (if (lang == AppLanguage.GUJARATI) "મારા વ્યવસાયો" else "My Businesses"), { onNavigate(Screen.Directory) }),
                         Pair("🗑️ " + if (lang == AppLanguage.GUJARATI) "ખાતું ડિલીટ કરો" else "Delete My Account", {
@@ -265,8 +264,7 @@ fun ProfileScreen(
                             } else {
                                 onNavigate(Screen.Login)
                             }
-                        }),
-                        Pair("📞 " + Strings.serviceEmergency(lang), { onNavigate(Screen.Emergency) })
+                        })
                     )
 
                     menuItems.forEachIndexed { index, (label, action) ->
@@ -347,7 +345,7 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = "Version 10.01.28", style = BodlaCaption, color = TextSecondary)
+                    Text(text = "Version 10.01.29", style = BodlaCaption, color = TextSecondary)
                     Text(text = "Developed by Rutul Patel", style = BodlaCaption, color = TextSecondary)
                 }
             }

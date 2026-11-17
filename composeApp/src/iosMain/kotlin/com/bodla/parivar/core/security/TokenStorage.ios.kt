@@ -34,4 +34,12 @@ actual class TokenStorage {
         defaults.removeObjectForKey("refresh_token")
         defaults.removeObjectForKey("saved_profile_json")
     }
+
+    actual fun saveLastSeenNoticeId(noticeId: String) {
+        defaults.setObject(noticeId, forKey = "last_seen_notice_id")
+    }
+
+    actual fun getLastSeenNoticeId(): String? {
+        return defaults.stringForKey("last_seen_notice_id")
+    }
 }

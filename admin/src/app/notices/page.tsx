@@ -8,6 +8,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { translateText } from '@/lib/translation';
 import PrintControls from '@/components/PrintControls';
 import { GujlishInput, GujlishTextarea } from '@/components/GujlishInput';
+import PendingNoticesList from '@/components/PendingNoticesList';
 
 const MAX_MEDIA_SIZE = 100 * 1024 * 1024;
 const MEDIA_ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -238,6 +239,17 @@ export default function AdminNoticesPage() {
     const autoNotifTitle = notificationTitleGu.trim() || autoTitle;
     let uploadedPath: string | null = null;
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let authorProfileId: string | null = null;
+      if (user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+        authorProfileId = prof?.id || null;
+      }
+
       let imageUrl: string | null = null;
       let attachmentUrl: string | null = null;
       if (media) {
@@ -261,6 +273,7 @@ export default function AdminNoticesPage() {
         image_url: imageUrl,
         attachment_url: attachmentUrl,
         status: 'PUBLISHED',
+        published_by: authorProfileId,
         is_pinned: isPinned,
         publish_at: new Date().toISOString(),
       });
@@ -384,6 +397,11 @@ export default function AdminNoticesPage() {
       </header>
 
       {error && <p role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
+
+      {/* Admin Approval Section for Pending Notices */}
+      <div className="rounded-2xl border border-amber-300 bg-white p-5 shadow-sm">
+        <PendingNoticesList />
+      </div>
 
       {showComposer && (
         <form onSubmit={handleSubmit} className="space-y-5 border border-brand-border bg-cream-surface p-5 sm:p-6">

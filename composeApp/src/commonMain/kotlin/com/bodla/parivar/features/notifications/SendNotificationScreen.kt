@@ -243,18 +243,27 @@ fun SendNotificationScreen(
                 val finalBodyEn = bodyEn.trim().ifBlank { finalBodyGu }
                 val finalNotifTitle = finalTitleGu
 
-                // Post directly to send-notification edge function which handles FCM all_users topic
+                // Post with PENDING status - admin approval required before publishing
+                val currentProfile = runCatching { AppContainer.authRepository.getCurrentUser() }.getOrNull()
+                val profileId = currentProfile?.id
+
                 val response = client.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
                     contentType(ContentType.Application.Json)
                     setBody(buildJsonObject {
                         put("title_gu", finalTitleGu)
                         put("title_en", finalTitleEn)
+                        put("title", finalTitleGu)
                         put("notification_title_gu", finalNotifTitle)
                         put("notification_title_en", finalNotifTitle)
                         put("body_gu", finalBodyGu)
                         put("body_en", finalBodyEn)
+                        put("body", finalBodyGu)
                         put("description_gu", finalBodyGu)
                         put("description_en", finalBodyEn)
+                        put("status", "PENDING")
+                        if (!profileId.isNullOrBlank()) {
+                            put("published_by", profileId)
+                        }
                         if (!uploadedImageUrl.isNullOrBlank()) {
                             put("image_url", uploadedImageUrl!!)
                         }
@@ -285,6 +294,13 @@ fun SendNotificationScreen(
                 }
 
                 val responseBody = response.bodyAsText()
+                val requiresApproval = runCatching {
+                    Json.parseToJsonElement(responseBody)
+                        .jsonObject["requires_admin_approval"]
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        .equals("true", ignoreCase = true)
+                }.getOrDefault(false)
                 val pushSent = runCatching {
                     Json.parseToJsonElement(responseBody)
                         .jsonObject["push_sent"]
@@ -292,21 +308,47 @@ fun SendNotificationScreen(
                         ?.contentOrNull
                         .equals("true", ignoreCase = true)
                 }.getOrDefault(false)
-                if (pushSent) {
-                    successMessage = if (isGujarati) {
-                        "સૂચના મોકલાઈ અને push alert મોકલવાની વિનંતી સફળ થઈ."
-                    } else {
-                        "Notice published and push alert request accepted."
+
+                when {
+                    requiresApproval -> {
+                        // Notice saved as PENDING — admin will approve
+                        val noticeId = runCatching {
+                            Json.parseToJsonElement(responseBody).jsonObject["notice_id"]?.jsonPrimitive?.contentOrNull ?: ""
+                        }.getOrDefault("")
+                        if (noticeId.isNotBlank()) {
+                            AppContainer.tokenStorage.saveLastSeenNoticeId(noticeId)
+                        }
+                        successMessage = if (isGujarati) {
+                            "સૂચના એડમિન મંજૂરી માટે મોકલાઈ ગઈ છે. એડમિન મંજૂર કરશે પછી બધાને મોકલવામાં આવશે."
+                        } else {
+                            "Notice submitted for admin approval. Broadcast will be sent once approved."
+                        }
+                        kotlinx.coroutines.delay(1800)
+                        onSuccess()
                     }
-                    kotlinx.coroutines.delay(1200)
-                    onSuccess()
-                } else {
-                    wasNoticePublished = true
-                    successMessage = if (isGujarati) "સૂચના સફળતાપૂર્વક સાચવાઈ." else "Notice was saved successfully."
-                    errorMessage = if (isGujarati) {
-                        "Push alert મોકલાઈ નથી. Duplicate સૂચના ન મોકલો; Admin ને FCM ગોઠવવા કહો."
-                    } else {
-                        "No push alert was sent. Do not send this notice again; ask an administrator to configure FCM."
+                    pushSent -> {
+                        val noticeId = runCatching {
+                            Json.parseToJsonElement(responseBody).jsonObject["notice_id"]?.jsonPrimitive?.contentOrNull ?: ""
+                        }.getOrDefault("")
+                        if (noticeId.isNotBlank()) {
+                            AppContainer.tokenStorage.saveLastSeenNoticeId(noticeId)
+                        }
+                        successMessage = if (isGujarati) {
+                            "સૂચના મોકલાઈ અને push alert મોકલવાની વિનંતી સફળ થઈ."
+                        } else {
+                            "Notice published and push alert request accepted."
+                        }
+                        kotlinx.coroutines.delay(1200)
+                        onSuccess()
+                    }
+                    else -> {
+                        wasNoticePublished = true
+                        successMessage = if (isGujarati) "સૂચના સફળતાપૂર્વક સાચવાઈ." else "Notice was saved successfully."
+                        errorMessage = if (isGujarati) {
+                            "Push alert મોકલાઈ નથી. Duplicate સૂચના ન મોકલો; Admin ને FCM ગોઠવવા કહો."
+                        } else {
+                            "No push alert was sent. Do not send this notice again; ask an administrator to configure FCM."
+                        }
                     }
                 }
             } catch (e: Exception) {

@@ -8,4 +8,6 @@ expect class TokenStorage() {
     fun saveUserProfile(profileJson: String)
     fun getUserProfile(): String?
     fun clearToken()
+    fun saveLastSeenNoticeId(noticeId: String)
+    fun getLastSeenNoticeId(): String?
 }
