@@ -75,6 +75,40 @@ data class AppNotification(
     @SerialName("attachment_url") val attachmentUrl: String? = null
 )
 
+private fun shortenNotificationBody(rawBody: String): String {
+    val trimmed = rawBody.trim()
+    if (trimmed.isEmpty()) return ""
+
+    val isAntim = trimmed.contains("અંતિમ યાત્રા") || trimmed.contains("અંતિમયાત્રા") || trimmed.contains("સ્મશાન યાત્રા")
+    val isBesanu = trimmed.contains("બેસણું")
+
+    // If it is an antim yatra or besanu notification and contains extended poster text
+    if ((isAntim || isBesanu) && (trimmed.contains("દિલગીરી") || trimmed.contains("અવસાન") || trimmed.contains("અક્ષરવાસ") || trimmed.lines().size > 4)) {
+        val lines = trimmed.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val nameLine = lines.firstOrNull { line ->
+            (line.startsWith("સ્વ.") || line.startsWith("સ્વર્ગસ્થ")) &&
+                !line.contains("દિલગીરી") && !line.contains("અવસાન") && !line.contains("અક્ષરવાસ")
+        } ?: lines.firstOrNull { line ->
+            !line.contains("ૐ") && !line.contains("શાંતિ") && !line.contains("શ્રદ્ધાંજલિ") &&
+                !line.contains("દિલગીરી") && !line.contains("અંતિમ") && !line.contains("બેસણું") &&
+                !line.contains("સ્મશાન") && !line.contains("તારીખ") && !line.contains("તા.") &&
+                !line.contains("મો.") && !line.contains("લિ.") && !line.contains("પરિવાર") &&
+                line.length in 3..50
+        }
+
+        val cleanName = nameLine?.removePrefix("સ્વ.")?.removePrefix("સ્વર્ગસ્થ")?.trim() ?: ""
+        val formattedName = if (cleanName.isNotBlank()) "સ્વ. $cleanName" else ""
+
+        return buildString {
+            append("ૐ શાંતિઃ\n")
+            append(if (isBesanu) "બેસણું\n" else "અંતિમ યાત્રા\n")
+            if (formattedName.isNotBlank()) append(formattedName)
+        }.trim()
+    }
+
+    return trimmed
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationCenterScreen(
@@ -202,7 +236,11 @@ fun NotificationCenterScreen(
                                 Text(text = title, style = BodlaCardTitle, color = TextPrimary)
                                 if (body.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    Text(text = formatNoticeText(body), style = BodlaBody, color = TextSecondary)
+                                    Text(
+                                        text = formatNoticeText(shortenNotificationBody(body)),
+                                        style = BodlaBody,
+                                        color = TextSecondary
+                                    )
                                 }
                                 val imageUrl = notification.imageUrl ?: notification.payload?.get("image_url")?.jsonPrimitive?.contentOrNull
                                 val attachmentUrl = notification.attachmentUrl ?: notification.payload?.get("attachment_url")?.jsonPrimitive?.contentOrNull
