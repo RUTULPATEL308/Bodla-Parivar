@@ -128,8 +128,8 @@ suspend fun publishBesanuNotice(data: BesanuDesignData, accessToken: String, pos
 
         // 2. Broadcast FCM Push Notification via Vercel Admin API
         val token = com.bodla.parivar.core.security.TokenStorage().getToken() ?: accessToken
-        runCatching {
-            client.post("https://bodla-parivar-admin.vercel.app/api/notifications/send") {
+        try {
+            val pushResponse = client.post("https://bodla-parivar-admin.vercel.app/api/notifications/send") {
                 contentType(ContentType.Application.Json)
                 if (!token.isNullOrBlank()) {
                     header(HttpHeaders.Authorization, "Bearer $token")
@@ -149,6 +149,14 @@ suspend fun publishBesanuNotice(data: BesanuDesignData, accessToken: String, pos
                     }
                 }.toString())
             }
+            if (!pushResponse.status.isSuccess()) {
+                val errBody = runCatching { pushResponse.bodyAsText() }.getOrDefault("")
+                io.github.aakira.napier.Napier.e("Besanu push broadcast failed (${pushResponse.status.value}): $errBody", tag = "FCM")
+            } else {
+                io.github.aakira.napier.Napier.d("Besanu push broadcast success: ${pushResponse.bodyAsText()}", tag = "FCM")
+            }
+        } catch (e: Exception) {
+            io.github.aakira.napier.Napier.e("Besanu push broadcast exception: ${e.message}", e, tag = "FCM")
         }
 
         return result

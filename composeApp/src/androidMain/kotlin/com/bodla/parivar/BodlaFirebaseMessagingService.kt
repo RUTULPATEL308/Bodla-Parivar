@@ -44,6 +44,9 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
+        if (AndroidPlatform.appContext == null) {
+            AndroidPlatform.appContext = applicationContext
+        }
         val noticeId = remoteMessage.data["reference_id"] ?: remoteMessage.data["notification_id"] ?: ""
         val now = System.currentTimeMillis()
         if (noticeId.isNotBlank() && noticeId == lastProcessedNoticeId && now - lastProcessedTime < 4000) {
