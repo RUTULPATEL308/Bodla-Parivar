@@ -71,10 +71,14 @@ suspend fun publishAntimYatraNotice(data: NoticeDesignData, accessToken: String,
         val fullNoticeText = data.toNoticeText()
 
         val name = data.name.trim()
+        val formattedName = if (name.isNotBlank()) {
+            if (name.startsWith("સ્વ.") || name.startsWith("સ્વર્ગસ્થ")) name else "સ્વ. $name"
+        } else ""
+
         val shortBodyGu = buildString {
             append("ૐ શાંતિઃ\n")
-            append("ભાવભીની શ્રદ્ધાંજલિ\n")
-            if (name.isNotBlank()) append(name)
+            append("અંતિમ યાત્રા\n")
+            if (formattedName.isNotBlank()) append(formattedName)
         }.trim()
 
         val payload = buildJsonObject {
