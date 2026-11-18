@@ -1,6 +1,6 @@
 {
   "name": "bodla-parivar-admin",
-  "version": "10.01.29",
+  "version": "10.01.30",
   "private": true,
   "scripts": {
     "dev": "next dev",

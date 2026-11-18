@@ -21,6 +21,13 @@ object TokenManager {
 
     /** Call after user logs in or when the app starts. */
     fun registerIfNeeded(context: Context) {
+        val tokenStorage = TokenStorage()
+        val isLoggedIn = !tokenStorage.getToken().isNullOrBlank() || !tokenStorage.getUserProfile().isNullOrBlank()
+        if (!isLoggedIn) {
+            Napier.d("TokenManager: Skipping register, user not logged in", tag = "FCM")
+            return
+        }
+
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (!task.isSuccessful) {
                 Napier.e("FCM token fetch failed", tag = "FCM")
@@ -45,7 +52,13 @@ object TokenManager {
 
     /** Called from FirebaseMessagingService when a new token is generated. */
     fun refresh(token: String) {
-        uploadToken(token)
+        val tokenStorage = TokenStorage()
+        val isLoggedIn = !tokenStorage.getToken().isNullOrBlank() || !tokenStorage.getUserProfile().isNullOrBlank()
+        if (isLoggedIn) {
+            uploadToken(token)
+        } else {
+            Napier.d("TokenManager: Skipping refresh token upload, user not logged in", tag = "FCM")
+        }
     }
 
     // ---------------------------------------------------------------------

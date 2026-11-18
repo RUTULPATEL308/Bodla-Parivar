@@ -59,10 +59,18 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
         }
         Napier.d("FCM Message received from: ${remoteMessage.from}", tag = "FCM")
 
+        // Only deliver notifications to users who are logged in
+        val tokenStorage = TokenStorage()
+        val authToken = tokenStorage.getToken()
+        val userProfileJson = tokenStorage.getUserProfile()
+        if (authToken.isNullOrBlank() && userProfileJson.isNullOrBlank()) {
+            Napier.d("Skipping push notification: user is not logged in", tag = "FCM")
+            return
+        }
+
         // Exclude sender from receiving their own push notification
         val senderProfileId = remoteMessage.data["sender_profile_id"]
         if (!senderProfileId.isNullOrBlank()) {
-            val userProfileJson = TokenStorage().getUserProfile()
             if (userProfileJson != null) {
                 val profile = runCatching { Json.decodeFromString<Profile>(userProfileJson) }.getOrNull()
                 if (profile?.id == senderProfileId) {

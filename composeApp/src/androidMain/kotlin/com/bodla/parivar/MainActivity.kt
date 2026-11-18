@@ -38,21 +38,33 @@ class MainActivity : ComponentActivity() {
         handleNotificationIntent(intent)
         createVillageNotificationChannel()
         requestNotificationPermission()
-        TokenManager.registerIfNeeded(this)
 
-        // Subscribe to global topic for push broadcast notifications
-        try {
-            FirebaseMessaging.getInstance()
-                .subscribeToTopic("all_users")
-                .addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        Napier.d("Successfully subscribed to FCM topic: all_users", tag = "FCM")
-                    } else {
-                        Napier.w("Failed to subscribe to FCM topic: all_users", task.exception, tag = "FCM")
+        val tokenStorage = com.bodla.parivar.core.security.TokenStorage()
+        val isLoggedIn = !tokenStorage.getToken().isNullOrBlank() || !tokenStorage.getUserProfile().isNullOrBlank()
+
+        if (isLoggedIn) {
+            TokenManager.registerIfNeeded(this)
+            // Subscribe to global topic for push broadcast notifications
+            try {
+                FirebaseMessaging.getInstance()
+                    .subscribeToTopic("all_users")
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            Napier.d("Successfully subscribed to FCM topic: all_users", tag = "FCM")
+                        } else {
+                            Napier.w("Failed to subscribe to FCM topic: all_users", task.exception, tag = "FCM")
+                        }
                     }
-                }
-        } catch (e: Exception) {
-            Napier.e("FirebaseMessaging init error", e, tag = "FCM")
+            } catch (e: Exception) {
+                Napier.e("FirebaseMessaging init error", e, tag = "FCM")
+            }
+        } else {
+            // Ensure not subscribed to topic if not logged in
+            try {
+                FirebaseMessaging.getInstance().unsubscribeFromTopic("all_users")
+            } catch (e: Exception) {
+                Napier.w("Failed to unsubscribe from topic all_users", e, tag = "FCM")
+            }
         }
 
         setContent {

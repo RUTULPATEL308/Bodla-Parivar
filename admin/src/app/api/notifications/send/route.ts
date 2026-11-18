@@ -226,7 +226,8 @@ export async function POST(request: NextRequest) {
         const { data: deviceTokens } = await supabase
           .from('device_tokens')
           .select('token')
-          .eq('active', true);
+          .eq('active', true)
+          .not('user_id', 'is', null);
 
         const tokens = (deviceTokens || []).map((t) => t.token).filter(Boolean);
         if (tokens.length > 0) {
@@ -244,7 +245,8 @@ export async function POST(request: NextRequest) {
       const { data: deviceTokens, error: tokenError } = await supabase
         .from('device_tokens')
         .select('token')
-        .eq('active', true);
+        .eq('active', true)
+        .not('user_id', 'is', null);
 
       if (tokenError) {
         console.warn('Failed to query device tokens:', tokenError);

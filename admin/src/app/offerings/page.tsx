@@ -708,14 +708,10 @@ export default function AdminOfferingsPage() {
 
       // Send notification to all users about the new offering
       try {
-        const lang = (typeof window !== 'undefined' && typeof localStorage !== 'undefined')
-          ? (localStorage.getItem('lang') === 'gu' ? 'gu' : 'en')
-          : 'en';
-        const isGujarati = lang === 'gu';
-        const titleGu = isGujarati ? 'નવું ચઢાવો ઉમેરવામાં આવ્યું' : 'New Offering Added';
-        const titleEn = titleGu;
-        const bodyGu = isGujarati ? `નવું ચઢાવો ઉમેરવામાં આવ્યું છે: ${formData.title_gu || formData.title_en}` : `A new offering has been added: ${formData.title_gu || formData.title_en}`;
-        const bodyEn = bodyGu;
+        const titleGu = 'નવું ચઢાવો ઉમેરવામાં આવ્યું';
+        const titleEn = 'New Offering Added';
+        const bodyGu = `નવું ચઢાવો ઉમેરવામાં આવ્યું છે: ${formData.title_gu || formData.title_en}`;
+        const bodyEn = `A new offering has been added: ${formData.title_en || formData.title_gu}`;
 
         const { data: { session } } = await supabase.auth.getSession();
 

@@ -892,15 +892,13 @@ fun MainScreen(
                         )
 
                         is Screen.AddOffering -> if (currentUser?.isStaff == true || currentUser?.featurePermissions?.contains("offerings") == true) {
-                            val currentLang = LocalAppLanguage.current
                             AddOfferingScreen(
                                 onBack = { currentScreen = Screen.Offerings },
                                 onSubmit = { offering ->
-                                    val isGujarati = currentLang == AppLanguage.GUJARATI
-                                    val titleGu = if (isGujarati) "નવું ચઢાવો ઉમેરવામાં આવ્યું" else "New Offering Added"
-                                    val titleEn = titleGu
-                                    val bodyGu = if (isGujarati) "નવું ચઢાવો ઉમેરવામાં આવ્યું છે: ${offering.titleGu}" else "A new offering has been added: ${offering.titleGu}"
-                                    val bodyEn = bodyGu
+                                    val titleGu = "નવું ચઢાવો ઉમેરવામાં આવ્યું"
+                                    val titleEn = "New Offering Added"
+                                    val bodyGu = "નવું ચઢાવો ઉમેરવામાં આવ્યું છે: ${offering.titleGu}"
+                                    val bodyEn = "A new offering has been added: ${offering.titleEn.ifBlank { offering.titleGu }}"
                                     coroutineScope.launch {
                                         AppContainer.offeringRepository.submitOffering(offering)
                                             .onSuccess {
