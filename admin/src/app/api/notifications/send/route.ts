@@ -26,6 +26,18 @@ export async function POST(request: NextRequest) {
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: validated.status });
     const { target, title_gu, title_en, notification_title_gu, notification_title_en, body_gu, body_en, image_url, attachment_url, type, reference_id } = validated.value;
 
+    const isDirectFuneralNotice = Boolean(
+      body.is_besanu ||
+      body.is_antim_yatra ||
+      title_gu.includes('બેસણું') ||
+      title_gu.includes('અંતિમ યાત્રા') ||
+      title_gu.includes('અંતિમયાત્રા') ||
+      title_gu.includes('અંજલિ') ||
+      body_gu.includes('બેસણું') ||
+      body_gu.includes('અંતિમ યાત્રા') ||
+      body_gu.includes('અંતિમયાત્રા') ||
+      body_gu.includes('અંજલિ')
+    );
 
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -34,6 +46,7 @@ export async function POST(request: NextRequest) {
 
     let isStaff = false;
     let profileId: string | null = null;
+    let profile: { id: string } | null = null;
 
     const accessToken = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
     if (accessToken) {
@@ -42,19 +55,20 @@ export async function POST(request: NextRequest) {
       });
       const { data: { user } } = await authClient.auth.getUser(accessToken);
       if (user) {
-        const { data: profile } = await supabase
+        const { data: activeProfile } = await supabase
           .from('profiles')
           .select('id')
           .eq('auth_user_id', user.id)
           .eq('status', 'ACTIVE')
           .maybeSingle();
 
-        if (profile) {
-          profileId = profile.id;
+        if (activeProfile) {
+          profile = activeProfile;
+          profileId = activeProfile.id;
           const { data: roleLinks } = await supabase
             .from('user_roles')
             .select('role_id')
-            .eq('user_id', profile.id);
+            .eq('user_id', activeProfile.id);
           const roleIds = (roleLinks ?? []).map((row) => row.role_id);
           const { data: roles } = roleIds.length
             ? await supabase.from('roles').select('name').in('id', roleIds)
@@ -194,7 +208,7 @@ export async function POST(request: NextRequest) {
         body_gu: pushBodyGu,
         body_en: pushBodyEn,
         type: String(type),
-        sender_profile_id: profile.id,
+        sender_profile_id: profileId ?? '',
         notification_id: notification?.id ? String(notification.id) : '',
         reference_id: noticeId ? String(noticeId) : '',
         image_url: image_url ?? '',
