@@ -961,7 +961,7 @@ export function MobileParityFuneralDesignView({ kind }: { kind: 'antim' | 'besan
             <p className="min-h-[34px] max-w-full whitespace-pre-line px-1 text-[12px] font-semibold leading-[17px]" style={{ color: posterColors.ink }}>
               {isBesanu
                 ? 'બેસણાની શોકસભામાં આપની ઉપસ્થિતિથી શોકગ્રસ્ત પરિવારને સાંત્વના આપવાની વિનંતી છે.'
-                : `દિલગીરી સાથે જણાવવાનું કે અમારા વ્હાલા ${name || '[અહીં નામ લખો]'} નું${deathDate ? ` તા. ${formatDate(deathDate)} ના રોજ` : ''} અવસાન થયેલ છે.\nભગવાન એમના દિવ્ય આત્માને શાંતિ અર્પે અને પરિવારજનોને આ દુઃખ સહન કરવાની શક્તિ આપે ...`}
+                : `દિલગીરી સાથે જણાવવાનું કે ${name || '[અહીં નામ લખો]'} નું${deathDate ? ` તા. ${formatDate(deathDate)} ના રોજ` : ''} અવસાન થયેલ છે.\nભગવાન એમના દિવ્ય આત્માને શાંતિ અર્પે અને પરિવારજનોને આ દુઃખ સહન કરવાની શક્તિ આપે ...`}
             </p>
 
             <div className="mt-[9px] w-full rounded-[11px] border px-[14px] py-[7px] text-[12px] leading-[20px]" style={{ backgroundColor: posterColors.card, borderColor: `${posterColors.gold}99`, color: posterColors.ink }}>

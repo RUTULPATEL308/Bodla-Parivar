@@ -18,7 +18,7 @@ data class NoticeDesignData(
         appendLine("ભાવભીની શ્રદ્ધાંજલિ")
         appendLine(name.trim())
         appendLine()
-        appendLine("દિલગીરી સાથે જણાવવાનું કે અમારા વ્હાલા ${name.trim()} નું તા. ${dateOfDeath.trim()} ના રોજ અવસાન થયેલ છે.")
+        appendLine("દિલગીરી સાથે જણાવવાનું કે ${name.trim()} નું તા. ${dateOfDeath.trim()} ના રોજ અવસાન થયેલ છે.")
         appendLine("ભગવાન એમના દિવ્ય આત્માને શાંતિ અર્પે અને પરિવારજનોને આ દુઃખ સહન કરવાની શક્તિ આપે એ જ અમારી પ્રાર્થના.")
         appendLine("સ્મશાન યાત્રા / અંતિમ યાત્રા")
         
