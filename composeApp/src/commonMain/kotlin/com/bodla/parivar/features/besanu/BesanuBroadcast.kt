@@ -69,7 +69,12 @@ suspend fun publishBesanuNotice(data: BesanuDesignData, accessToken: String, pos
         val titleEn = noticeTitleEn(data)
         val fullNoticeText = data.toNoticeText()
 
-        val summaryBody = titleGu.take(200)
+        val name = data.name.trim()
+        val shortBodyGu = buildString {
+            append("ૐ શાંતિઃ\n")
+            append("ભાવભીની શ્રદ્ધાંજલિ\n")
+            if (name.isNotBlank()) append(name)
+        }.trim()
 
         val payload = buildJsonObject {
             put("title_gu", titleGu)
@@ -77,7 +82,7 @@ suspend fun publishBesanuNotice(data: BesanuDesignData, accessToken: String, pos
             put("notification_title_gu", titleGu)
             put("notification_title_en", titleEn)
             put("image_url", imageUrl)
-            put("body_gu", summaryBody)
+            put("body_gu", shortBodyGu)
             put("body_en", titleEn)
             put("description_gu", fullNoticeText.take(4000))
             put("description_en", titleEn)
@@ -140,7 +145,7 @@ suspend fun publishBesanuNotice(data: BesanuDesignData, accessToken: String, pos
                     put("notification_title_gu", titleGu.take(80))
                     put("notification_title_en", titleEn.take(120))
                     put("image_url", imageUrl)
-                    put("body_gu", fullNoticeText.take(200))
+                    put("body_gu", shortBodyGu)
                     put("body_en", titleEn.take(200))
                     put("type", "NOTICE")
                     put("is_besanu", true)

@@ -152,7 +152,6 @@ fun ExactImage2NoticeAlert(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .heightIn(max = 550.dp)
                 .clickable(enabled = false) {}
                 .shadow(
                     elevation = 20.dp,
@@ -164,7 +163,8 @@ fun ExactImage2NoticeAlert(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 22.dp),
+                    .wrapContentHeight()
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // 1. Soft Pill Tag: e.g. "📢 નવી ગ્રામ સૂચના" or "🕯️ અંતિમ યાત્રા" or "🕊️ બેસણું / શ્રદ્ધાંજલિ"
@@ -218,7 +218,8 @@ fun ExactImage2NoticeAlert(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 240.dp)
+                            .wrapContentHeight()
+                            .heightIn(max = 200.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
                         Text(
