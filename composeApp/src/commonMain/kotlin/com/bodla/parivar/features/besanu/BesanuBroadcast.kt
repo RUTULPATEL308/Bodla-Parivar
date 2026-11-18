@@ -129,7 +129,7 @@ suspend fun publishBesanuNotice(data: BesanuDesignData, accessToken: String, pos
         // 2. Broadcast FCM Push Notification via Vercel Admin API
         val token = com.bodla.parivar.core.security.TokenStorage().getToken() ?: accessToken
         try {
-            val pushResponse = client.post("https://bodla-parivar-admin.vercel.app/api/notifications/send") {
+            val pushResponse = client.post("https://bodla-parivar.vercel.app/api/notifications/send") {
                 contentType(ContentType.Application.Json)
                 if (!token.isNullOrBlank()) {
                     header(HttpHeaders.Authorization, "Bearer $token")
