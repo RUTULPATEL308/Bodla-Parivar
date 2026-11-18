@@ -226,5 +226,12 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
         }
 
         notificationManager.notify(notificationId, notificationBuilder.build())
+
+        // Automatically dismiss the status bar notification after 15 seconds
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            runCatching {
+                notificationManager.cancel(notificationId)
+            }
+        }, 15000L)
     }
 }
