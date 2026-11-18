@@ -41,11 +41,14 @@ export default function PendingNoticesList() {
   };
 
   useEffect(() => {
-    void fetchPending();
+    const fetch = async () => {
+      await fetchPending();
+    };
+    void fetch();
     const channel = supabase
       .channel('admin_pending_notices_sub')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notices' }, () => {
-        void fetchPending();
+        void fetch();
       })
       .subscribe();
 
