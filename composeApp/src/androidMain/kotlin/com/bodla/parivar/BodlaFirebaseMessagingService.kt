@@ -8,6 +8,9 @@ import android.content.Intent
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.PowerManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.net.URL
 import androidx.core.app.NotificationCompat
 import com.bodla.parivar.core.AndroidPlatform
 import com.bodla.parivar.core.security.TokenStorage
@@ -68,37 +71,44 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
 
         // Extract title and body from notification payload or data payload
         val type = remoteMessage.data["type"]
-        val title = if (type == "NOTICE") {
-            remoteMessage.notification?.title?.takeIf { it.isNotBlank() }
-                ?: remoteMessage.data["title_gu"]?.takeIf { it.isNotBlank() }
-                ?: "અંતિમ યાત્રા / સ્મશાન યાત્રા"
-        } else {
-            remoteMessage.notification?.title
-                ?: remoteMessage.data["title_gu"]
-                ?: remoteMessage.data["title_en"]
-                ?: "બોદલા પરિવાર (Bodla Parivar)"
+        val isAntim = remoteMessage.data["is_antim_yatra"] == "true" ||
+            remoteMessage.data["title_gu"]?.contains("અંતિમ") == true ||
+            remoteMessage.data["body_gu"]?.contains("અંતિમ") == true
+        val isBesanu = remoteMessage.data["is_besanu"] == "true" ||
+            remoteMessage.data["title_gu"]?.contains("બેસણું") == true ||
+            remoteMessage.data["body_gu"]?.contains("બેસણું") == true
+
+        val title = when {
+            isAntim -> remoteMessage.data["title_gu"]?.takeIf { it.isNotBlank() } ?: "અંતિમ યાત્રા"
+            isBesanu -> remoteMessage.data["title_gu"]?.takeIf { it.isNotBlank() } ?: "બેસણું"
+            type == "NOTICE" -> {
+                remoteMessage.notification?.title?.takeIf { it.isNotBlank() }
+                    ?: remoteMessage.data["title_gu"]?.takeIf { it.isNotBlank() }
+                    ?: "બોદલા પરિવાર સૂચના"
+            }
+            else -> {
+                remoteMessage.notification?.title
+                    ?: remoteMessage.data["title_gu"]
+                    ?: remoteMessage.data["title_en"]
+                    ?: "બોદલા પરિવાર (Bodla Parivar)"
+            }
         }
 
-        val body = if (type == "NOTICE") {
-            (remoteMessage.data["body_gu"] ?: remoteMessage.notification?.body ?: "")
-                .lineSequence()
-                .firstOrNull { it.isNotBlank() }
-                ?.take(120)
-                .orEmpty()
-        } else {
-            remoteMessage.notification?.body
-                ?: remoteMessage.data["body_gu"]
-                ?: remoteMessage.data["body_en"]
-                ?: ""
-        }
+        val body = (remoteMessage.data["body_gu"] ?: remoteMessage.notification?.body ?: "")
+            .lineSequence()
+            .firstOrNull { it.isNotBlank() }
+            ?.take(160)
+            ?: (remoteMessage.notification?.body ?: remoteMessage.data["body_en"] ?: "")
+
+        val imageUrl = remoteMessage.data["image_url"] ?: remoteMessage.data["imageUrl"]
 
         // Wake screen if screen is off so alert pops up immediately
         wakeUpScreen()
 
         // If app is closed / in background, also launch NoticeAlertActivity directly
-        launchAlertDirectly(title, body, remoteMessage.data)
+        launchAlertDirectly(title, remoteMessage.data["body_gu"] ?: body, remoteMessage.data)
 
-        sendNotification(title, body, remoteMessage.data)
+        sendNotification(title, body, remoteMessage.data, imageUrl)
     }
 
     private fun wakeUpScreen() {
@@ -141,7 +151,7 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun sendNotification(title: String, messageBody: String, data: Map<String, String>) {
+    private fun sendNotification(title: String, messageBody: String, data: Map<String, String>, imageUrl: String? = null) {
         val notificationId = (System.currentTimeMillis() % 100000).toInt()
 
         val fullScreenIntent = Intent(this, NoticeAlertActivity::class.java).apply {
@@ -177,7 +187,18 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        // Download poster image for big picture notification style if available
+        val pictureBitmap: Bitmap? = if (!imageUrl.isNullOrBlank()) {
+            runCatching {
+                val url = URL(imageUrl)
+                val conn = url.openConnection()
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                BitmapFactory.decodeStream(conn.getInputStream())
+            }.getOrNull()
+        } else null
+
+        val notificationBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(messageBody)
@@ -187,8 +208,19 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setDefaults(Notification.DEFAULT_ALL)
             .setContentIntent(fullScreenPendingIntent)
-            .build()
 
-        notificationManager.notify(notificationId, notification)
+        if (pictureBitmap != null) {
+            notificationBuilder
+                .setLargeIcon(pictureBitmap)
+                .setStyle(
+                    NotificationCompat.BigPictureStyle()
+                        .bigPicture(pictureBitmap)
+                        .setSummaryText(messageBody)
+                )
+        } else {
+            notificationBuilder.setStyle(NotificationCompat.BigTextStyle().bigText(messageBody))
+        }
+
+        notificationManager.notify(notificationId, notificationBuilder.build())
     }
 }

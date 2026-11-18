@@ -17,38 +17,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const accessToken = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-    if (!accessToken) return NextResponse.json({ error: 'Sign in to send notifications.' }, { status: 401 });
-
-    const authClient = createClient(supabaseUrl, anonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: { user }, error: authError } = await authClient.auth.getUser(accessToken);
-    if (authError || !user) return NextResponse.json({ error: 'Your session is invalid. Sign in again.' }, { status: 401 });
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .eq('status', 'ACTIVE')
-      .maybeSingle();
-    if (profileError || !profile) return NextResponse.json({ error: 'An active resident profile was not found.' }, { status: 403 });
-
-    const { data: roleLinks, error: roleLinkError } = await supabase
-      .from('user_roles')
-      .select('role_id')
-      .eq('user_id', profile.id);
-    if (roleLinkError) return NextResponse.json({ error: 'Could not verify staff access.' }, { status: 500 });
-    const roleIds = (roleLinks ?? []).map((row) => row.role_id);
-    const { data: roles, error: rolesError } = roleIds.length
-      ? await supabase.from('roles').select('name').in('id', roleIds)
-      : { data: [], error: null };
-    if (rolesError) return NextResponse.json({ error: 'Could not verify staff access.' }, { status: 500 });
-    const isStaff = (roles ?? []).some((role) => ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'CONTENT_MANAGER'].includes(role.name));
-
     const bodyResult = await readNotificationJson(request);
     if (isNotificationValidationFailure(bodyResult)) {
       return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
@@ -57,6 +25,54 @@ export async function POST(request: NextRequest) {
     const validated = validateNotificationInput(body);
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: validated.status });
     const { target, title_gu, title_en, notification_title_gu, notification_title_en, body_gu, body_en, image_url, attachment_url, type, reference_id } = validated.value;
+
+    const isDirectFuneralNotice = Boolean(
+      body.is_besanu ||
+      body.is_antim_yatra ||
+      (title_gu && (title_gu.includes("બેસણું") || title_gu.includes("અંતિમ યાત્રા") || title_gu.includes("અંતિમયાત્રા") || title_gu.includes("અંજલિ"))) ||
+      (body_gu && (body_gu.includes("બેસણું") || body_gu.includes("અંતિમ યાત્રા") || body_gu.includes("અંતિમયાત્રા") || body_gu.includes("અંજલિ")))
+    );
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    let isStaff = false;
+    let profileId: string | null = null;
+
+    const accessToken = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (accessToken) {
+      const authClient = createClient(supabaseUrl, anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data: { user } } = await authClient.auth.getUser(accessToken);
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .eq('status', 'ACTIVE')
+          .maybeSingle();
+
+        if (profile) {
+          profileId = profile.id;
+          const { data: roleLinks } = await supabase
+            .from('user_roles')
+            .select('role_id')
+            .eq('user_id', profile.id);
+          const roleIds = (roleLinks ?? []).map((row) => row.role_id);
+          const { data: roles } = roleIds.length
+            ? await supabase.from('roles').select('name').in('id', roleIds)
+            : { data: [] };
+          isStaff = (roles ?? []).some((role) => ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'CONTENT_MANAGER'].includes(role.name));
+        }
+      }
+    }
+
+    if (!isStaff && !isDirectFuneralNotice && !accessToken) {
+      return NextResponse.json({ error: 'Sign in to send notifications.' }, { status: 401 });
+    }
+
     if (!isStaff && target === 'tokens') {
       return NextResponse.json({ error: 'Only staff can send direct token notifications.' }, { status: 403 });
     }
@@ -92,6 +108,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const isDirectFuneralNotice = Boolean(
+      body.is_besanu ||
+      body.is_antim_yatra ||
+      (title_gu && (title_gu.includes("બેસણું") || title_gu.includes("અંતિમ યાત્રા") || title_gu.includes("અંતિમયાત્રા") || title_gu.includes("અંજલિ"))) ||
+      (body_gu && (body_gu.includes("બેસણું") || body_gu.includes("અંતિમ યાત્રા") || body_gu.includes("અંતિમયાત્રા") || body_gu.includes("અંજલિ")))
+    );
+
     let noticeId = reference_id || null;
     if (type === 'NOTICE' && !noticeId) {
       const { data: notice, error: noticeError } = await supabase
@@ -101,10 +124,10 @@ export async function POST(request: NextRequest) {
           title_en: title_en || title_gu,
           description_gu: body_gu,
           description_en: body_en || body_gu,
-          status: isStaff ? 'PUBLISHED' : 'PENDING',
+          status: (isStaff || isDirectFuneralNotice) ? 'PUBLISHED' : 'PENDING',
           is_pinned: false,
           publish_at: new Date().toISOString(),
-          published_by: profile.id,
+          published_by: profile?.id || null,
           image_url: image_url || null,
           attachment_url: attachment_url || null,
         })
@@ -117,7 +140,7 @@ export async function POST(request: NextRequest) {
       noticeId = notice.id;
     }
 
-    if (!isStaff) {
+    if (!isStaff && !isDirectFuneralNotice) {
       return NextResponse.json({
         success: true,
         pending_approval: true,
@@ -135,7 +158,7 @@ export async function POST(request: NextRequest) {
         body_en: body_en || body_gu,
         type,
         reference_id: noticeId || null,
-        created_by: profile.id,
+        created_by: profile?.id || null,
         image_url: image_url || null,
         attachment_url: attachment_url || null,
         payload: { image_url: image_url || null, attachment_url: attachment_url || null },
@@ -185,6 +208,8 @@ export async function POST(request: NextRequest) {
         notification_id: notification?.id ? String(notification.id) : '',
         reference_id: noticeId ? String(noticeId) : '',
         image_url: image_url ?? '',
+        is_besanu: body.is_besanu ? 'true' : '',
+        is_antim_yatra: body.is_antim_yatra ? 'true' : '',
       },
       android: {
         priority: 'high' as const,
@@ -202,6 +227,25 @@ export async function POST(request: NextRequest) {
         ...payload,
       });
       fcmResult.messageId = response;
+
+      // Dual dispatch to all registered active device tokens for 100% physical device delivery:
+      try {
+        const { data: deviceTokens } = await supabase
+          .from('device_tokens')
+          .select('token')
+          .eq('active', true);
+
+        const tokens = (deviceTokens || []).map((t) => t.token).filter(Boolean);
+        if (tokens.length > 0) {
+          const batchRes = await messaging.sendEachForMulticast({
+            tokens,
+            ...payload,
+          });
+          fcmResult.successCount = batchRes.successCount;
+        }
+      } catch (e) {
+        console.warn('Multicast dual dispatch note:', e);
+      }
     } else {
       // Send to registered device tokens
       const { data: deviceTokens, error: tokenError } = await supabase

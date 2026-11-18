@@ -82,7 +82,7 @@ export function validateNotificationInput(body: Record<string, unknown>): Valida
   }
 
   const referenceId = body.reference_id;
-  if (referenceId !== undefined && (typeof referenceId !== 'string' || !uuidPattern.test(referenceId))) {
+  if (referenceId !== undefined && referenceId !== null && referenceId !== '' && (typeof referenceId !== 'string' || !uuidPattern.test(String(referenceId)))) {
     return { ok: false, status: 400, error: 'Invalid notification reference.' };
   }
 
@@ -139,7 +139,7 @@ export function validateNotificationInput(body: Record<string, unknown>): Valida
       image_url: normalizedImageUrl,
       attachment_url: normalizedAttachmentUrl,
       type,
-      reference_id: referenceId,
+      reference_id: typeof referenceId === 'string' && uuidPattern.test(referenceId) ? referenceId : undefined,
     },
   };
 }

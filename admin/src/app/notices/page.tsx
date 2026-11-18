@@ -224,8 +224,9 @@ export default function AdminNoticesPage() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    if (!titleGu.trim() || !bodyGu.trim()) {
-      setError('ગુજરાતી શીર્ષક અને સંદેશ જરૂરી છે.');
+    const messageText = bodyGu.trim();
+    if (!messageText) {
+      setError('સૂચના સંદેશ જરૂરી છે.');
       return;
     }
     if (media && media.size > MAX_MEDIA_SIZE) {
@@ -235,7 +236,7 @@ export default function AdminNoticesPage() {
 
     setSaving(true);
     const noticeId = crypto.randomUUID();
-    const autoTitle = titleGu.trim() || bodyGu.trim().split('\n')[0].slice(0, 80) || 'Notice';
+    const autoTitle = titleGu.trim() || messageText.split('\n')[0].slice(0, 80) || 'સૂચના';
     const autoNotifTitle = notificationTitleGu.trim() || autoTitle;
     let uploadedPath: string | null = null;
     try {

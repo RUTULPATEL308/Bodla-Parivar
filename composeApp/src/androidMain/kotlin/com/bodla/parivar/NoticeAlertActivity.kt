@@ -75,12 +75,38 @@ class NoticeAlertActivity : ComponentActivity() {
             ?: intent.getStringExtra("body_gu")
             ?: ""
         val imageUrl = intent.getStringExtra("image_url")
+            ?: intent.getStringExtra("imageUrl")
+
+        val isAntim = intent.getStringExtra("is_antim_yatra") == "true" ||
+            title.contains("અંતિમ") ||
+            body.contains("અંતિમ")
+        val isBesanu = intent.getStringExtra("is_besanu") == "true" ||
+            title.contains("બેસણું") ||
+            body.contains("બેસણું")
+
+        val tagText = when {
+            isAntim -> "🕯️ અંતિમ યાત્રા"
+            isBesanu -> "🕊️ બેસણું / શ્રદ્ધાંજલિ"
+            else -> "📢 નવી ગ્રામ સૂચના"
+        }
+
+        val tagBgColor = when {
+            isAntim || isBesanu -> Color(0xFFF1F5F9) // Subtle calm neutral
+            else -> Color(0xFFE8F0FE) // Light soft pastel blue
+        }
+        val tagTextColor = when {
+            isAntim || isBesanu -> Color(0xFF334155) // Calm slate
+            else -> Color(0xFF1E3A8A) // Deep subtle blue
+        }
 
         setContent {
             ExactImage2NoticeAlert(
                 title = title,
                 body = body,
                 imageUrl = imageUrl,
+                tagText = tagText,
+                tagBgColor = tagBgColor,
+                tagTextColor = tagTextColor,
                 onOpen = {
                     val mainIntent = Intent(this, MainActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -107,6 +133,9 @@ fun ExactImage2NoticeAlert(
     title: String,
     body: String,
     imageUrl: String?,
+    tagText: String = "📢 નવી ગ્રામ સૂચના",
+    tagBgColor: Color = Color(0xFFE8F0FE),
+    tagTextColor: Color = Color(0xFF1E3A8A),
     onOpen: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -123,6 +152,7 @@ fun ExactImage2NoticeAlert(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
+                .heightIn(max = 550.dp)
                 .clickable(enabled = false) {}
                 .shadow(
                     elevation = 20.dp,
@@ -137,18 +167,18 @@ fun ExactImage2NoticeAlert(
                     .padding(horizontal = 16.dp, vertical = 22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 1. Soft Light Blue Pill Tag: 📢 નવી ગ્રામ સૂચના
+                // 1. Soft Pill Tag: e.g. "📢 નવી ગ્રામ સૂચના" or "🕯️ અંતિમ યાત્રા" or "🕊️ બેસણું / શ્રદ્ધાંજલિ"
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFE8F0FE) // Light soft pastel blue from Image 2
+                    color = tagBgColor
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "📢 નવી ગ્રામ સૂચના",
-                            color = Color(0xFF1E3A8A), // Deep subtle blue text
+                            text = tagText,
+                            color = tagTextColor,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -188,7 +218,7 @@ fun ExactImage2NoticeAlert(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 200.dp)
+                            .heightIn(max = 240.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
                         Text(
