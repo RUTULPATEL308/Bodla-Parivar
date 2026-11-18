@@ -67,3 +67,5 @@ ehthumbs.db
 composeApp/bodla-fcm-sa.json
 
 composeApp/bodla-fcm-sa.json
+.vercel
+.env*

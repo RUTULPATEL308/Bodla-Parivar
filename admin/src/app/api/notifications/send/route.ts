@@ -26,7 +26,12 @@ export async function POST(request: NextRequest) {
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: validated.status });
     const { target, title_gu, title_en, notification_title_gu, notification_title_en, body_gu, body_en, image_url, attachment_url, type, reference_id } = validated.value;
 
-
+    const isDirectFuneralNotice = Boolean(
+      body.is_besanu ||
+      body.is_antim_yatra ||
+      (title_gu && (title_gu.includes("બેસણું") || title_gu.includes("અંતિમ યાત્રા") || title_gu.includes("અંતિમયાત્રા") || title_gu.includes("અંજલિ"))) ||
+      (body_gu && (body_gu.includes("બેસણું") || body_gu.includes("અંતિમ યાત્રા") || body_gu.includes("અંતિમયાત્રા") || body_gu.includes("અંજલિ")))
+    );
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -102,8 +107,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'The notification attachment URL is invalid.' }, { status: 400 });
       }
     }
-
-
 
     let noticeId = reference_id || null;
     if (type === 'NOTICE' && !noticeId) {
