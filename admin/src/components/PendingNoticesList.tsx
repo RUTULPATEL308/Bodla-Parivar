@@ -40,27 +40,7 @@ export default function PendingNoticesList() {
     setLoading(false);
   };
 
-  const deleteNotice = async (id: string) => {
-    if (actionInProgress) return;
-    setActionInProgress(id);
-    try {
-      const res = await fetch('/api/notices/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noticeId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('Delete failed: ' + (data.error || 'Server error'));
-      } else {
-        await fetchPending();
-      }
-    } catch (e: any) {
-      alert('Error deleting notice: ' + (e?.message || e));
-    } finally {
-      setActionInProgress(null);
-    }
-  };
+
 
 
   useEffect(() => {
@@ -68,27 +48,7 @@ export default function PendingNoticesList() {
       await fetchPending();
     };
 
-  const deleteNotice = async (id: string) => {
-    if (actionInProgress) return;
-    setActionInProgress(id);
-    try {
-      const res = await fetch('/api/notices/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noticeId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('Delete failed: ' + (data.error || 'Server error'));
-      } else {
-        await fetchPending();
-      }
-    } catch (e: any) {
-      alert('Error deleting notice: ' + (e?.message || e));
-    } finally {
-      setActionInProgress(null);
-    }
-  };
+
 
     void fetch();
     const channel = supabase
@@ -102,27 +62,7 @@ export default function PendingNoticesList() {
       void supabase.removeChannel(channel);
     };
 
-  const deleteNotice = async (id: string) => {
-    if (actionInProgress) return;
-    setActionInProgress(id);
-    try {
-      const res = await fetch('/api/notices/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noticeId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('Delete failed: ' + (data.error || 'Server error'));
-      } else {
-        await fetchPending();
-      }
-    } catch (e: any) {
-      alert('Error deleting notice: ' + (e?.message || e));
-    } finally {
-      setActionInProgress(null);
-    }
-  };
+
 
   }, []);
 
@@ -148,27 +88,7 @@ export default function PendingNoticesList() {
     }
   };
 
-  const deleteNotice = async (id: string) => {
-    if (actionInProgress) return;
-    setActionInProgress(id);
-    try {
-      const res = await fetch('/api/notices/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noticeId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('Delete failed: ' + (data.error || 'Server error'));
-      } else {
-        await fetchPending();
-      }
-    } catch (e: any) {
-      alert('Error deleting notice: ' + (e?.message || e));
-    } finally {
-      setActionInProgress(null);
-    }
-  };
+
 
 
   const reject = async (id: string) => {
@@ -193,27 +113,7 @@ export default function PendingNoticesList() {
     }
   };
 
-  const deleteNotice = async (id: string) => {
-    if (actionInProgress) return;
-    setActionInProgress(id);
-    try {
-      const res = await fetch('/api/notices/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noticeId: id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('Delete failed: ' + (data.error || 'Server error'));
-      } else {
-        await fetchPending();
-      }
-    } catch (e: any) {
-      alert('Error deleting notice: ' + (e?.message || e));
-    } finally {
-      setActionInProgress(null);
-    }
-  };
+
 
 
   return (
