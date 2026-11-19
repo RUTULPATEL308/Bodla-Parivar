@@ -113,8 +113,8 @@ android {
         applicationId = "com.bodla.parivar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 100130
-        versionName = "10.01.30"
+        versionCode = 100133
+        versionName = "10.01.33"
     }
 
     packaging {
@@ -156,4 +156,8 @@ sqldelight {
 
 compose.resources {
     packageOfResClass = "com.bodla.parivar.composeapp.generated.resources"
+}
+
+configurations.all {
+    resolutionStrategy.force("com.google.android.recaptcha:recaptcha:18.4.0")
 }
