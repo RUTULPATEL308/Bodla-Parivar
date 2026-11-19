@@ -15,6 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
@@ -80,6 +81,10 @@ fun NoticeListScreen(
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
+    val isGujarati = lang == AppLanguage.GUJARATI
+
+    val needOverlay = !com.bodla.parivar.core.hasOverlayPermission()
+    val needNotification = com.bodla.parivar.core.hasOverlayPermission() && !com.bodla.parivar.core.hasNotificationPermission()
 
     Scaffold(
         topBar = {
@@ -110,22 +115,90 @@ fun NoticeListScreen(
         containerColor = CreamBackground,
         modifier = modifier
     ) { innerPadding ->
-        if (notices.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "No published notices yet. Pull down to refresh.",
-                    style = BodlaBody,
-                    color = TextSecondary
-                )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (needOverlay) {
+                item {
+                    Card(
+                        onClick = { com.bodla.parivar.core.openOverlayPermissionSettings() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = androidx.compose.ui.graphics.SolidColor(GoldenAccent)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "📲", fontSize = 26.sp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isGujarati) "બંધ એપમાં પોપ-અપ વિન્ડો મેળવો" else "Get popup window when app is closed",
+                                    style = BodlaBody.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (isGujarati) "'Display over other apps' પરવાનગી આપવા અહીં ક્લિક કરો" else "Click to enable 'Display over other apps'",
+                                    style = BodlaCaption.copy(color = SaffronPrimary, fontWeight = FontWeight.SemiBold)
+                                )
+                            }
+                            Text(text = "⚙️", fontSize = 22.sp)
+                        }
+                    }
+                }
+            } else if (needNotification) {
+                item {
+                    Card(
+                        onClick = { com.bodla.parivar.core.openAppSettings() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = androidx.compose.ui.graphics.SolidColor(GoldenAccent)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "🔔", fontSize = 26.sp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isGujarati) "નોટિફિકેશન પરવાનગી ચાલુ કરો" else "Enable Notification Permission",
+                                    style = BodlaBody.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (isGujarati) "નોટિફિકેશન મેળવવા અહીં ક્લિક કરો" else "Click here to enable notifications",
+                                    style = BodlaCaption.copy(color = SaffronPrimary, fontWeight = FontWeight.SemiBold)
+                                )
+                            }
+                            Text(text = "⚙️", fontSize = 22.sp)
+                        }
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+
+            if (notices.isEmpty()) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (isGujarati) "હાલમાં કોઈ નવી સૂચના નથી." else "No published notices yet. Pull down to refresh.",
+                            style = BodlaBody,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            } else {
                 items(notices) { notice ->
                     NoticeCard(
                         notice = notice,
@@ -411,21 +484,53 @@ fun NoticeDetailScreen(
 
     val attachmentUrl = currentNotice.attachmentUrl
     if (showAttachmentPreview.value && !attachmentUrl.isNullOrBlank()) {
-        Dialog(onDismissRequest = { showAttachmentPreview.value = false }) {
-            Surface(shape = MaterialTheme.shapes.large, color = WarmWhiteSurface) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    NoticeAttachmentPreview(
-                        url = attachmentUrl,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 560.dp)
-                    )
-                    OutlinedButton(
-                        onClick = { uriHandler.openUri(attachmentUrl + if (attachmentUrl.contains('?')) "&download" else "?download") },
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                    ) { Text(if (lang == AppLanguage.GUJARATI) "ડાઉનલોડ કરો" else "Download") }
-                    TextButton(
-                        onClick = { showAttachmentPreview.value = false },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (lang == AppLanguage.GUJARATI) "બંધ કરો" else "Close") }
+        Dialog(
+            onDismissRequest = { showAttachmentPreview.value = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = WarmWhiteSurface,
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .fillMaxHeight(0.85f)
+                    .padding(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        NoticeAttachmentPreview(
+                            url = attachmentUrl,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { uriHandler.openUri(attachmentUrl + if (attachmentUrl.contains('?')) "&download" else "?download") },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text(if (lang == AppLanguage.GUJARATI) "ડાઉનલોડ કરો" else "Download", fontWeight = FontWeight.Bold) }
+                        TextButton(
+                            onClick = { showAttachmentPreview.value = false },
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                        ) { Text(if (lang == AppLanguage.GUJARATI) "બંધ કરો" else "Close", fontWeight = FontWeight.SemiBold, color = TextSecondary) }
+                    }
                 }
             }
         }

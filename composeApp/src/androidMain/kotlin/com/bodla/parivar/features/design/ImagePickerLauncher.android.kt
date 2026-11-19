@@ -42,5 +42,5 @@ actual fun ResultDocumentPicker(label: String, modifier: Modifier, onDocumentPic
         }
         onDocumentPicked(selected)
     }
-    TextButton(onClick = { launcher.launch(arrayOf("image/*", "application/pdf")) }, modifier = modifier) { Text(label) }
+    TextButton(onClick = { launcher.launch(arrayOf("image/*", "video/*", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) }, modifier = modifier) { Text(label) }
 }

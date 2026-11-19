@@ -256,6 +256,7 @@ fun ProfileScreen(
                 BodlaCard {
                     val menuItems = mutableListOf(
                         Pair(if (lang == AppLanguage.GUJARATI) "✏️ પ્રોફાઇલ અપડેટ" else "✏️ Edit Profile", { onNavigate(Screen.EditProfile) }),
+                        Pair("🔔 " + if (lang == AppLanguage.GUJARATI) "નોટિફિકેશન અને પોપ-અપ સેટિંગ્સ" else "Notification & Popup Settings", { com.bodla.parivar.core.openAppSettings() }),
                         Pair("🙏 " + Strings.myOfferings(lang), { onNavigate(Screen.Offerings) }),
                         Pair("🏪 " + (if (lang == AppLanguage.GUJARATI) "મારા વ્યવસાયો" else "My Businesses"), { onNavigate(Screen.Directory) }),
                         Pair("🗑️ " + if (lang == AppLanguage.GUJARATI) "ખાતું ડિલીટ કરો" else "Delete My Account", {

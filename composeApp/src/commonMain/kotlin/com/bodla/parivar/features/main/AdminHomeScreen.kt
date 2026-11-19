@@ -33,6 +33,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import com.bodla.parivar.core.di.AppContainer
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
@@ -264,6 +268,53 @@ fun AdminHomeScreen(
                                                 maxLines = 3,
                                                 overflow = TextOverflow.Ellipsis
                                             )
+                                        }
+
+                                        val imageUrl = notice.imageUrl
+                                        if (!imageUrl.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = imageUrl,
+                                                contentDescription = "Notice image",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .heightIn(max = 140.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                            )
+                                        }
+
+                                        val attachmentUrl = notice.attachmentUrl
+                                        if (!attachmentUrl.isNullOrBlank()) {
+                                            val uriHandler = LocalUriHandler.current
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+                                            ) {
+                                                androidx.compose.material3.OutlinedButton(
+                                                    onClick = { uriHandler.openUri(attachmentUrl) },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(
+                                                        text = if (isGujarati) "📄 દસ્તાવેજ જુઓ" else "📄 View Document",
+                                                        style = BodlaCaption.copy(fontWeight = FontWeight.SemiBold),
+                                                        color = SaffronPrimary
+                                                    )
+                                                }
+                                                androidx.compose.material3.OutlinedButton(
+                                                    onClick = {
+                                                        uriHandler.openUri(attachmentUrl + if (attachmentUrl.contains('?')) "&download" else "?download")
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(
+                                                        text = if (isGujarati) "⬇️ ડાઉનલોડ" else "⬇️ Download",
+                                                        style = BodlaCaption.copy(fontWeight = FontWeight.SemiBold),
+                                                        color = TextPrimary
+                                                    )
+                                                }
+                                            }
                                         }
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),

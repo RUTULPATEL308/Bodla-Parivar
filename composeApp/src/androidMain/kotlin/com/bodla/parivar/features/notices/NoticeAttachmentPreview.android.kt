@@ -141,6 +141,7 @@ private fun PdfAttachmentPreview(url: String, modifier: Modifier) {
 private fun WebAttachmentPreview(url: String, modifier: Modifier) {
     val path = url.substringBefore('?').lowercase()
     val isOfficeDocument = path.endsWith(".doc") || path.endsWith(".docx")
+    val isVideo = path.endsWith(".mp4") || path.endsWith(".mov") || path.endsWith(".m4v") || path.endsWith(".webm") || path.endsWith(".3gp") || path.endsWith(".mkv")
     val previewUrl = if (isOfficeDocument) {
         "https://docs.google.com/gview?embedded=1&url=${android.net.Uri.encode(url)}"
     } else {
@@ -150,18 +151,51 @@ private fun WebAttachmentPreview(url: String, modifier: Modifier) {
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
-                settings.javaScriptEnabled = isOfficeDocument
-                settings.mediaPlaybackRequiresUserGesture = true
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(0xFF000000.toInt())
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.mediaPlaybackRequiresUserGesture = false
                 settings.setSupportZoom(true)
                 settings.builtInZoomControls = true
                 settings.displayZoomControls = false
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
                 webViewClient = WebViewClient()
                 webChromeClient = WebChromeClient()
-                loadUrl(previewUrl)
+
+                if (isVideo) {
+                    val html = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        </head>
+                        <body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;">
+                            <video controls playsinline autoplay style="width:100%;max-height:100%;">
+                                <source src="$url">
+                                Your browser does not support the video tag.
+                            </video>
+                        </body>
+                        </html>
+                    """.trimIndent()
+                    loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+                } else {
+                    loadUrl(previewUrl)
+                }
             }
         },
         update = { view ->
-            if (view.url != previewUrl) view.loadUrl(previewUrl)
+            if (!isVideo && view.url != previewUrl) view.loadUrl(previewUrl)
+        },
+        onRelease = { view ->
+            runCatching {
+                view.loadUrl("about:blank")
+                view.destroy()
+            }
         }
     )
 }

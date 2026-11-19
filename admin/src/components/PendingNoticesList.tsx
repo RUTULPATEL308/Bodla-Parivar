@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Check, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { Check, Clock, AlertCircle, RefreshCw, FileText, Download, ExternalLink } from 'lucide-react';
 
 interface NoticeItem {
   id: string;
@@ -143,6 +143,7 @@ export default function PendingNoticesList() {
               </p>
               {n.image_url && (
                 <div className="pt-2">
+                  <p className="text-xs font-semibold text-slate-500 mb-1.5">🖼️ ફોટો / છબી (Image):</p>
                   <a
                     href={n.image_url}
                     target="_blank"
@@ -155,6 +156,31 @@ export default function PendingNoticesList() {
                       className="max-h-48 rounded-lg object-contain border border-slate-200"
                     />
                   </a>
+                </div>
+              )}
+              {n.attachment_url && (
+                <div className="pt-2">
+                  <p className="text-xs font-semibold text-slate-500 mb-1.5">📄 અપલોડ કરેલ દસ્તાવેજ (Uploaded Document):</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={n.attachment_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition shadow-sm"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span>દસ્તાવેજ જુઓ (View Document)</span>
+                    </a>
+                    <a
+                      href={n.attachment_url + (n.attachment_url.includes('?') ? '&download' : '?download')}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                    >
+                      <Download className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>ડાઉનલોડ કરો (Download)</span>
+                    </a>
+                  </div>
                 </div>
               )}
               <div className="flex justify-end pt-2 border-t border-slate-100">

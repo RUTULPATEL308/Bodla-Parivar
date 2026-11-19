@@ -57,7 +57,7 @@ actual fun ResultDocumentPicker(label: String, modifier: Modifier, onDocumentPic
     val parent = LocalUIViewController.current
     TextButton(onClick = {
         val picker = UIDocumentPickerViewController(
-            documentTypes = listOf("public.image", "com.adobe.pdf"),
+            documentTypes = listOf("public.image", "public.movie", "public.video", "public.audiovisual-content", "com.adobe.pdf", "com.microsoft.word.doc", "org.openxmlformats.wordprocessingml.document"),
             inMode = UIDocumentPickerMode.UIDocumentPickerModeImport
         )
         val delegate = object : NSObject(), UIDocumentPickerDelegateProtocol {
@@ -65,11 +65,18 @@ actual fun ResultDocumentPicker(label: String, modifier: Modifier, onDocumentPic
                 val url = didPickDocumentsAtURLs.firstOrNull() as? NSURL
                 val bytes = url?.let { NSData.dataWithContentsOfURL(it) }
                 val result = if (url != null && bytes != null) {
-                    val contentType = when (url.pathExtension?.lowercase()) {
+                    val ext = url.pathExtension?.lowercase() ?: "bin"
+                    val contentType = when (ext) {
                         "pdf" -> "application/pdf"
                         "png" -> "image/png"
                         "webp" -> "image/webp"
-                        else -> "image/jpeg"
+                        "mp4" -> "video/mp4"
+                        "mov" -> "video/quicktime"
+                        "webm" -> "video/webm"
+                        "mkv" -> "video/x-matroska"
+                        "doc" -> "application/msword"
+                        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        else -> "application/octet-stream"
                     }
                     ResultDocument(ByteArray(bytes.length.toInt()).also { target ->
                         if (target.isNotEmpty()) target.usePinned { memcpy(it.addressOf(0), bytes.bytes, bytes.length) }
