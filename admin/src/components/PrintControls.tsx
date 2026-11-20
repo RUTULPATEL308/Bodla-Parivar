@@ -8,9 +8,10 @@ import { useAdminLanguage } from '@/components/AdminLanguageContext';
 
 type PrintControlsProps = {
   orientation?: 'portrait' | 'landscape';
+  documentTitle?: string;
 };
 
-export default function PrintControls({ orientation = 'portrait' }: PrintControlsProps) {
+export default function PrintControls({ orientation = 'portrait', documentTitle }: PrintControlsProps) {
   const { lang, printLanguage, setPrintLanguage } = useAdminLanguage();
   const gu = lang === 'gu';
   const [isGenerating, setIsGenerating] = useState(false);
@@ -42,7 +43,7 @@ export default function PrintControls({ orientation = 'portrait' }: PrintControl
     orgSubtitle.style.cssText = 'font-size: 7.5pt; color: #64748B; font-weight: 500; margin-top: 1px;';
     orgSubtitle.textContent = 'બોદલા ગ્રામીણ સમુદાય ટ્રસ્ટ • Mehsana, Gujarat';
 
-    const currentTitle = document.querySelector('main h1')?.textContent?.trim() || document.title;
+    const currentTitle = documentTitle || document.querySelector('main h1')?.textContent?.trim() || document.title;
     const docTitle = document.createElement('div');
     docTitle.style.cssText = 'font-size: 9.5pt; font-weight: 700; color: #D97706; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.02em;';
     docTitle.textContent = currentTitle;
@@ -176,7 +177,7 @@ export default function PrintControls({ orientation = 'portrait' }: PrintControl
       }
 
       const blob = pdf.output('blob');
-      const sanitizedTitle = (document.querySelector('main h1')?.textContent?.trim() || document.title || 'bodla-report')
+      const sanitizedTitle = (documentTitle || document.querySelector('main h1')?.textContent?.trim() || document.title || 'bodla-report')
         .replace(/[^a-zA-Z0-9\u0A80-\u0AFF]+/g, '-')
         .replace(/^-|-$/g, '');
       const filename = `${sanitizedTitle || 'bodla-document'}.pdf`;
