@@ -304,7 +304,7 @@ fun NotificationCenterScreen(
                                 }
                                 notification.createdAt?.let { createdAt ->
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Text(text = createdAt, style = BodlaCaption, color = TextTertiary)
+                                    Text(text = com.bodla.parivar.core.ui.formatShortDateTime(createdAt), style = BodlaCaption, color = TextTertiary)
                                 }
                             }
                             val canDelete = currentProfile?.let { profile ->

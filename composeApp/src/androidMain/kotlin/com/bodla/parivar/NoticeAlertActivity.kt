@@ -77,6 +77,9 @@ class NoticeAlertActivity : ComponentActivity() {
         val imageUrl = intent.getStringExtra("image_url")
             ?: intent.getStringExtra("imageUrl")
 
+        val type = intent.getStringExtra("type")
+        val isPendingNotice = type == "NOTICE_PENDING"
+
         val isAntim = intent.getStringExtra("is_antim_yatra") == "true" ||
             title.contains("અંતિમ") ||
             body.contains("અંતિમ")
@@ -85,16 +88,19 @@ class NoticeAlertActivity : ComponentActivity() {
             body.contains("બેસણું")
 
         val tagText = when {
+            isPendingNotice -> "⏳ મંજૂરી માટે નવી સૂચના (Pending Approval)"
             isAntim -> "🕯️ અંતિમ યાત્રા"
             isBesanu -> "🕊️ બેસણું / શ્રદ્ધાંજલિ"
             else -> "📢 નવી ગ્રામ સૂચના"
         }
 
         val tagBgColor = when {
+            isPendingNotice -> Color(0xFFFEF3C7) // Light amber
             isAntim || isBesanu -> Color(0xFFF1F5F9) // Subtle calm neutral
             else -> Color(0xFFE8F0FE) // Light soft pastel blue
         }
         val tagTextColor = when {
+            isPendingNotice -> Color(0xFF92400E) // Amber text
             isAntim || isBesanu -> Color(0xFF334155) // Calm slate
             else -> Color(0xFF1E3A8A) // Deep subtle blue
         }
@@ -110,11 +116,15 @@ class NoticeAlertActivity : ComponentActivity() {
                 onOpen = {
                     val mainIntent = Intent(this, MainActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        if (noticeId.isNotBlank()) {
+                        if (isPendingNotice) {
+                            putExtra("target_screen", "admin_home")
+                        } else if (noticeId.isNotBlank()) {
                             putExtra("reference_id", noticeId)
                         }
                     }
-                    if (noticeId.isNotBlank()) {
+                    if (isPendingNotice) {
+                        PendingNotices.post("ADMIN_PENDING_APPROVAL")
+                    } else if (noticeId.isNotBlank()) {
                         PendingNotices.post(noticeId)
                     }
                     startActivity(mainIntent)

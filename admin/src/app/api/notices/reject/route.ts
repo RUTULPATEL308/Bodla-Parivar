@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * Reject a pending notice. The notice status will be set to 'REJECTED'.
- * Admin can later delete it permanently if desired.
- */
+// Reject / Delete a pending notice
 export async function POST(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -29,15 +26,41 @@ export async function POST(request: NextRequest) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { error } = await supabase
+  // 1. Fetch notice media URLs to clean up storage if present
+  const { data: notice } = await supabase
     .from('notices')
-    .update({ status: 'REJECTED' })
+    .select('image_url, attachment_url')
+    .eq('id', noticeId)
+    .maybeSingle();
+
+  // 2. Delete notice from notices table
+  const { error: deleteError } = await supabase
+    .from('notices')
+    .delete()
     .eq('id', noticeId);
 
-  if (error) {
-    console.error('Reject notice error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (deleteError) {
+    console.error('Reject/Delete error:', deleteError);
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, noticeId });
+  // 3. Clean up storage files if present
+  if (notice) {
+    const bucketMarkers = [
+      { bucket: 'notices', marker: '/storage/v1/object/public/notices/' },
+      { bucket: 'antim-yatra-posters', marker: '/storage/v1/object/public/antim-yatra-posters/' },
+    ];
+    for (const url of [notice.image_url, notice.attachment_url]) {
+      if (!url) continue;
+      for (const { bucket, marker } of bucketMarkers) {
+        const markerIndex = url.indexOf(marker);
+        if (markerIndex < 0) continue;
+        const path = decodeURIComponent(url.slice(markerIndex + marker.length).split('?')[0]);
+        await supabase.storage.from(bucket).remove([path]);
+        break;
+      }
+    }
+  }
+
+  return NextResponse.json({ success: true, message: 'Notice rejected and deleted.' });
 }

@@ -19,7 +19,8 @@ fun NoticeDto.toDomain(): Notice = Notice(
     status = status,
     publishAt = publishAt,
     createdAt = createdAt,
-    publishedById = publishedBy
+    publishedById = publishedBy,
+    publisherName = publisher?.fullName
 )
 
 fun CachedNotice.toDomain(): Notice = Notice(
@@ -36,7 +37,8 @@ fun CachedNotice.toDomain(): Notice = Notice(
     status = status,
     publishAt = publishAt,
     createdAt = createdAt,
-    publishedById = publishedById
+    publishedById = publishedById,
+    publisherName = publisherName
 )
 
 // --- Event Mappers ---

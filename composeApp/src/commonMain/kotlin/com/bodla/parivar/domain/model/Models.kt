@@ -58,7 +58,8 @@ data class Notice(
     val status: String = "PUBLISHED",
     val publishAt: String? = null,
     val createdAt: String,
-    val publishedById: String? = null
+    val publishedById: String? = null,
+    val publisherName: String? = null
 )
 
 @Serializable

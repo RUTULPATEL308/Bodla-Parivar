@@ -499,7 +499,8 @@ class NoticeRepositoryImpl(
                             status = dto.status,
                             publishAt = dto.publishAt,
                             createdAt = dto.createdAt,
-                            publishedById = dto.publishedBy
+                            publishedById = dto.publishedBy,
+                            publisherName = dto.publisher?.fullName
                         )
                     }
                 }
@@ -530,7 +531,7 @@ class NoticeRepositoryImpl(
 
         // Fallback: Fetch directly from server by ID in case local sync hasn't arrived yet
         try {
-            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en)&id=eq.$id")
+            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en),publisher:profiles!published_by(full_name)&id=eq.$id")
             if (response.status.isSuccess()) {
                 val dtos = decodeNoticeDtos(response.bodyAsText())
                 val dto = dtos.firstOrNull()
@@ -549,7 +550,8 @@ class NoticeRepositoryImpl(
                         status = dto.status,
                         publishAt = dto.publishAt,
                         createdAt = dto.createdAt,
-                        publishedById = dto.publishedBy
+                        publishedById = dto.publishedBy,
+                        publisherName = dto.publisher?.fullName
                     )
                     return@withContext dto.toDomain()
                 }
@@ -632,7 +634,7 @@ class NoticeRepositoryImpl(
     override suspend fun getPendingNotices(): Result<List<Notice>> = withContext(Dispatchers.IO) {
         try {
             val token = tokenStorage?.getToken()
-            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en)&status=eq.PENDING&order=created_at.desc") {
+            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en),publisher:profiles!published_by(full_name)&status=eq.PENDING&order=created_at.desc") {
                 if (!token.isNullOrBlank()) {
                     headers.remove(HttpHeaders.Authorization)
                     header(HttpHeaders.Authorization, "Bearer $token")
@@ -654,33 +656,16 @@ class NoticeRepositoryImpl(
     override suspend fun approveNotice(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val token = tokenStorage?.getToken()
-            val response = httpClient.patch("${Endpoints.REST_BASE_URL}/notices?id=eq.$id") {
+            val response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/approve_notice") {
                 contentType(ContentType.Application.Json)
                 if (!token.isNullOrBlank()) {
-                    headers.remove(HttpHeaders.Authorization)
                     header(HttpHeaders.Authorization, "Bearer $token")
                 }
                 setBody(buildJsonObject {
-                    put("status", "PUBLISHED")
-                    put("publish_at", Clock.System.now().toString())
+                    put("p_notice_id", id)
                 }.toString())
             }
             if (response.status.isSuccess()) {
-                runCatching {
-                    httpClient.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
-                        contentType(ContentType.Application.Json)
-                        if (!token.isNullOrBlank()) {
-                            headers.remove(HttpHeaders.Authorization)
-                            header(HttpHeaders.Authorization, "Bearer $token")
-                        }
-                        setBody(buildJsonObject {
-                            put("reference_id", id)
-                            put("type", "NOTICE")
-                            put("title_gu", "ગ્રામ સૂચના મંજૂર થઈ")
-                            put("body_gu", "નવી સૂચના મંજૂર અને પ્રકાશિત કરવામાં આવી છે.")
-                        }.toString())
-                    }
-                }
                 Result.success(Unit)
             } else {
                 val body = runCatching { response.bodyAsText() }.getOrDefault("")

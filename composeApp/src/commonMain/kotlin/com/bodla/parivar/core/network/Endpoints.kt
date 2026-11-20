@@ -50,7 +50,7 @@ object Endpoints {
         get() = "$REST_BASE_URL/profiles"
 
     val NOTICES: String
-        get() = "$REST_BASE_URL/notices?select=*,category:notice_categories(name_gu,name_en)&status=eq.PUBLISHED&order=is_pinned.desc,created_at.desc"
+        get() = "$REST_BASE_URL/notices?select=*,category:notice_categories(name_gu,name_en),publisher:profiles!published_by(full_name)&status=eq.PUBLISHED&order=is_pinned.desc,created_at.desc"
 
     val NAVRATRI_OPTIONS: String
         get() = "$REST_BASE_URL/navratri_options?select=*&is_active=eq.true&order=display_order.asc"

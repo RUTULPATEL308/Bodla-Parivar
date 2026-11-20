@@ -70,7 +70,7 @@ fun HomeScreen(
                 }
             }
 
-            // 1. App Logo + Welcome Greeting Section
+            // 1. Welcome Greeting Section (Duplicate Logo Removed)
             item {
                 Column(
                     modifier = Modifier
@@ -78,16 +78,6 @@ fun HomeScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painter = painterResource(Res.drawable.bodla_parivar_logo),
-                        contentDescription = "Bodla Parivar Logo",
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                        ,
-                        contentScale = ContentScale.Fit
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = Strings.greeting(userName, lang),
                         style = BodlaPageTitle,

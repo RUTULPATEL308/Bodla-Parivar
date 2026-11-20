@@ -55,7 +55,7 @@ export default function AdminNoticesPage() {
   const [bodyGu, setBodyGu] = useState('');
   const [bodyEn, setBodyEn] = useState('');
   const [notificationTitleGu, setNotificationTitleGu] = useState('');
-  const [media, setMedia] = useState<File | null>(null);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [optimizing, setOptimizing] = useState(false);
   const [preview, setPreview] = useState<Notice | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -238,7 +238,7 @@ export default function AdminNoticesPage() {
     const noticeId = crypto.randomUUID();
     const autoTitle = titleGu.trim() || messageText.split('\n')[0].slice(0, 80) || 'સૂચના';
     const autoNotifTitle = notificationTitleGu.trim() || autoTitle;
-    let uploadedPath: string | null = null;
+    const uploadedPaths: string[] = [];
     try {
       const { data: { user } } = await supabase.auth.getUser();
       let authorProfileId: string | null = null;
@@ -253,16 +253,24 @@ export default function AdminNoticesPage() {
 
       let imageUrl: string | null = null;
       let attachmentUrl: string | null = null;
-      if (media) {
-        const safeName = media.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        uploadedPath = `${noticeId}/${Date.now()}-${safeName}`;
+
+      for (const file of mediaFiles) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${noticeId}/${Date.now()}-${safeName}`;
         const { error: uploadError } = await supabase.storage
           .from('notices')
-          .upload(uploadedPath, media, { contentType: media.type, upsert: false });
+          .upload(path, file, { contentType: file.type, upsert: false });
         if (uploadError) throw uploadError;
-        const { data } = supabase.storage.from('notices').getPublicUrl(uploadedPath);
-        if (media.type.startsWith('image/')) imageUrl = data.publicUrl;
-        else attachmentUrl = data.publicUrl;
+        uploadedPaths.push(path);
+        const { data } = supabase.storage.from('notices').getPublicUrl(path);
+
+        if (file.type.startsWith('image/') && !imageUrl) {
+          imageUrl = data.publicUrl;
+        } else if (!attachmentUrl) {
+          attachmentUrl = data.publicUrl;
+        } else {
+          attachmentUrl += `,${data.publicUrl}`;
+        }
       }
 
       const { error: insertError } = await supabase.from('notices').insert({
@@ -319,13 +327,15 @@ export default function AdminNoticesPage() {
       setBodyGu('');
       setBodyEn('');
       setNotificationTitleGu('');
-      setMedia(null);
+      setMediaFiles([]);
       setIsPinned(false);
       setShowComposer(false);
       if (notificationWarning) setError(notificationWarning);
       await loadNotices();
     } catch (submitError) {
-      if (uploadedPath) await supabase.storage.from('notices').remove([uploadedPath]);
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from('notices').remove(uploadedPaths);
+      }
       setError(submitError instanceof Error ? submitError.message : 'સૂચના પ્રકાશિત થઈ શકી નથી.');
     } finally {
       setSaving(false);
@@ -339,8 +349,11 @@ export default function AdminNoticesPage() {
       p_notice_id: notice.id,
     });
     if (deleteError) {
-      setError(`Could not delete notice: ${deleteError.message}`);
-      return;
+      const { error: directError } = await supabase.from('notices').delete().eq('id', notice.id);
+      if (directError) {
+        setError(`Could not delete notice: ${deleteError.message} (${directError.message})`);
+        return;
+      }
     }
 
     const bucketMarkers: Array<{ bucket: string; marker: string }> = [
@@ -408,14 +421,6 @@ export default function AdminNoticesPage() {
         <form onSubmit={handleSubmit} className="space-y-5 border border-brand-border bg-cream-surface p-5 sm:p-6">
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-700">ફોર્મેટિંગ:</span>
-                <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
-                  {toolbarButton('Bold', '*', <Bold className="h-3.5 w-3.5" />, guInput, bodyGu, setBodyGu)}
-                  {toolbarButton('Italic', '_', <Italic className="h-3.5 w-3.5" />, guInput, bodyGu, setBodyGu)}
-                  {toolbarButton('Strikethrough', '~', <Strikethrough className="h-3.5 w-3.5" />, guInput, bodyGu, setBodyGu)}
-                </div>
-              </div>
               <GujlishTextarea
                 label="સૂચના સંદેશ (Notice Message)"
                 value={bodyGu}
@@ -439,18 +444,40 @@ export default function AdminNoticesPage() {
             <div className="flex flex-wrap items-center gap-3">
               <label className="inline-flex cursor-pointer items-center gap-2 border border-brand-border bg-white px-3 py-2 text-sm font-medium text-brand-text hover:bg-cream">
                 <ImagePlus className="h-4 w-4 text-leaf" />
-                <span>{media ? media.name : 'મીડિયા જોડો'}</span>
-                <input type="file" accept={MEDIA_ACCEPT} className="sr-only" onChange={async (event) => {
-                  const selected = event.target.files?.[0];
-                  if (!selected) return;
+                <span>{mediaFiles.length > 0 ? `${mediaFiles.length} ફાઈલો પસંદ કરી` : 'મીડિયા / ફાઈલો જોડો'}</span>
+                <input type="file" multiple accept={MEDIA_ACCEPT} className="sr-only" onChange={async (event) => {
+                  const selectedFiles = Array.from(event.target.files ?? []);
+                  if (selectedFiles.length === 0) return;
                   setOptimizing(true);
-                  try { setMedia(await optimizeImage(selected)); }
-                  catch { setMedia(selected); }
-                  finally { setOptimizing(false); }
+                  try {
+                    const optimized = await Promise.all(
+                      selectedFiles.map(async (file) => {
+                        if (file.type.startsWith('image/')) {
+                          return await optimizeImage(file);
+                        }
+                        return file;
+                      })
+                    );
+                    setMediaFiles((prev) => [...prev, ...optimized]);
+                  } catch {
+                    setMediaFiles((prev) => [...prev, ...selectedFiles]);
+                  } finally {
+                    setOptimizing(false);
+                  }
                 }} />
               </label>
-              {media && <button type="button" onClick={() => setMedia(null)} aria-label="Remove attachment" className="p-2 text-brand-muted hover:text-rose-700"><X className="h-4 w-4" /></button>}
-              <span className="text-xs text-brand-muted">{optimizing ? 'Optimizing image…' : 'Image, video, PDF or Word document · max 100 MB. Large images are resized and optimized as WebP.'}</span>
+              {mediaFiles.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {mediaFiles.map((file, index) => (
+                    <span key={index} className="inline-flex items-center gap-1 rounded bg-cream px-2 py-1 text-xs text-brand-text border border-brand-border">
+                      {file.name.slice(0, 20)}
+                      <button type="button" onClick={() => setMediaFiles(prev => prev.filter((_, i) => i !== index))} className="ml-1 text-rose-700 font-bold hover:text-rose-900">×</button>
+                    </span>
+                  ))}
+                  <button type="button" onClick={() => setMediaFiles([])} className="text-xs text-rose-700 hover:underline">બધું કાઢો</button>
+                </div>
+              )}
+              <span className="text-xs text-brand-muted">{optimizing ? 'Optimizing images…' : 'Multiple images, videos, PDF or Word documents · max 100 MB each.'}</span>
             </div>
             <label className="inline-flex items-center gap-2 text-sm text-brand-text">
               <input type="checkbox" checked={isPinned} onChange={(event) => setIsPinned(event.target.checked)} className="h-4 w-4 accent-amber-600" />

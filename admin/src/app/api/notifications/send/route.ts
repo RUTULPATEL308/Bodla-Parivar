@@ -134,10 +134,72 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isStaff && !isDirectFuneralNotice) {
+      try {
+        const adminApp = getFirebaseAdminApp();
+        const messaging = getMessaging(adminApp);
+
+        const pushData = {
+          title_gu: '🔔 નવી સૂચના મંજૂરી માટે આવી છે',
+          title_en: 'New Notice Awaiting Approval',
+          body_gu: `સૂચના: "${title_gu.slice(0, 50)}" મંજૂરી માટે બાકી છે.`,
+          body_en: `A new notice is awaiting your approval.`,
+          type: 'NOTICE_PENDING',
+          reference_id: noticeId ? String(noticeId) : '',
+        };
+
+        // 1. Send broadcast to topic 'admin_staff' (all admin app devices subscribe to this topic)
+        try {
+          await messaging.send({
+            topic: 'admin_staff',
+            data: pushData,
+            android: { priority: 'high' },
+            apns: { payload: { aps: { 'content-available': 1, sound: 'default' } }, headers: { 'apns-priority': '10' } },
+          });
+        } catch (topicErr) {
+          console.error('Failed to notify topic admin_staff:', topicErr);
+        }
+
+        // 2. Also send to individual admin device tokens if available
+        const { data: staffRoles } = await supabase
+          .from('roles')
+          .select('id')
+          .in('name', ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'CONTENT_MANAGER']);
+
+        const staffRoleIds = (staffRoles || []).map((r: any) => r.id);
+        if (staffRoleIds.length > 0) {
+          const { data: staffUserRoles } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .in('role_id', staffRoleIds);
+
+          const staffUserIds = Array.from(new Set((staffUserRoles || []).map((r: any) => r.user_id)));
+          if (staffUserIds.length > 0) {
+            const { data: adminTokens } = await supabase
+              .from('device_tokens')
+              .select('token')
+              .in('user_id', staffUserIds)
+              .eq('active', true);
+
+            const tokens = Array.from(new Set((adminTokens || []).map((t: any) => t.token).filter(Boolean)));
+            if (tokens.length > 0) {
+              await messaging.sendEachForMulticast({
+                tokens,
+                data: pushData,
+                android: { priority: 'high' },
+              });
+            }
+          }
+        }
+      } catch (adminPushErr) {
+        console.error('Failed to notify admins about pending notice:', adminPushErr);
+      }
+
       return NextResponse.json({
         success: true,
         pending_approval: true,
-        message: 'Notice submitted successfully and is pending admin approval. It will not be published or broadcasted until approved by an administrator.'
+        requires_admin_approval: true,
+        notice_id: noticeId ? String(noticeId) : undefined,
+        message: 'Notice submitted successfully and is pending admin approval. Admins have been notified.'
       });
     }
 

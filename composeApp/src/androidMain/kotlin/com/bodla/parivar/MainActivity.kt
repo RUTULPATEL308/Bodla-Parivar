@@ -46,15 +46,17 @@ class MainActivity : ComponentActivity() {
             TokenManager.registerIfNeeded(this)
             // Subscribe to global topic for push broadcast notifications
             try {
-                FirebaseMessaging.getInstance()
-                    .subscribeToTopic("all_users")
-                    .addOnCompleteListener { task ->
-                        if (task.isSuccessful) {
-                            Napier.d("Successfully subscribed to FCM topic: all_users", tag = "FCM")
-                        } else {
-                            Napier.w("Failed to subscribe to FCM topic: all_users", task.exception, tag = "FCM")
-                        }
-                    }
+                FirebaseMessaging.getInstance().subscribeToTopic("all_users")
+                val profileJson = tokenStorage.getUserProfile() ?: ""
+                val isStaff = profileJson.contains("isStaff\":true", ignoreCase = true) ||
+                              profileJson.contains("isAdmin\":true", ignoreCase = true) ||
+                              profileJson.contains("ADMIN", ignoreCase = true) ||
+                              profileJson.contains("SUPER_ADMIN", ignoreCase = true)
+                if (isStaff) {
+                    FirebaseMessaging.getInstance().subscribeToTopic("admin_staff")
+                } else {
+                    FirebaseMessaging.getInstance().unsubscribeFromTopic("admin_staff")
+                }
             } catch (e: Exception) {
                 Napier.e("FirebaseMessaging init error", e, tag = "FCM")
             }
@@ -62,8 +64,8 @@ class MainActivity : ComponentActivity() {
             // Ensure not subscribed to topic if not logged in
             try {
                 FirebaseMessaging.getInstance().unsubscribeFromTopic("all_users")
-            } catch (e: Exception) {
-                Napier.w("Failed to unsubscribe from topic all_users", e, tag = "FCM")
+                FirebaseMessaging.getInstance().unsubscribeFromTopic("admin_staff")
+            } catch (_: Exception) {
             }
         }
 

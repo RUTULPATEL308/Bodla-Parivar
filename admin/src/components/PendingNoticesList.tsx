@@ -13,6 +13,7 @@ interface NoticeItem {
   image_url?: string | null;
   attachment_url?: string | null;
   created_at: string;
+  publisher?: { full_name?: string | null } | null;
 }
 
 // Component to list pending notices for admin approval
@@ -28,7 +29,7 @@ export default function PendingNoticesList() {
     // Query notices with status PENDING or PENDING_APPROVAL
     const { data, error: fetchErr } = await supabase
       .from('notices')
-      .select('id, title_gu, title_en, description_gu, description_en, status, image_url, attachment_url, created_at')
+      .select('id, title_gu, title_en, description_gu, description_en, status, image_url, attachment_url, created_at, publisher:profiles!published_by(full_name)')
       .in('status', ['PENDING', 'PENDING_APPROVAL'])
       .order('created_at', { ascending: false });
 
@@ -69,6 +70,8 @@ export default function PendingNoticesList() {
   const approve = async (id: string) => {
     if (actionInProgress) return;
     setActionInProgress(id);
+    // Optimistic UI update: Remove instantly from local UI without delay
+    setNotices((prev) => prev.filter((n) => n.id !== id));
     try {
       const res = await fetch('/api/notices/approve', {
         method: 'POST',
@@ -78,22 +81,21 @@ export default function PendingNoticesList() {
       const data = await res.json();
       if (!res.ok) {
         alert('Approve failed: ' + (data.error || 'Server error'));
-      } else {
         await fetchPending();
       }
     } catch (e: any) {
       alert('Error approving notice: ' + (e?.message || e));
+      await fetchPending();
     } finally {
       setActionInProgress(null);
     }
   };
 
-
-
-
   const reject = async (id: string) => {
     if (actionInProgress) return;
     setActionInProgress(id);
+    // Optimistic UI update: Remove instantly from local UI without delay
+    setNotices((prev) => prev.filter((n) => n.id !== id));
     try {
       const res = await fetch('/api/notices/reject', {
         method: 'POST',
@@ -103,11 +105,11 @@ export default function PendingNoticesList() {
       const data = await res.json();
       if (!res.ok) {
         alert('Reject failed: ' + (data.error || 'Server error'));
-      } else {
         await fetchPending();
       }
     } catch (e: any) {
       alert('Error rejecting notice: ' + (e?.message || e));
+      await fetchPending();
     } finally {
       setActionInProgress(null);
     }
@@ -169,6 +171,11 @@ export default function PendingNoticesList() {
                 <p className="text-xs text-slate-400 mt-1">
                   તારીખ: {new Date(n.created_at).toLocaleString('gu-IN')}
                 </p>
+                {n.publisher?.full_name && (
+                  <p className="text-xs font-semibold text-amber-700 mt-1">
+                    પ્રકાશક (Publisher): {n.publisher.full_name}
+                  </p>
+                )}
               </div>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
                 {n.status}
@@ -220,7 +227,19 @@ export default function PendingNoticesList() {
                   </div>
                 </div>
               )}
-              <div className="flex justify-end pt-2 border-t border-slate-100">
+              <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={actionInProgress === n.id}
+                  onClick={() => void reject(n.id)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition shadow-sm"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>
+                    {actionInProgress === n.id ? 'પ્રક્રિયા ચાલે છે...' : 'ડિલીટ કરો (Delete / Reject)'}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   disabled={actionInProgress === n.id}

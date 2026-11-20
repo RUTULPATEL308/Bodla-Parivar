@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -45,6 +47,7 @@ import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.AppIconContainer
 import com.bodla.parivar.core.ui.BodlaButton
 import com.bodla.parivar.core.ui.BodlaOutlinedButton
+import com.bodla.parivar.core.ui.formatShortDateTime
 import com.bodla.parivar.domain.model.Notice
 import com.bodla.parivar.domain.model.Offering
 import com.bodla.parivar.domain.model.Profile
@@ -59,11 +62,12 @@ fun AdminHomeScreen(
     notices: List<Notice>,
     offerings: List<Offering>,
     onNavigate: (Screen) -> Unit,
-    onLogout: () -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
     var dashboardSearch by remember { mutableStateOf("") }
+    var previewAttachmentUrl by remember { mutableStateOf<String?>(null) }
     var memberCount by remember(profile?.id) { mutableStateOf<Int?>(null) }
     var memberLoadFailed by remember(profile?.id) { mutableStateOf(false) }
     val publishedNoticeCount = notices.count { it.status == "PUBLISHED" }
@@ -270,6 +274,32 @@ fun AdminHomeScreen(
                                             )
                                         }
 
+                                        val publisher = notice.publisherName?.takeIf { it.isNotBlank() }
+                                        if (publisher != null) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = formatShortDateTime(notice.createdAt),
+                                                    style = BodlaCaption,
+                                                    color = TextTertiary
+                                                )
+                                                Text(
+                                                    text = if (isGujarati) "પ્રકાશક: $publisher" else "By $publisher",
+                                                    style = BodlaCaption.copy(fontSize = 11.sp),
+                                                    color = TextSecondary.copy(alpha = 0.65f)
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                text = formatShortDateTime(notice.createdAt),
+                                                style = BodlaCaption,
+                                                color = TextTertiary
+                                            )
+                                        }
+
                                         val imageUrl = notice.imageUrl
                                         if (!imageUrl.isNullOrBlank()) {
                                             AsyncImage(
@@ -291,7 +321,7 @@ fun AdminHomeScreen(
                                                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
                                             ) {
                                                 androidx.compose.material3.OutlinedButton(
-                                                    onClick = { uriHandler.openUri(attachmentUrl) },
+                                                    onClick = { previewAttachmentUrl = attachmentUrl },
                                                     shape = RoundedCornerShape(8.dp),
                                                     modifier = Modifier.weight(1f)
                                                 ) {
@@ -353,86 +383,46 @@ fun AdminHomeScreen(
                     }
                 }
             }
+        }
+    }
 
-            if (isAdmin || isModerator) item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+    if (!previewAttachmentUrl.isNullOrBlank()) {
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { previewAttachmentUrl = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = WarmWhiteSurface,
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .fillMaxHeight(0.85f)
+                    .padding(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Text(
-                            text = if (isGujarati) "મંજૂરી માટે બાકી" else "Pending approvals",
-                            style = BodlaSection,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = if (isGujarati) "ચઢાવાની વિનંતીઓ તપાસો" else "Review offering requests",
-                            style = BodlaBody,
-                            color = TextSecondary
-                        )
-                    }
-                    BodlaOutlinedButton(
-                        text = if (isGujarati) "બધા જુઓ" else "View all",
-                        onClick = { onNavigate(Screen.Offerings) }
+                    com.bodla.parivar.features.notices.NoticeAttachmentPreview(
+                        url = previewAttachmentUrl!!,
+                        modifier = Modifier.weight(1f).fillMaxWidth()
                     )
-                }
-            }
-
-            if (isAdmin || isModerator) {
-                if (pendingOfferings.isEmpty()) {
-                    item {
-                        Text(
-                            text = if (isGujarati) "હાલમાં કોઈ ચઢાવાની મંજૂરી બાકી નથી." else "There are no offering requests awaiting review.",
-                            style = BodlaBody,
-                            color = TextSecondary,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        )
-                    }
-                } else {
-                    items(pendingOfferings.take(5), key = { it.id }) { offering ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { onNavigate(Screen.Offerings) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface),
-                            border = CardDefaults.outlinedCardBorder().copy(
-                                brush = androidx.compose.ui.graphics.SolidColor(BorderStroke)
-                            )
-                        ) {
-                            Row(
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(18.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "🙏", fontSize = 22.sp)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isGujarati) offering.titleGu else offering.titleEn,
-                                        style = BodlaBody.copy(fontWeight = FontWeight.SemiBold),
-                                        color = TextPrimary,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = if (isGujarati) "ચઢાવાની વિનંતી" else "Offering request",
-                                        style = BodlaBody.copy(fontSize = 14.sp),
-                                        color = TextSecondary
-                                    )
-                                }
-                                Text(text = "→", fontSize = 20.sp, color = SaffronPrimary)
-                            }
-                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { uriHandler.openUri(previewAttachmentUrl + if (previewAttachmentUrl!!.contains('?')) "&download" else "?download") },
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text(if (isGujarati) "ડાઉનલોડ કરો" else "Download", fontWeight = FontWeight.Bold) }
+                        androidx.compose.material3.TextButton(
+                            onClick = { previewAttachmentUrl = null },
+                            modifier = Modifier.weight(1f).height(46.dp)
+                        ) { Text(if (isGujarati) "બંધ કરો" else "Close", fontWeight = FontWeight.SemiBold, color = TextSecondary) }
                     }
                 }
-            }
-
-            item {
-                BodlaOutlinedButton(
-                    text = if (isGujarati) "સાઇન આઉટ" else "Sign out",
-                    onClick = onLogout,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)
-                )
             }
         }
     }

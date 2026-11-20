@@ -343,3 +343,31 @@ fun ErrorStateView(
         )
     }
 }
+
+fun formatShortDateTime(isoString: String?): String {
+    if (isoString.isNullOrBlank()) return ""
+    return runCatching {
+        val clean = isoString.substringBefore('.').replace('T', ' ').replace('Z', ' ')
+        val parts = clean.split(" ")
+        if (parts.size >= 2) {
+            val datePart = parts[0]
+            val timePart = parts[1]
+            val dateTokens = datePart.split("-")
+            val formattedDate = if (dateTokens.size == 3) dateTokens[2] + "-" + dateTokens[1] + "-" + dateTokens[0] else datePart
+            
+            val timeTokens = timePart.split(":")
+            val formattedTime = if (timeTokens.size >= 2) {
+                var hour = timeTokens[0].toIntOrNull() ?: 0
+                val minute = timeTokens[1]
+                val amPm = if (hour >= 12) "PM" else "AM"
+                if (hour == 0) hour = 12 else if (hour > 12) hour -= 12
+                val hourStr = if (hour < 10) "0$hour" else "$hour"
+                "$hourStr:$minute $amPm"
+            } else timePart
+            
+            "$formattedDate $formattedTime"
+        } else {
+            isoString.take(16)
+        }
+    }.getOrElse { isoString.take(16) }
+}

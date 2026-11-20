@@ -16,20 +16,20 @@ actual class DatabaseDriverFactory {
         if (dbFile.exists()) {
             try {
                 val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-                var hasPublishedById = false
+                var hasPublisherName = false
                 try {
                     val cursor = db.rawQuery("PRAGMA table_info(CachedNotice);", null)
                     while (cursor.moveToNext()) {
                         val name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
-                        if (name == "publishedById") {
-                            hasPublishedById = true
+                        if (name == "publisherName") {
+                            hasPublisherName = true
                             break
                         }
                     }
                     cursor.close()
                 } catch (_: Exception) {}
                 db.close()
-                if (!hasPublishedById) {
+                if (!hasPublisherName) {
                     context.deleteDatabase("bodla_parivar.db")
                 }
             } catch (_: Exception) {

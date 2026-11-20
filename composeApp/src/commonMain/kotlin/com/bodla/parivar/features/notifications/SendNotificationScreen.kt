@@ -247,20 +247,19 @@ fun SendNotificationScreen(
                 val currentProfile = runCatching { AppContainer.authRepository.getCurrentUser() }.getOrNull()
                 val profileId = currentProfile?.id
 
-                val response = client.post("${Endpoints.SUPABASE_URL.trimEnd('/')}/functions/v1/send-notification") {
+                val response = client.post("https://bodla-parivar.vercel.app/api/notifications/send") {
                     contentType(ContentType.Application.Json)
+                    header("Authorization", "Bearer $token")
                     setBody(buildJsonObject {
                         put("title_gu", finalTitleGu)
                         put("title_en", finalTitleEn)
-                        put("title", finalTitleGu)
                         put("notification_title_gu", finalNotifTitle)
                         put("notification_title_en", finalNotifTitle)
                         put("body_gu", finalBodyGu)
                         put("body_en", finalBodyEn)
-                        put("body", finalBodyGu)
                         put("description_gu", finalBodyGu)
                         put("description_en", finalBodyEn)
-                        put("status", "PENDING")
+                        put("type", "NOTICE")
                         if (!profileId.isNullOrBlank()) {
                             put("published_by", profileId)
                         }
@@ -294,12 +293,11 @@ fun SendNotificationScreen(
                 }
 
                 val responseBody = response.bodyAsText()
-                val requiresApproval = runCatching {
-                    Json.parseToJsonElement(responseBody)
-                        .jsonObject["requires_admin_approval"]
-                        ?.jsonPrimitive
-                        ?.contentOrNull
-                        .equals("true", ignoreCase = true)
+                val isPendingResponse = runCatching {
+                    val root = Json.parseToJsonElement(responseBody).jsonObject
+                    root["pending_approval"]?.jsonPrimitive?.contentOrNull.equals("true", ignoreCase = true) ||
+                    root["requires_admin_approval"]?.jsonPrimitive?.contentOrNull.equals("true", ignoreCase = true) ||
+                    root["requires_approval"]?.jsonPrimitive?.contentOrNull.equals("true", ignoreCase = true)
                 }.getOrDefault(false)
                 val pushSent = runCatching {
                     Json.parseToJsonElement(responseBody)
@@ -310,7 +308,7 @@ fun SendNotificationScreen(
                 }.getOrDefault(false)
 
                 when {
-                    requiresApproval -> {
+                    isPendingResponse -> {
                         // Notice saved as PENDING — admin will approve
                         val noticeId = runCatching {
                             Json.parseToJsonElement(responseBody).jsonObject["notice_id"]?.jsonPrimitive?.contentOrNull ?: ""
@@ -721,66 +719,22 @@ private fun enhanceNoticeMessage(text: String): Pair<String, String> {
     if (trimmed.isBlank()) return Pair(trimmed, "")
     val lower = trimmed.lowercase()
 
-    // Detect notice type from content keywords
-    val isTest = lower.contains("ટેસ્ટ") || lower.contains("test")
-    val isDeath = lower.contains("બેસણું") || lower.contains("અવસાન") || lower.contains("દુઃખ") || lower.contains("શોક") || lower.contains("death") || lower.contains("condolence") || lower.contains("besanu")
-    val isWater = lower.contains("પાણી") || lower.contains("water") || lower.contains("પુરવઠો")
-    val isElectricity = lower.contains("વીજળી") || lower.contains("લાઈટ") || lower.contains("પાવર") || lower.contains("cut") || lower.contains("છોડ") || lower.contains("power")
-    val isMeeting = lower.contains("મીટિંગ") || lower.contains("સભા") || lower.contains("meeting") || lower.contains("gathering")
-    val isFestival = lower.contains("ઉત્સવ") || lower.contains("પર્વ") || lower.contains("festival") || lower.contains("celebration")
-    val isHealth = lower.contains("તબીબી") || lower.equals("health") || lower.contains("hospital") || lower.contains("દવાખાના") || lower.contains("આરોગ્ય")
-    val isEmergency = lower.contains("અગત્યની") || lower.contains("ઉપડવું") || lower.contains("emergency") || lower.contains("urgent")
-    val isInvite = lower.contains("જમવા") || lower.contains("જમવાનું") || lower.contains("invite") || lower.contains("પૂજા") || lower.contains("અનુષ્ઠાન")
-
-    // Gujarati opening salutation
-    val guOpening = "આથી બોદલા ગામના તમામ ગ્રામજનોને સુચનાએ જણાવવામાં આવે છે કે,"
-    val guClosing = "આપ સૌએ આ અંગે યોગ્ય નોંધ લેવા નમ્ર વિનંતી છે."
-
-    // English opening salutation
-    val enOpening = "Notice to all Bodla Parivar members and village residents:"
-    val enClosing = "All members are requested to take note and cooperate."
-
-    // Content-based body messages (Gujarati + English)
-    // For longer messages (>20 chars), keep user's original text as body
-    // For very short messages (<20 chars), use formal templates
-    val guBody = when {
-        lower.length < 20 -> when {
-            isTest -> "આ એક ટેસ્ટ સંદેશ છે જે એપની કાર્યક્ષમતા ચકાસવા માટે મોકલવામાં આવ્યો છે."
-            isDeath -> "શોકગ્રસ્ત પરિવાર માટે બેસણું રાખવામાં આવ્યું છે. તમામ ગ્રામજનોએ શોકગ્રસ્ત પરિવારને સાંત્વના આપવા હાજરી આપવી જોઈએ."
-            isWater -> "જરૂરી કામગીરીને કારણે પાણીનો પુરવઠો થોડા સમય માટે ખોરવાઈ શકે છે. કૃપા કરીને જરૂરી પાણીનો સંગ્રહ અગાઉથી કરી લેશો."
-            isElectricity -> "જરૂરી સમારકામને કારણે વીજળી સેવામાં ખલેલ પડી શકે છે. તમામ રહેવાસીઓએ વીજળી યોગ્ય રીતે ઉપયોગ કરવી જોઈએ."
-            isMeeting -> "એક મહત્ત્વપૂર્ણ સભા બોલાવવામાં આવી છે. તમામ સભ્યોની હાજરી અનિવાર્ય છે."
-            isFestival -> "આ ઉત્સવની શુભકામનાઓ. બધાને ખુશીઓ, સમૃદ્ધિ અને સૌભાગ્ય મળે."
-            isHealth -> "બોદલા ગામના તમામ રહેવાસીઓ માટે તબીબી સેવા સુવિધા ઉપલબ્ધ કરાવવામાં આવશે."
-            isEmergency -> "એક અગત્યની પરિસ્થિતિ ઉદભવી છે. તમામ રહેવાસીઓએ સૂચનાઓનું કડક પાલન કરવું અને સુરક્ષિત રહેવું જરૂરી છે."
-            isInvite -> "તમારે આ જમવા/પૂજા/અનુષ્ઠાનમાં હાર્દિક નિમંત્રિત છો. આપની હાજરી આપીને અમને ગૌરવવાનું કરશે."
-            else -> "$trimmed માટે વિશેષ સૂચના આપવામાં આવે છે."
-        }
-        else -> trimmed
+    val enhancedGu = when {
+        lower.contains("ટેસ્ટ") || lower.contains("test") -> 
+            "આ એક ટેસ્ટ સંદેશ છે, જે બોદલા પરિવાર એપની નોટિફિકેશન સેવા ચકાસવા માટે મોકલવામાં આવ્યો છે."
+        lower.contains("બેসણું") || lower.contains("બેસણું") || lower.contains("અવસાન") || lower.contains("દુઃખ") || lower.contains("શોક") -> 
+            "અત્યંત દુઃખ સાથે જણાવવાનું કે સ્વર્ગસ્થના અર્થમાં બેસણું/શોકસભા રાખવામાં આવેલ છે. સૌ સ્નેહીજનોએ ઉપસ્થિત રહી સાંત્વના પાઠવવા નમ્ર વિનંતી."
+        lower.contains("પાણી") -> 
+            "જરૂરી વહીવટી કે જાળવણી કામગીરીને કારણે પાણી પુરવઠામાં ફેરફાર થઈ શકે છે. ગ્રામજનોએ જરૂરી પાણીનો સંગ્રહ અગાઉથી કરી લેવો."
+        lower.contains("વીજળી") || lower.contains("લાઈટ") || lower.contains("પાવર") -> 
+            "સમારકામ અથવા વીજ પ્રવાહ જાળવણીને કારણે વીજ પુરવઠો થોડા સમય માટે બંધ રહી શકે છે. સૌ સભ્યોએ નોંધ લેવી."
+        lower.contains("હવન") || lower.contains("જમણવાર") || lower.contains("આયોજન") || lower.contains("પ્રસંગ") || lower.contains("નિમંત્રણ") || lower.contains("વાદી") || lower.contains("ભોજન") ->
+            "બોદલા ગામના તમામ ગ્રામજનોને સપ્રેમ નમસ્તે. જણાવવાનું કે $trimmed. આપ સૌ પરિવાર સાથે ઉપસ્થિત રહી પ્રસંગની શોભા વધારશો તેવી નમ્ર વિનંતી."
+        lower.contains("મીટિંગ") || lower.contains("સભા") || lower.contains("એકત્ર") ->
+            "બોદલા ગામના તમામ સભ્યોની એક વિશેષ સભા/મીટિંગનું આયોજન કરવામાં આવેલ છે. તમામ ગ્રામજનોને સમયસર ઉપસ્થિત રહેવા વિનંતી."
+        else -> 
+            "સૌ ગ્રામજનોને ખાસ જણાવવાનું કે: $trimmed. આપ સૌએ આ અંગે યોગ્ય નોંધ લેવી."
     }
-
-    val enBody = when {
-        lower.length < 20 -> when {
-            isTest -> "This is a test message to verify application functionality."
-            isDeath -> "A condolence gathering (besanu) has been arranged. All community members are requested to attend and offer condolences to the bereaved family."
-            isWater -> "Due to essential maintenance work, water supply may be temporarily disrupted. Please store necessary water in advance."
-            isElectricity -> "Due to essential maintenance work, power supply may be temporarily disrupted. Please use electricity wisely."
-            isMeeting -> "An important meeting has been called. Attendance of all members is mandatory."
-            isFestival -> "Festival greetings to all. May everyone be blessed with joy and prosperity."
-            isHealth -> "Medical health services will be made available for all Bodla village residents."
-            isEmergency -> "An emergency situation has arisen. All residents must strictly comply with instructions and stay safe."
-            isInvite -> "You are cordially invited to this meal/puja/ceremony. Your presence would honor us."
-            else -> "Special notice regarding $trimmed."
-        }
-        else -> trimmed
-    }
-
-    // Build Gujarati message: opening + body + closing
-    val gu = "$guOpening $guBody $guClosing"
-
-    // Build English message: opening + body + closing
-    val en = "$enOpening $enBody $enClosing"
-
-    return Pair(gu, en)
+    return Pair(enhancedGu, trimmed)
 }
 

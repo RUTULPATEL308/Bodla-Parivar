@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, '');
     const model = process.env.AI_MODEL || (provider === 'gemini' ? 'gemini-1.5-flash' : 'gpt-4o-mini');
 
-    const systemPrompt = "You are a helpful and articulate human resident of Bodla village writing community announcements. Read the user's raw message carefully, understand its exact topic (e.g. sports, donations, meetings, personal news, festival greetings, water/electricity updates, urgent alerts, etc.), and rewrite it in natural, warm, human-like Gujarati. Avoid rigid templates or repeating the same opening/closing lines. Make it sound genuine, polite, and engaging. Preserve essential details (names, dates, times, places, numbers, URLs). Output JSON: {\"enhanced_gu\": \"...\", \"enhanced_en\": \"...\"}. No markdown, no extra commentary, raw JSON only.";
+    const systemPrompt = "You are an expert Gujarati communicator for Bodla Parivar. Read the user's raw message carefully and understand its situation (condolence/death, festival, village notice, meeting, water/electricity, sports, celebration). Rewrite it into eloquent, polite, warm, and highly situation-aware Gujarati. DO NOT use rigid templates or repeat the same opening/closing lines. Adapt tone to the specific context. Preserve all names, dates, times, locations, and numbers accurately. DO NOT use formatting symbols like *, _, ~, or markdown. Return raw JSON: {\"enhanced_gu\": \"...\", \"enhanced_en\": \"...\"}. No commentary.";
 
     let openAiResponse = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',

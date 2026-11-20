@@ -281,11 +281,25 @@ fun NoticeCard(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = notice.createdAt,
-            style = BodlaCaption,
-            color = TextTertiary
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = formatShortDateTime(notice.createdAt),
+                style = BodlaCaption,
+                color = TextTertiary
+            )
+            val publisher = notice.publisherName?.takeIf { it.isNotBlank() }
+            if (publisher != null) {
+                Text(
+                    text = if (lang == AppLanguage.GUJARATI) "પ્રકાશક: $publisher" else "By $publisher",
+                    style = BodlaCaption.copy(fontSize = 11.sp),
+                    color = TextSecondary.copy(alpha = 0.65f)
+                )
+            }
+        }
     }
 }
 
@@ -342,11 +356,25 @@ fun NoticeDetailScreen(
                     color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "તારીખ / Date: " + currentNotice.createdAt,
-                    style = BodlaCaption,
-                    color = TextSecondary
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "તારીખ / Date: " + formatShortDateTime(currentNotice.createdAt),
+                        style = BodlaCaption,
+                        color = TextSecondary
+                    )
+                    val publisher = currentNotice.publisherName?.takeIf { it.isNotBlank() }
+                    if (publisher != null) {
+                        Text(
+                            text = if (lang == AppLanguage.GUJARATI) "પ્રકાશક: $publisher" else "By $publisher",
+                            style = BodlaCaption.copy(fontSize = 11.sp),
+                            color = TextSecondary.copy(alpha = 0.65f)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider(color = BorderStroke)
                 Spacer(modifier = Modifier.height(16.dp))

@@ -10,6 +10,11 @@ data class CategoryDto(
 )
 
 @Serializable
+data class PublisherDto(
+    @SerialName("full_name") val fullName: String? = null
+)
+
+@Serializable
 data class NoticeDto(
     val id: String,
     @SerialName("title_gu") val titleGu: String,
@@ -23,6 +28,7 @@ data class NoticeDto(
     @SerialName("publish_at") val publishAt: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("published_by") val publishedBy: String? = null,
+    val publisher: PublisherDto? = null,
     val category: CategoryDto? = null
 )
 
