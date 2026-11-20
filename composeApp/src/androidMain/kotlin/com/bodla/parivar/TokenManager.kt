@@ -1,6 +1,9 @@
 package com.bodla.parivar
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import com.bodla.parivar.core.network.Endpoints
 import com.bodla.parivar.core.security.TokenStorage
 import com.bodla.parivar.domain.model.Profile
@@ -9,8 +12,19 @@ import io.github.aakira.napier.Napier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+
+@Serializable
+private data class DeviceTokenRegistrationRequest(
+    @SerialName("user_id") val userId: String?,
+    val token: String,
+    val platform: String,
+    val active: Boolean,
+    @SerialName("updated_at") val updatedAt: String,
+)
 
 /**
  * Manages registration, refresh and removal of FCM device tokens in Supabase.
@@ -33,10 +47,11 @@ object TokenManager {
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (!task.isSuccessful) {
                 Napier.e("FCM token fetch failed", tag = "FCM")
+                showStatus(context, "Push setup failed: Firebase could not create a device token.")
                 return@addOnCompleteListener
             }
             val token = task.result ?: return@addOnCompleteListener
-            uploadToken(token)
+            uploadToken(context.applicationContext, token)
         }
     }
 
@@ -57,14 +72,14 @@ object TokenManager {
         val tokenStorage = TokenStorage()
         val isLoggedIn = !tokenStorage.getToken().isNullOrBlank() || !tokenStorage.getUserProfile().isNullOrBlank()
         if (isLoggedIn) {
-            uploadToken(token)
+            uploadToken(com.bodla.parivar.core.AndroidPlatform.appContext ?: return, token)
         } else {
             Napier.d("TokenManager: Skipping refresh token upload, user not logged in", tag = "FCM")
         }
     }
 
     // ---------------------------------------------------------------------
-    private fun uploadToken(token: String) {
+    private fun uploadToken(context: Context, token: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val userJson = TokenStorage().getUserProfile()
@@ -74,26 +89,28 @@ object TokenManager {
                 val userId = profile?.id
 
                 val body = Json.encodeToString(
-                    mapOf(
-                        "user_id" to userId,
-                        "token" to token,
-                        "platform" to "ANDROID",
-                        "active" to true,
-                        "updated_at" to kotlinx.datetime.Clock.System.now().toString()
+                    DeviceTokenRegistrationRequest(
+                        userId = userId,
+                        token = token,
+                        platform = "ANDROID",
+                        active = true,
+                        updatedAt = kotlinx.datetime.Clock.System.now().toString(),
                     )
                 )
                 val accessToken = TokenStorage().getToken()
                     ?: throw IllegalStateException("No signed-in session for push token registration.")
-                vercelPost(body, accessToken)
-                Napier.d("FCM token uploaded for user ${userId ?: "guest"} -> $token", tag = "FCM")
+                val responseCode = vercelPost(body, accessToken)
+                Napier.d("FCM token registration returned HTTP $responseCode", tag = "FCM")
+                showStatus(context, "Push notifications are registered for this account.")
             } catch (e: Exception) {
-                Napier.e("Error uploading token: ${e.message}", tag = "FCM")
+                Napier.e("Error uploading FCM token: ${e.message}", tag = "FCM")
+                showStatus(context, "Push registration failed: ${e.message?.take(140) ?: "unknown error"}")
             }
         }
     }
 
     // ---------------------------------------------------------------------
-    private suspend fun vercelPost(jsonBody: String, accessToken: String) {
+    private suspend fun vercelPost(jsonBody: String, accessToken: String): Int {
         val url = java.net.URL(VERCEL_REGISTER_TOKEN_ENDPOINT)
         with(url.openConnection() as java.net.HttpURLConnection) {
             requestMethod = "POST"
@@ -106,6 +123,13 @@ object TokenManager {
                 val errorMsg = runCatching { errorStream?.bufferedReader()?.readText() }.getOrDefault("")
                 throw Exception("Vercel token register POST failed with code $responseCode: $errorMsg")
             }
+            return responseCode
+        }
+    }
+
+    private fun showStatus(context: Context, message: String) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context.applicationContext, message, Toast.LENGTH_LONG).show()
         }
     }
 

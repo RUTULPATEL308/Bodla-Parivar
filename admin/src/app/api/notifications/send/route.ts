@@ -151,12 +151,24 @@ export async function POST(request: NextRequest) {
           reference_id: noticeId ? String(noticeId) : '',
         };
 
+        // Include a notification payload so Android can show the approval alert itself
+        // when the app is closed or its process has been reclaimed. A data-only message
+        // depends on Android starting our service in the background.
+        const approvalNotification = {
+          title: 'New Notice Awaiting Approval',
+          body: `A new notice is awaiting your approval: "${title_gu.slice(0, 50)}"`,
+        };
+
         // 1. Send broadcast to topic 'admin_staff' (all admin app devices subscribe to this topic)
         try {
           const topicMessageId = await messaging.send({
             topic: 'admin_staff',
+            notification: approvalNotification,
             data: pushData,
-            android: { priority: 'high' },
+            android: {
+              priority: 'high',
+              notification: { channelId: 'bodla_parivar_channel_v4' },
+            },
             apns: { payload: { aps: { 'content-available': 1, sound: 'default' } }, headers: { 'apns-priority': '10' } },
           });
           adminPushSent = Boolean(topicMessageId);
@@ -190,8 +202,12 @@ export async function POST(request: NextRequest) {
             if (tokens.length > 0) {
               const delivery = await messaging.sendEachForMulticast({
                 tokens,
+                notification: approvalNotification,
                 data: pushData,
-                android: { priority: 'high' },
+                android: {
+                  priority: 'high',
+                  notification: { channelId: 'bodla_parivar_channel_v4' },
+                },
               });
               adminPushSuccessCount = delivery.successCount;
               adminPushFailureCount = delivery.failureCount;
