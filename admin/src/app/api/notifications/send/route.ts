@@ -134,6 +134,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isStaff && !isDirectFuneralNotice) {
+      let adminPushSent = false;
+      let adminPushSuccessCount = 0;
+      let adminPushFailureCount = 0;
+      let adminPushTargetCount = 0;
       try {
         const adminApp = getFirebaseAdminApp();
         const messaging = getMessaging(adminApp);
@@ -149,12 +153,13 @@ export async function POST(request: NextRequest) {
 
         // 1. Send broadcast to topic 'admin_staff' (all admin app devices subscribe to this topic)
         try {
-          await messaging.send({
+          const topicMessageId = await messaging.send({
             topic: 'admin_staff',
             data: pushData,
             android: { priority: 'high' },
             apns: { payload: { aps: { 'content-available': 1, sound: 'default' } }, headers: { 'apns-priority': '10' } },
           });
+          adminPushSent = Boolean(topicMessageId);
         } catch (topicErr) {
           console.error('Failed to notify topic admin_staff:', topicErr);
         }
@@ -181,12 +186,16 @@ export async function POST(request: NextRequest) {
               .eq('active', true);
 
             const tokens = Array.from(new Set((adminTokens || []).map((t: any) => t.token).filter(Boolean)));
+            adminPushTargetCount = tokens.length;
             if (tokens.length > 0) {
-              await messaging.sendEachForMulticast({
+              const delivery = await messaging.sendEachForMulticast({
                 tokens,
                 data: pushData,
                 android: { priority: 'high' },
               });
+              adminPushSuccessCount = delivery.successCount;
+              adminPushFailureCount = delivery.failureCount;
+              adminPushSent = adminPushSent || delivery.successCount > 0;
             }
           }
         }
@@ -199,7 +208,13 @@ export async function POST(request: NextRequest) {
         pending_approval: true,
         requires_admin_approval: true,
         notice_id: noticeId ? String(noticeId) : undefined,
-        message: 'Notice submitted successfully and is pending admin approval. Admins have been notified.'
+        push_sent: adminPushSent,
+        push_target_devices: adminPushTargetCount,
+        push_delivered_devices: adminPushSuccessCount,
+        push_failed_devices: adminPushFailureCount,
+        message: adminPushSent
+          ? 'Notice submitted successfully and is pending admin approval. Admin devices were notified.'
+          : 'Notice submitted successfully and is pending admin approval, but no admin device accepted the push.'
       });
     }
 

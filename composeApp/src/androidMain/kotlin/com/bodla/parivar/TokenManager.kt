@@ -17,6 +17,8 @@ import kotlinx.serialization.json.Json
  */
 object TokenManager {
 
+    // Deprecated direct Supabase endpoint – now using Vercel proxy for token registration
+    private const val VERCEL_REGISTER_TOKEN_ENDPOINT = "https://bodla-parivar.vercel.app/api/notifications/register-token"
     private const val DEVICE_TOKENS_ENDPOINT = "/rest/v1/device_tokens"
 
     /** Call after user logs in or when the app starts. */
@@ -80,7 +82,9 @@ object TokenManager {
                         "updated_at" to kotlinx.datetime.Clock.System.now().toString()
                     )
                 )
-                supabasePost(body)
+                val accessToken = TokenStorage().getToken()
+                    ?: throw IllegalStateException("No signed-in session for push token registration.")
+                vercelPost(body, accessToken)
                 Napier.d("FCM token uploaded for user ${userId ?: "guest"} -> $token", tag = "FCM")
             } catch (e: Exception) {
                 Napier.e("Error uploading token: ${e.message}", tag = "FCM")
@@ -89,20 +93,18 @@ object TokenManager {
     }
 
     // ---------------------------------------------------------------------
-    private suspend fun supabasePost(jsonBody: String) {
-        val url = java.net.URL("${Endpoints.SUPABASE_URL.trimEnd('/')}$DEVICE_TOKENS_ENDPOINT")
+    private suspend fun vercelPost(jsonBody: String, accessToken: String) {
+        val url = java.net.URL(VERCEL_REGISTER_TOKEN_ENDPOINT)
         with(url.openConnection() as java.net.HttpURLConnection) {
             requestMethod = "POST"
-            setRequestProperty("apikey", Endpoints.SUPABASE_ANON_KEY)
-            setRequestProperty("Authorization", "Bearer ${Endpoints.SUPABASE_ANON_KEY}")
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Prefer", "resolution=merge-duplicates")
+            setRequestProperty("Authorization", "Bearer $accessToken")
             doOutput = true
             outputStream.bufferedWriter().use { it.write(jsonBody) }
             val responseCode = responseCode
             if (responseCode !in 200..299) {
                 val errorMsg = runCatching { errorStream?.bufferedReader()?.readText() }.getOrDefault("")
-                throw Exception("Supabase POST failed with code $responseCode: $errorMsg")
+                throw Exception("Vercel token register POST failed with code $responseCode: $errorMsg")
             }
         }
     }

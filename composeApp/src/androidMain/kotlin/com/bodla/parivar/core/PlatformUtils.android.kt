@@ -45,3 +45,14 @@ actual fun hasNotificationPermission(): Boolean {
         true
     }
 }
+
+actual fun registerPushForUser(isStaff: Boolean) {
+    val context = com.bodla.parivar.core.AndroidPlatform.appContext ?: return
+    com.bodla.parivar.TokenManager.registerIfNeeded(context)
+    com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("all_users")
+    if (isStaff) {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic("admin_staff")
+    } else {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().unsubscribeFromTopic("admin_staff")
+    }
+}

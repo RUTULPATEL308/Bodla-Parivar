@@ -19,6 +19,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -103,6 +104,9 @@ fun AdminHomeScreen(
         add(Triple(if (isGujarati) "રહેવાસી હોમ" else "Resident home", "🏠", Screen.Home))
     }
     var pendingNotices by remember { mutableStateOf<List<Notice>>(emptyList()) }
+    var pendingNoticesLoading by remember { mutableStateOf(false) }
+    var pendingNoticeActionId by remember { mutableStateOf<String?>(null) }
+    var pendingNoticeError by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val filteredActions = dashboardActions.filter { (title, _, _) ->
         title.contains(dashboardSearch.trim(), ignoreCase = true)
@@ -114,8 +118,14 @@ fun AdminHomeScreen(
                 .onSuccess { memberCount = it.size }
                 .onFailure { memberLoadFailed = true }
         }
-        runCatching { AppContainer.noticeRepository.getPendingNotices() }
-            .onSuccess { pendingNotices = it.getOrDefault(emptyList()) }
+        if (isAdmin || isModerator || isContentManager || profile?.isStaff == true) {
+            pendingNoticesLoading = true
+            AppContainer.noticeRepository.refreshNotices()
+            AppContainer.noticeRepository.getPendingNotices()
+                .onSuccess { pendingNotices = it; pendingNoticeError = null }
+                .onFailure { pendingNoticeError = it.message }
+            pendingNoticesLoading = false
+        }
     }
 
     Scaffold(
@@ -235,12 +245,29 @@ fun AdminHomeScreen(
             if (isAdmin || isModerator || isContentManager || profile?.isStaff == true) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = if (isGujarati) "મંજૂરી માટે બાકી નોટિસો (Pending Notices)" else "Pending Notices for Approval",
-                            style = BodlaSection,
-                            color = TextPrimary
-                        )
-                        if (pendingNotices.isEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = if (isGujarati) "મંજૂરી માટે બાકી નોટિસો (Pending Notices)" else "Pending Notices for Approval",
+                                style = BodlaSection,
+                                color = TextPrimary
+                            )
+                            TextButton(onClick = {
+                                coroutineScope.launch {
+                                    pendingNoticesLoading = true
+                                    AppContainer.noticeRepository.refreshNotices()
+                                    AppContainer.noticeRepository.getPendingNotices()
+                                        .onSuccess { pendingNotices = it; pendingNoticeError = null }
+                                        .onFailure { pendingNoticeError = it.message }
+                                    pendingNoticesLoading = false
+                                }
+                            }, enabled = !pendingNoticesLoading) {
+                                Text(if (pendingNoticesLoading) "…" else if (isGujarati) "રીફ્રેશ" else "Refresh")
+                            }
+                        }
+                        pendingNoticeError?.let { Text(it, style = BodlaCaption, color = StatusError) }
+                        if (pendingNoticesLoading && pendingNotices.isEmpty()) {
+                            Text(if (isGujarati) "તપાસી રહ્યા છીએ…" else "Loading pending notices…", style = BodlaBody, color = TextSecondary)
+                        } else if (pendingNotices.isEmpty()) {
                             Text(
                                 text = if (isGujarati) "હાલમાં કોઈ નોટિસ મંજૂરી માટે બાકી નથી." else "No notices awaiting approval.",
                                 style = BodlaBody,
@@ -351,14 +378,18 @@ fun AdminHomeScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             BodlaButton(
-                                                text = if (isGujarati) "મંજૂર કરો (Approve)" else "Approve",
+                                                text = if (pendingNoticeActionId == notice.id) (if (isGujarati) "મંજૂર કરી રહ્યા છીએ…" else "Approving…") else if (isGujarati) "મંજૂર કરો (Approve)" else "Approve",
+                                                enabled = pendingNoticeActionId == null,
                                                 onClick = {
                                                     coroutineScope.launch {
+                                                        pendingNoticeActionId = notice.id
                                                         AppContainer.noticeRepository.approveNotice(notice.id)
                                                             .onSuccess {
                                                                 pendingNotices = pendingNotices.filter { it.id != notice.id }
                                                                 AppContainer.noticeRepository.refreshNotices()
                                                             }
+                                                            .onFailure { pendingNoticeError = it.message }
+                                                        pendingNoticeActionId = null
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f)

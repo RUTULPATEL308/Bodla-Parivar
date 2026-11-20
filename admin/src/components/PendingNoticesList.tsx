@@ -36,7 +36,10 @@ export default function PendingNoticesList() {
     if (fetchErr) {
       setError(fetchErr.message);
     } else {
-      setNotices(data ?? []);
+      setNotices((data ?? []).map((notice) => ({
+        ...notice,
+        publisher: Array.isArray(notice.publisher) ? notice.publisher[0] ?? null : notice.publisher,
+      })) as unknown as NoticeItem[]);
     }
     setLoading(false);
   };

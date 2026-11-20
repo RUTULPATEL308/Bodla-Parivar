@@ -634,10 +634,19 @@ class NoticeRepositoryImpl(
     override suspend fun getPendingNotices(): Result<List<Notice>> = withContext(Dispatchers.IO) {
         try {
             val token = tokenStorage?.getToken()
-            val response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en),publisher:profiles!published_by(full_name)&status=eq.PENDING&order=created_at.desc") {
+            var response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en),publisher:profiles!published_by(full_name)&status=in.(PENDING,PENDING_APPROVAL)&order=created_at.desc") {
                 if (!token.isNullOrBlank()) {
                     headers.remove(HttpHeaders.Authorization)
                     header(HttpHeaders.Authorization, "Bearer $token")
+                }
+            }
+            if (response.status == HttpStatusCode.Unauthorized && tokenStorage != null) {
+                val refreshed = syncEngine?.refreshAccessTokenIfStale(token)
+                if (!refreshed.isNullOrBlank()) {
+                    response = httpClient.get("${Endpoints.REST_BASE_URL}/notices?select=*,category:notice_categories(name_gu,name_en),publisher:profiles!published_by(full_name)&status=in.(PENDING,PENDING_APPROVAL)&order=created_at.desc") {
+                        headers.remove(HttpHeaders.Authorization)
+                        header(HttpHeaders.Authorization, "Bearer $refreshed")
+                    }
                 }
             }
             if (response.status.isSuccess()) {
@@ -656,7 +665,7 @@ class NoticeRepositoryImpl(
     override suspend fun approveNotice(id: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val token = tokenStorage?.getToken()
-            val response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/approve_notice") {
+            var response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/approve_notice") {
                 contentType(ContentType.Application.Json)
                 if (!token.isNullOrBlank()) {
                     header(HttpHeaders.Authorization, "Bearer $token")
@@ -664,6 +673,17 @@ class NoticeRepositoryImpl(
                 setBody(buildJsonObject {
                     put("p_notice_id", id)
                 }.toString())
+            }
+            if (response.status == HttpStatusCode.Unauthorized && tokenStorage != null) {
+                val refreshed = syncEngine?.refreshAccessTokenIfStale(token)
+                if (!refreshed.isNullOrBlank()) {
+                    response = httpClient.post("${Endpoints.REST_BASE_URL}/rpc/approve_notice") {
+                        contentType(ContentType.Application.Json)
+                        headers.remove(HttpHeaders.Authorization)
+                        header(HttpHeaders.Authorization, "Bearer $refreshed")
+                        setBody(buildJsonObject { put("p_notice_id", id) }.toString())
+                    }
+                }
             }
             if (response.status.isSuccess()) {
                 Result.success(Unit)

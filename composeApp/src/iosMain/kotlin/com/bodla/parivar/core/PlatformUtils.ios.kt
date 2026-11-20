@@ -4,3 +4,4 @@ actual fun openAppSettings() {}
 actual fun openOverlayPermissionSettings() {}
 actual fun hasOverlayPermission(): Boolean = true
 actual fun hasNotificationPermission(): Boolean = true
+actual fun registerPushForUser(isStaff: Boolean) {}

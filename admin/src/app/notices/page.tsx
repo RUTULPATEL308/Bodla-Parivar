@@ -229,7 +229,7 @@ export default function AdminNoticesPage() {
       setError('સૂચના સંદેશ જરૂરી છે.');
       return;
     }
-    if (media && media.size > MAX_MEDIA_SIZE) {
+    if (mediaFiles.some((file) => file.size > MAX_MEDIA_SIZE)) {
       setError('ફાઇલ 100 MB કરતાં નાની હોવી જોઈએ.');
       return;
     }

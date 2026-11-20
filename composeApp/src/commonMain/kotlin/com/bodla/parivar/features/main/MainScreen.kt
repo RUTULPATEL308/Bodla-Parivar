@@ -810,6 +810,7 @@ fun MainScreen(
                             onLoginSuccess = { profile ->
                                 currentUser = profile
                                 val isAdminUser = profile.hasAdminDashboardAccess()
+                                com.bodla.parivar.core.registerPushForUser(isAdminUser)
                                 currentScreen = if (isAdminUser) Screen.AdminHome else Screen.Home
                                 coroutineScope.launch {
                                     AppContainer.syncEngine.syncAll()
