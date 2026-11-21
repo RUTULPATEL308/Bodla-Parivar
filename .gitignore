@@ -69,3 +69,4 @@ composeApp/bodla-fcm-sa.json
 composeApp/bodla-fcm-sa.json
 .vercel
 .env*
+.gradle-user-home/

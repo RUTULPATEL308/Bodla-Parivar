@@ -10,6 +10,21 @@ plugins {
     // This avoids CI failures in forks/PRs where the secret is unavailable.
 }
 
+val uploadStoreFile = project.file(
+    providers.gradleProperty("BODLA_UPLOAD_STORE_FILE")
+        .orElse(providers.environmentVariable("BODLA_UPLOAD_STORE_FILE"))
+        .orElse("upload-keystore.jks")
+        .get()
+)
+val uploadStorePassword = providers.gradleProperty("BODLA_UPLOAD_STORE_PASSWORD")
+    .orElse(providers.environmentVariable("BODLA_UPLOAD_STORE_PASSWORD")).orNull
+val uploadKeyAlias = providers.gradleProperty("BODLA_UPLOAD_KEY_ALIAS")
+    .orElse(providers.environmentVariable("BODLA_UPLOAD_KEY_ALIAS")).orNull
+val uploadKeyPassword = providers.gradleProperty("BODLA_UPLOAD_KEY_PASSWORD")
+    .orElse(providers.environmentVariable("BODLA_UPLOAD_KEY_PASSWORD")).orNull
+val releaseSigningConfigured = uploadStoreFile.isFile &&
+    !uploadStorePassword.isNullOrBlank() && !uploadKeyAlias.isNullOrBlank() && !uploadKeyPassword.isNullOrBlank()
+
 if (file("${projectDir}/google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
@@ -113,8 +128,8 @@ android {
         applicationId = "com.bodla.parivar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 100133
-        versionName = "10.01.33"
+        versionCode = 100134
+        versionName = "10.01.34"
     }
 
     packaging {
@@ -124,11 +139,13 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = project.file("upload-keystore.jks")
-            storePassword = "bodla123"
-            keyAlias = "upload"
-            keyPassword = "bodla123"
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = uploadStoreFile
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
         }
     }
 
@@ -136,7 +153,7 @@ android {
         getByName("release") {
             isMinifyEnabled = true
             proguardFiles("proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
         }
     }
 

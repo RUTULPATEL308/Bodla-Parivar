@@ -14,6 +14,9 @@ object Endpoints {
     val REST_BASE_URL: String
         get() = "${SUPABASE_URL.trimEnd('/')}/rest/v1"
 
+    // Set to the deployed Next.js admin origin (for example https://bodla.example.com).
+    var ADMIN_API_BASE_URL: String = ""
+
     val AUTH_BASE_URL: String
         get() = "${SUPABASE_URL.trimEnd('/')}/auth/v1"
 

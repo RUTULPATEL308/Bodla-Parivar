@@ -22,6 +22,7 @@ expect fun PlatformShare(content: String, title: String)
 expect fun PlatformShareFile(content: String, filename: String, mimeType: String)
 expect fun PlatformCapturePoster(boundsInWindow: IntRect): ByteArray?
 expect fun PlatformOpenUrl(url: String)
+expect fun PlatformSetSystemBarStyle(darkTheme: Boolean)
 
 /**
  * Material design vector icons for Print and Share that don't depend on extended icons library.
@@ -109,27 +110,13 @@ fun PrintAction(
     modifier: Modifier = Modifier
 ) {
     val lang = LocalAppLanguage.current
-    var expanded by remember { mutableStateOf(false) }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp).semantics {
+        IconButton(onClick = { PlatformPrint(content, title) }, modifier = Modifier.size(48.dp).semantics {
             contentDescription = if (lang == AppLanguage.GUJARATI) "\u0AAA\u0ACD\u0AB0\u0ABF\u0AA8\u0ACD\u0A9F \u0A95\u0AB0\u0ACB" else "Print"
         }) { Icon(IconPrint, contentDescription = null) }
         IconButton(onClick = { PlatformShare(content, title) }, modifier = Modifier.size(48.dp).semantics {
             contentDescription = if (lang == AppLanguage.GUJARATI) "\u0AB6\u0AC7\u0AB0 \u0A95\u0AB0\u0ACB" else "Share"
         }) { Icon(IconShare, contentDescription = null) }
     }
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        DropdownMenuItem(text = { Text("ગુજરાતી") }, onClick = {
-            expanded = false
-            PlatformPrint(content, "$title — ગુજરાતી")
-        })
-        DropdownMenuItem(text = { Text("English") }, onClick = {
-            expanded = false
-            PlatformPrint(englishContent, "$title — English")
-        })
-        DropdownMenuItem(text = { Text(if (lang == AppLanguage.GUJARATI) "બંને ભાષા" else "Both languages") }, onClick = {
-            expanded = false
-            PlatformPrint(bothContent, "$title — Gujarati and English")
-        })
-    }
+
 }

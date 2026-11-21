@@ -16,6 +16,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.bodla.parivar.core.di.AppContainer
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
@@ -23,6 +26,8 @@ import com.bodla.parivar.core.theme.*
 import com.bodla.parivar.core.ui.PrintAction
 import com.bodla.parivar.core.ui.PlatformShareFile
 import com.bodla.parivar.features.notices.NoticeAttachmentPreview
+import com.bodla.parivar.features.design.ResultDocument
+import com.bodla.parivar.features.design.ResultDocumentPicker
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -59,7 +64,23 @@ private data class NavratriOption(
     @SerialName("option_type") val optionType: String,
     @SerialName("cash_only") val cashOnly: Boolean = true,
     @SerialName("form_fields") val formFields: List<NavratriBookingField> = emptyList(),
-    @SerialName("is_active") val isActive: Boolean = true
+    @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("display_order") val displayOrder: Int = 10
+)
+
+@Serializable
+private data class NavratriOptionPayload(
+    val slug: String,
+    @SerialName("title_gu") val titleGu: String,
+    @SerialName("title_en") val titleEn: String,
+    @SerialName("description_gu") val descriptionGu: String? = null,
+    @SerialName("description_en") val descriptionEn: String? = null,
+    @SerialName("report_url") val reportUrl: String? = null,
+    @SerialName("option_type") val optionType: String,
+    @SerialName("cash_only") val cashOnly: Boolean = true,
+    @SerialName("form_fields") val formFields: List<NavratriBookingField> = emptyList(),
+    @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("display_order") val displayOrder: Int = 10
 )
 
 @Serializable
@@ -142,6 +163,20 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
     var bookingQuantity by remember { mutableStateOf("1") }
     var bookingNotes by remember { mutableStateOf("") }
     var bookingFormData by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var editingOption by remember { mutableStateOf<NavratriOption?>(null) }
+    var showOptionEditor by remember { mutableStateOf(false) }
+    var deleteOptionCandidate by remember { mutableStateOf<NavratriOption?>(null) }
+    var optionSlug by remember { mutableStateOf("") }
+    var optionTitleGu by remember { mutableStateOf("") }
+    var optionTitleEn by remember { mutableStateOf("") }
+    var optionDescriptionGu by remember { mutableStateOf("") }
+    var optionDescriptionEn by remember { mutableStateOf("") }
+    var optionType by remember { mutableStateOf("BOOKING") }
+    var optionReportUrl by remember { mutableStateOf("") }
+    var optionDisplayOrder by remember { mutableStateOf("10") }
+    var optionFields by remember { mutableStateOf<List<NavratriBookingField>>(emptyList()) }
+    var optionReportFile by remember { mutableStateOf<ResultDocument?>(null) }
+    var savingOption by remember { mutableStateOf(false) }
     val selectedService = options.firstOrNull { it.id == bookingListOptionId }
     val serviceBookings = bookings.filter { bookingListOptionId == "ALL" || it.optionId == bookingListOptionId }
 
@@ -156,6 +191,85 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
         bookingFormData = booking?.formData.orEmpty()
         error = null
         showBookingEditor = true
+    }
+
+    val startOptionEditor: (NavratriOption?) -> Unit = { option ->
+        editingOption = option
+        optionSlug = option?.slug.orEmpty()
+        optionTitleGu = option?.titleGu.orEmpty()
+        optionTitleEn = option?.titleEn.orEmpty()
+        optionDescriptionGu = option?.descriptionGu.orEmpty()
+        optionDescriptionEn = option?.descriptionEn.orEmpty()
+        optionType = option?.optionType ?: if (adminTab == "REPORTS") "REPORT" else "BOOKING"
+        optionReportUrl = option?.reportUrl.orEmpty()
+        optionDisplayOrder = option?.displayOrder?.toString() ?: "10"
+        optionFields = option?.formFields.orEmpty()
+        optionReportFile = null
+        error = null
+        showOptionEditor = true
+    }
+
+    val saveOption: () -> Unit = {
+        val slug = optionSlug.trim().lowercase().replace(Regex("[^a-z0-9-]+"), "-").trim('-')
+        if (slug.isBlank() || optionTitleGu.isBlank() || optionTitleEn.isBlank()) {
+            error = if (lang == AppLanguage.GUJARATI) "કી અને બંને ભાષામાં નામ ભરો." else "Enter the key and both titles."
+        } else if (!savingOption) {
+            savingOption = true
+            error = null
+            coroutineScope.launch {
+                try {
+                    var reportUrl = optionReportUrl.trim().ifBlank { null }
+                    optionReportFile?.let { file ->
+                        require(file.bytes.size <= 100 * 1024 * 1024) { "Report file must be 100 MB or smaller." }
+                        val safeName = file.name.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                        val path = "reports/$slug/${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}-$safeName"
+                        val upload = AppContainer.httpClient.post("${com.bodla.parivar.core.network.Endpoints.SUPABASE_URL.trimEnd('/')}/storage/v1/object/navratri/$path") {
+                            contentType(ContentType.parse(file.contentType.ifBlank { "application/octet-stream" }))
+                            header("x-upsert", "false")
+                            setBody(file.bytes)
+                        }
+                        if (!upload.status.isSuccess()) throw IllegalStateException("Report upload failed: ${upload.bodyAsText().take(200)}")
+                        reportUrl = "${com.bodla.parivar.core.network.Endpoints.SUPABASE_URL.trimEnd('/')}/storage/v1/object/public/navratri/$path"
+                    }
+                    val payload = NavratriOptionPayload(
+                        slug = slug, titleGu = optionTitleGu.trim(), titleEn = optionTitleEn.trim(),
+                        descriptionGu = optionDescriptionGu.trim().ifBlank { null },
+                        descriptionEn = optionDescriptionEn.trim().ifBlank { null }, reportUrl = reportUrl,
+                        optionType = optionType, cashOnly = optionType == "BOOKING",
+                        formFields = if (optionType == "BOOKING") optionFields else emptyList(),
+                        isActive = editingOption?.isActive ?: true, displayOrder = optionDisplayOrder.toIntOrNull() ?: 10
+                    )
+                    val endpoint = "${com.bodla.parivar.core.network.Endpoints.REST_BASE_URL}/navratri_options" + (editingOption?.let { "?id=eq.${it.id}" } ?: "")
+                    val response = if (editingOption == null) AppContainer.httpClient.post(endpoint) {
+                        contentType(ContentType.Application.Json); header("Prefer", "return=minimal"); setBody(Json.encodeToString(payload))
+                    } else AppContainer.httpClient.patch(endpoint) {
+                        contentType(ContentType.Application.Json); setBody(Json.encodeToString(payload))
+                    }
+                    if (!response.status.isSuccess()) throw IllegalStateException("HTTP ${response.status.value}: ${response.bodyAsText().take(240)}")
+                    val reload = AppContainer.httpClient.get("${com.bodla.parivar.core.network.Endpoints.REST_BASE_URL}/navratri_options?select=*&order=display_order.asc")
+                    if (!reload.status.isSuccess()) throw IllegalStateException("Could not refresh Navratri options.")
+                    options = Json { ignoreUnknownKeys = true; isLenient = true }.decodeFromString(reload.bodyAsText())
+                    showOptionEditor = false
+                    success = if (lang == AppLanguage.GUJARATI) "નવરાત્રી વિકલ્પ સાચવાયો." else "Navratri option saved."
+                } catch (e: Exception) { error = e.message ?: "Could not save the Navratri option." }
+                finally { savingOption = false }
+            }
+        }
+    }
+
+    val deleteOption: (NavratriOption) -> Unit = { option ->
+        if (bookings.any { it.optionId == option.id }) {
+            error = if (lang == AppLanguage.GUJARATI) "આ વિકલ્પની બુકિંગ નોંધ છે; તેને છુપાવો." else "This option has booking history. Hide it instead."
+            deleteOptionCandidate = null
+        } else coroutineScope.launch {
+            try {
+                val response = AppContainer.httpClient.delete("${com.bodla.parivar.core.network.Endpoints.REST_BASE_URL}/navratri_options?id=eq.${option.id}")
+                if (!response.status.isSuccess()) throw IllegalStateException("HTTP ${response.status.value}: ${response.bodyAsText().take(200)}")
+                options = options.filterNot { it.id == option.id }
+                success = if (lang == AppLanguage.GUJARATI) "વિકલ્પ કાઢી નાખ્યો." else "Option deleted."
+            } catch (e: Exception) { error = e.message ?: "Could not delete the option." }
+            finally { deleteOptionCandidate = null }
+        }
     }
 
     LaunchedEffect(canManage) {
@@ -383,16 +497,19 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
         ) {
             item {
                 Text(if (lang == AppLanguage.GUJARATI) "નવરાત્રી સેવાઓ" else "Navratri services", style = BodlaPageTitle, color = TextPrimary)
+                Spacer(Modifier.height(3.dp))
                 Text(if (lang == AppLanguage.GUJARATI) "બુકિંગની ચુકવણી રોકડમાં જ સ્વીકારવામાં આવશે." else "Booking payments are handled in cash only.", style = BodlaCaption, color = TextSecondary)
                 if (canManage) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = adminView, onClick = { adminView = true; selected = null }, label = { Text(if (lang == AppLanguage.GUJARATI) "વ્યવસ્થાપન" else "Manage") })
-                        FilterChip(selected = !adminView, onClick = { adminView = false; selected = null }, label = { Text(if (lang == AppLanguage.GUJARATI) "રહેવાસી દૃશ્ય" else "Resident view") })
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FilterChip(modifier = Modifier.weight(1f).heightIn(min = 52.dp), selected = adminView, onClick = { adminView = true; selected = null }, label = { Text(if (lang == AppLanguage.GUJARATI) "વ્યવસ્થાપન" else "Manage", maxLines = 1) })
+                        FilterChip(modifier = Modifier.weight(1f).heightIn(min = 52.dp), selected = !adminView, onClick = { adminView = false; selected = null }, label = { Text(if (lang == AppLanguage.GUJARATI) "રહેવાસી દૃશ્ય" else "Resident view", maxLines = 1) })
                     }
                     if (adminView) {
+                        Spacer(Modifier.height(6.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
                                 "SERVICES" to if (lang == AppLanguage.GUJARATI) "સેવાઓ" else "Services",
@@ -405,14 +522,16 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                                     else -> bookings.size
                                 }
                                 FilterChip(
+                                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                                     selected = adminTab == tab,
                                     onClick = { adminTab = tab; selected = null },
-                                    label = { Text("$label ($count)", maxLines = 1) }
+                                    label = { Text("$label ($count)", maxLines = 1, softWrap = false) }
                                 )
                             }
                         }
                     }
                 }
+                Spacer(Modifier.height(4.dp))
                 if (error != null) Text(error.orEmpty(), color = MaterialTheme.colorScheme.error, style = BodlaCaption)
                 if (success != null) Text(success.orEmpty(), color = MaterialTheme.colorScheme.primary, style = BodlaCaption)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
@@ -423,7 +542,11 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(if (lang == AppLanguage.GUJARATI) "બુકિંગ યાદી" else "Booking lists", style = BodlaCardTitle, color = TextPrimary)
-                            Button(onClick = { startBookingEditor(null) }) { Text(if (lang == AppLanguage.GUJARATI) "+ ઉમેરો" else "+ Add") }
+                            Button(
+                                onClick = { startBookingEditor(null) },
+                                colors = ButtonDefaults.buttonColors(containerColor = SaffronPrimary, contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp)
+                            ) { Text(if (lang == AppLanguage.GUJARATI) "+ ઉમેરો" else "+ Add", color = Color.White, fontWeight = FontWeight.Bold) }
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -491,28 +614,61 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                             style = BodlaCardTitle,
                             color = TextPrimary
                         )
+                        Button(
+                            onClick = { startOptionEditor(null) },
+                            colors = ButtonDefaults.buttonColors(containerColor = SaffronPrimary, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { Text(if (lang == AppLanguage.GUJARATI) "+ ઉમેરો" else "+ Add", color = Color.White, fontWeight = FontWeight.Bold) }
                     }
                 }
                 items(options.filter { if (adminTab == "REPORTS") it.optionType == "REPORT" else adminTab == "SERVICES" && it.optionType == "BOOKING" }, key = { "option-${it.id}" }) { option ->
                     Card(colors = CardDefaults.cardColors(containerColor = WarmWhiteSurface)) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(if (lang == AppLanguage.GUJARATI) option.titleGu else option.titleEn, style = BodlaCardTitle, color = TextPrimary)
-                                Text(if (option.optionType == "REPORT") if (lang == AppLanguage.GUJARATI) "અહેવાલ" else "Report" else if (lang == AppLanguage.GUJARATI) "રોકડ બુકિંગ" else "Cash booking", style = BodlaCaption, color = TextSecondary)
-                            }
-                            if (option.optionType == "REPORT" && !option.reportUrl.isNullOrBlank()) {
-                                TextButton(onClick = { selected = option }) {
-                                    Text(if (lang == AppLanguage.GUJARATI) "જુઓ" else "View")
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(if (lang == AppLanguage.GUJARATI) option.titleGu else option.titleEn, style = BodlaCardTitle, color = TextPrimary)
+                                    Text(if (option.optionType == "REPORT") if (lang == AppLanguage.GUJARATI) "અહેવાલ" else "Report" else if (lang == AppLanguage.GUJARATI) "રોકડ બુકિંગ" else "Cash booking", style = BodlaCaption, color = TextSecondary)
+                                }
+                                if (option.optionType == "REPORT" && !option.reportUrl.isNullOrBlank()) {
+                                    OutlinedButton(onClick = { selected = option }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                        Text(if (lang == AppLanguage.GUJARATI) "જુઓ" else "View")
+                                    }
                                 }
                             }
-                            Switch(checked = option.isActive, onCheckedChange = { setOptionActive(option, it) })
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(if (option.isActive) if (lang == AppLanguage.GUJARATI) "ચાલુ" else "Active" else if (lang == AppLanguage.GUJARATI) "બંધ" else "Inactive", style = BodlaBody, color = TextPrimary)
+                                Switch(
+                                    checked = option.isActive,
+                                    onCheckedChange = { setOptionActive(option, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = SaffronPrimary,
+                                        checkedTrackColor = Color.White,
+                                        checkedBorderColor = TextSecondary,
+                                        uncheckedThumbColor = TextSecondary,
+                                        uncheckedTrackColor = Color.White,
+                                        uncheckedBorderColor = TextSecondary
+                                    )
+                                )
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(onClick = { startOptionEditor(option) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(10.dp)) {
+                                    Text(if (lang == AppLanguage.GUJARATI) "સંપાદિત" else "Edit")
+                                }
+                                OutlinedButton(onClick = { deleteOptionCandidate = option }, modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(10.dp)) {
+                                    Text(if (lang == AppLanguage.GUJARATI) "કાઢો" else "Delete", color = MaterialTheme.colorScheme.error)
+                                }
+                            }
                         }
                     }
                 }
                 if (adminTab == "BOOKINGS") item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(if (lang == AppLanguage.GUJARATI) "બુકિંગ વિનંતીઓ" else "Booking requests", style = BodlaCardTitle, color = TextPrimary)
-                        Button(onClick = { startBookingEditor(null) }) { Text(if (lang == AppLanguage.GUJARATI) "+ ઉમેરો" else "+ Add") }
+                        Button(
+                            onClick = { startBookingEditor(null) },
+                            colors = ButtonDefaults.buttonColors(containerColor = SaffronPrimary, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { Text(if (lang == AppLanguage.GUJARATI) "+ ઉમેરો" else "+ Add", color = Color.White, fontWeight = FontWeight.Bold) }
                     }
                 }
                 if (adminTab == "BOOKINGS" && serviceBookings.isEmpty()) item { Text(if (lang == AppLanguage.GUJARATI) "હજુ કોઈ બુકિંગ નથી." else "No booking requests yet.", style = BodlaBody, color = TextSecondary) }
@@ -527,23 +683,51 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                             booking.formData.forEach { (key, value) -> Text("$key: $value", style = BodlaCaption, color = TextSecondary) }
                             if (!booking.notes.isNullOrBlank()) Text(booking.notes, style = BodlaCaption, color = TextSecondary)
                             Text("${booking.status} · ${booking.paymentStatus}", style = BodlaCaption, color = SaffronPrimary)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { startBookingEditor(booking) }) { Text(if (lang == AppLanguage.GUJARATI) "સંપાદિત" else "Edit") }
-                                TextButton(onClick = { deleteCandidate = booking }) { Text(if (lang == AppLanguage.GUJARATI) "ડિલીટ" else "Delete", color = MaterialTheme.colorScheme.error) }
-                                OutlinedButton(onClick = { updateBooking(booking, "payment_status", if (booking.paymentStatus == "PAID") "PENDING" else "PAID") }) {
-                                    Text(if (booking.paymentStatus == "PAID") if (lang == AppLanguage.GUJARATI) "ચૂકવેલ" else "Paid" else if (lang == AppLanguage.GUJARATI) "બાકી · ચૂકવેલ કરો" else "Pending · mark paid")
-                                }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(onClick = { startBookingEditor(booking) }, modifier = Modifier.weight(1f).heightIn(min = 50.dp)) { Text(if (lang == AppLanguage.GUJARATI) "સંપાદિત" else "Edit") }
+                                OutlinedButton(onClick = { deleteCandidate = booking }, modifier = Modifier.weight(1f).heightIn(min = 50.dp)) { Text(if (lang == AppLanguage.GUJARATI) "ડિલીટ" else "Delete", color = MaterialTheme.colorScheme.error) }
+                            }
+                            OutlinedButton(
+                                onClick = { updateBooking(booking, "payment_status", if (booking.paymentStatus == "PAID") "PENDING" else "PAID") },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(if (booking.paymentStatus == "PAID") if (lang == AppLanguage.GUJARATI) "ચૂકવેલ" else "Paid" else if (lang == AppLanguage.GUJARATI) "બાકી · ચૂકવેલ તરીકે ચિહ્નિત કરો" else "Pending · mark as paid")
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 when (booking.status) {
-                                    "PENDING" -> Button(onClick = { updateBooking(booking, "status", "CONFIRMED") }) {
-                                        Text(if (lang == AppLanguage.GUJARATI) "મંજૂર કરો" else "Confirm")
+                                    "PENDING" -> Button(
+                                        onClick = { updateBooking(booking, "status", "CONFIRMED") },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SaffronPrimary, contentColor = WarmWhiteSurface),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(if (lang == AppLanguage.GUJARATI) "મંજૂર કરો" else "Confirm", color = WarmWhiteSurface, fontWeight = FontWeight.Bold)
                                     }
-                                    "CONFIRMED" -> Button(onClick = { updateBooking(booking, "status", "COMPLETED") }) {
-                                        Text(if (lang == AppLanguage.GUJARATI) "પૂર્ણ" else "Complete")
+                                    "CONFIRMED" -> Button(
+                                        onClick = { updateBooking(booking, "status", "COMPLETED") },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SaffronPrimary, contentColor = WarmWhiteSurface),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(if (lang == AppLanguage.GUJARATI) "પૂર્ણ" else "Complete", color = WarmWhiteSurface, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 if (booking.status != "CANCELLED" && booking.status != "COMPLETED") {
-                                    TextButton(onClick = { updateBooking(booking, "status", "CANCELLED") }) {
-                                        Text(if (lang == AppLanguage.GUJARATI) "રદ કરો" else "Cancel")
+                                    TextButton(
+                                        onClick = { updateBooking(booking, "status", "CANCELLED") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(if (lang == AppLanguage.GUJARATI) "રદ કરો" else "Cancel", color = StatusError)
                                     }
                                 }
                             }
@@ -637,9 +821,15 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                                 }
                             }
                             if (option.cashOnly) Text(if (lang == AppLanguage.GUJARATI) "ચુકવણી રોકડમાં જ સ્વીકારવામાં આવશે." else "Payment is cash only.", style = BodlaCaption, color = SaffronPrimary)
-                            Button(onClick = submitBooking, enabled = !submitting, modifier = Modifier.fillMaxWidth()) {
-                                if (submitting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                                else Text(if (lang == AppLanguage.GUJARATI) "બુકિંગ મોકલો" else "Submit booking")
+                            Button(
+                                onClick = submitBooking,
+                                enabled = !submitting,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = SaffronPrimary, contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                if (submitting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                                else Text(if (lang == AppLanguage.GUJARATI) "બુકિંગ મોકલો" else "Submit booking", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -649,6 +839,65 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
     }
 
     val reportUrl = selected?.takeIf { it.optionType == "REPORT" }?.reportUrl
+    if (showOptionEditor) {
+        AlertDialog(
+            onDismissRequest = { if (!savingOption) showOptionEditor = false },
+            title = { Text(if (editingOption == null) if (lang == AppLanguage.GUJARATI) "Navratri વિકલ્પ ઉમેરો" else "Add Navratri option" else if (lang == AppLanguage.GUJARATI) "વિકલ્પ સંપાદિત કરો" else "Edit option") },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(optionSlug, { optionSlug = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "Option key" else "Option key") }, singleLine = true, enabled = editingOption == null)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = optionType == "BOOKING", onClick = { optionType = "BOOKING" }, label = { Text(if (lang == AppLanguage.GUJARATI) "સેવા" else "Service") })
+                        FilterChip(selected = optionType == "REPORT", onClick = { optionType = "REPORT" }, label = { Text(if (lang == AppLanguage.GUJARATI) "અહેવાલ" else "Report") })
+                    }
+                    OutlinedTextField(optionTitleGu, { optionTitleGu = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "નામ (ગુજરાતી)" else "Title (Gujarati)") })
+                    OutlinedTextField(optionTitleEn, { optionTitleEn = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "નામ (English)" else "Title (English)") })
+                    OutlinedTextField(optionDescriptionGu, { optionDescriptionGu = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "વિગત (ગુજરાતી)" else "Description (Gujarati)") }, minLines = 2)
+                    OutlinedTextField(optionDescriptionEn, { optionDescriptionEn = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "વિગત (English)" else "Description (English)") }, minLines = 2)
+                    OutlinedTextField(optionDisplayOrder, { optionDisplayOrder = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "ક્રમ" else "Display order") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                    if (optionType == "REPORT") {
+                        ResultDocumentPicker(if (lang == AppLanguage.GUJARATI) "અહેવાલ ફાઇલ પસંદ કરો" else "Choose report file", Modifier.fillMaxWidth()) { optionReportFile = it }
+                        optionReportFile?.let { Text(it.name, style = BodlaCaption, color = TextSecondary) }
+                        OutlinedTextField(optionReportUrl, { optionReportUrl = it }, label = { Text(if (lang == AppLanguage.GUJARATI) "અથવા અહેવાલ URL" else "Or report URL") }, singleLine = true)
+                        if (optionReportUrl.isNotBlank()) TextButton(onClick = { optionReportUrl = "" }) { Text(if (lang == AppLanguage.GUJARATI) "ફાઇલ દૂર કરો" else "Remove current file") }
+                    } else {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(if (lang == AppLanguage.GUJARATI) "વધારાના બુકિંગ ફીલ્ડ" else "Extra booking fields", style = BodlaCaption)
+                            TextButton(onClick = { optionFields = optionFields + NavratriBookingField("field_${optionFields.size + 1}", "", "", "TEXT", false) }) { Text(if (lang == AppLanguage.GUJARATI) "+ ફીલ્ડ" else "+ Field") }
+                        }
+                        optionFields.forEachIndexed { index, field ->
+                            OutlinedTextField(field.key, { value -> optionFields = optionFields.toMutableList().also { it[index] = field.copy(key = value.trim().replace(Regex("\\s+"), "_")) } }, label = { Text(if (lang == AppLanguage.GUJARATI) "કી" else "Field key") }, singleLine = true)
+                            OutlinedTextField(field.labelGu, { value -> optionFields = optionFields.toMutableList().also { it[index] = field.copy(labelGu = value) } }, label = { Text(if (lang == AppLanguage.GUJARATI) "લેબલ (ગુજરાતી)" else "Label (Gujarati)") }, singleLine = true)
+                            OutlinedTextField(field.labelEn, { value -> optionFields = optionFields.toMutableList().also { it[index] = field.copy(labelEn = value) } }, label = { Text(if (lang == AppLanguage.GUJARATI) "લેબલ (English)" else "Label (English)") }, singleLine = true)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = {
+                                    val types = listOf("TEXT", "NUMBER", "DATE", "TIME", "NOTES", "PHONE", "AMOUNT")
+                                    val next = (types.indexOf(field.type).coerceAtLeast(0) + 1) % types.size
+                                    optionFields = optionFields.toMutableList().also { it[index] = field.copy(type = types[next]) }
+                                }) { Text("${if (lang == AppLanguage.GUJARATI) "પ્રકાર" else "Type"}: ${field.type}") }
+                                Checkbox(checked = field.required, onCheckedChange = { value -> optionFields = optionFields.toMutableList().also { it[index] = field.copy(required = value) } })
+                                Text(if (lang == AppLanguage.GUJARATI) "ફરજિયાત" else "Required")
+                                Spacer(Modifier.weight(1f))
+                                TextButton(onClick = { optionFields = optionFields.filterIndexed { fieldIndex, _ -> fieldIndex != index } }) { Text(if (lang == AppLanguage.GUJARATI) "દૂર કરો" else "Remove") }
+                            }
+                        }
+                    }
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = BodlaCaption) }
+                }
+            },
+            confirmButton = { TextButton(onClick = saveOption, enabled = !savingOption) { Text(if (savingOption) "…" else if (lang == AppLanguage.GUJARATI) "સાચવો" else "Save") } },
+            dismissButton = { TextButton(onClick = { showOptionEditor = false }, enabled = !savingOption) { Text(if (lang == AppLanguage.GUJARATI) "રદ" else "Cancel") } }
+        )
+    }
+    deleteOptionCandidate?.let { option ->
+        AlertDialog(
+            onDismissRequest = { deleteOptionCandidate = null },
+            title = { Text(if (lang == AppLanguage.GUJARATI) "વિકલ્પ કાઢી નાખવો?" else "Delete option?") },
+            text = { Text(if (lang == AppLanguage.GUJARATI) "${option.titleGu} કાયમ માટે કાઢી નાખવામાં આવશે." else "${option.titleEn} will be permanently deleted.") },
+            confirmButton = { TextButton(onClick = { deleteOption(option) }) { Text(if (lang == AppLanguage.GUJARATI) "કાઢી નાખો" else "Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deleteOptionCandidate = null }) { Text(if (lang == AppLanguage.GUJARATI) "રદ" else "Cancel") } }
+        )
+    }
     if (showBookingEditor) {
         val selectedBookingOption = options.firstOrNull { it.id == bookingOptionId }
         AlertDialog(

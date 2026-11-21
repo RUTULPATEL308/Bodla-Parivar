@@ -36,10 +36,23 @@ actual fun PlatformPrint(content: String, title: String) {
 }
 
 actual fun PlatformShare(content: String, title: String) {
-    val controller = UIActivityViewController(listOf(content), null)
-    UIApplication.sharedApplication.keyWindow?.rootViewController?.presentViewController(
-        controller, animated = true, completion = null
-    )
+    val formatter = UISimpleTextPrintFormatter(text = "$title\n\n$content")
+    val renderer = platform.UIKit.UIPrintPageRenderer()
+    renderer.addPrintFormatter(formatter, startingAtPageAtIndex = 0)
+    val pageRect = platform.CoreGraphics.CGRectMake(0.0, 0.0, 595.0, 842.0)
+    renderer.setValue(platform.Foundation.NSValue.valueWithCGRect(pageRect), forKey = "paperRect")
+    renderer.setValue(platform.Foundation.NSValue.valueWithCGRect(platform.CoreGraphics.CGRectMake(36.0, 42.0, 523.0, 758.0)), forKey = "printableRect")
+    val range = platform.Foundation.NSMakeRange(0u, renderer.numberOfPages.toULong())
+    renderer.prepareForDrawingPages(range)
+    val path = NSTemporaryDirectory() + title.replace(Regex("[^A-Za-z0-9._-]"), "-") + ".pdf"
+    platform.UIKit.UIGraphicsBeginPDFContextToFile(path, pageRect, null)
+    for (page in 0 until renderer.numberOfPages.toInt()) {
+        platform.UIKit.UIGraphicsBeginPDFPageWithInfo(pageRect, null)
+        renderer.drawPageAtIndex(page.toLong(), inRect = pageRect)
+    }
+    platform.UIKit.UIGraphicsEndPDFContext()
+    val controller = UIActivityViewController(listOf(NSURL.fileURLWithPath(path)), null)
+    UIApplication.sharedApplication.keyWindow?.rootViewController?.presentViewController(controller, animated = true, completion = null)
 }
 
 actual fun PlatformShareFile(content: String, filename: String, mimeType: String) {
@@ -83,3 +96,5 @@ actual fun PlatformCapturePoster(boundsInWindow: IntRect): ByteArray? {
 actual fun PlatformOpenUrl(url: String) {
     NSURL(string = url)?.let { UIApplication.sharedApplication.openURL(it) }
 }
+
+actual fun PlatformSetSystemBarStyle(darkTheme: Boolean) = Unit

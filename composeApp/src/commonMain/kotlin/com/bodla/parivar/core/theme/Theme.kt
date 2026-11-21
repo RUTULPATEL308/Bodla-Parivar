@@ -12,6 +12,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
+import com.bodla.parivar.core.ui.PlatformSetSystemBarStyle
 
 private val LightColorScheme = lightColorScheme(
     primary = SaffronPrimary,
@@ -33,10 +36,10 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = SaffronPrimary,
-    onPrimary = DarkBackground,
-    primaryContainer = DarkIconBg,
-    onPrimaryContainer = GoldenAccent,
+    primary = Color(0xFF9DBDFF),
+    onPrimary = Color(0xFF102D58),
+    primaryContainer = Color(0xFF294A7A),
+    onPrimaryContainer = Color(0xFFD9E5FF),
     secondary = LeafGreenSecondary,
     onSecondary = DarkBackground,
     tertiary = GoldenAccent,
@@ -81,6 +84,7 @@ fun BodlaParivarTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    SideEffect { PlatformSetSystemBarStyle(darkTheme) }
     val customTextSelectionColors = TextSelectionColors(
         handleColor = SaffronPrimary,
         backgroundColor = SaffronPrimary.copy(alpha = 0.35f)

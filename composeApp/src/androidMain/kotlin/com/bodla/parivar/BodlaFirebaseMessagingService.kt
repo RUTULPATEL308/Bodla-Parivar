@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.media.RingtoneManager
 import android.os.Build
-import android.os.PowerManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import java.net.URL
@@ -23,7 +22,7 @@ import kotlinx.serialization.json.Json
 class BodlaFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
-        const val NOTIFICATION_CHANNEL_ID = "bodla_parivar_channel_v4"
+        const val NOTIFICATION_CHANNEL_ID = "bodla_parivar_channel_v5"
         const val ALERT_NOTIFICATION_ID_KEY = "alert_notification_id"
         private var lastProcessedNoticeId: String? = null
         private var lastProcessedTime = 0L
@@ -113,59 +112,13 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
 
         val imageUrl = remoteMessage.data["image_url"] ?: remoteMessage.data["imageUrl"]
 
-        // Wake screen if screen is off so alert pops up immediately
-        wakeUpScreen()
-
-        // If app is closed / in background, also launch NoticeAlertActivity directly
-        launchAlertDirectly(title, remoteMessage.data["body_gu"] ?: body, remoteMessage.data)
-
         sendNotification(title, body, remoteMessage.data, imageUrl)
-    }
-
-    private fun wakeUpScreen() {
-        try {
-            val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
-            if (powerManager != null && !powerManager.isInteractive) {
-                val wakeLock = powerManager.newWakeLock(
-                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                    "BodlaParivar:NoticeWakeLock"
-                )
-                wakeLock.acquire(10000L) // Release after 10s automatically
-            }
-        } catch (e: Exception) {
-            Napier.e("Failed to acquire wake lock: ${e.message}", tag = "FCM")
-        }
-    }
-
-    private fun launchAlertDirectly(title: String, body: String, data: Map<String, String>) {
-        try {
-            val alertIntent = Intent(this, NoticeAlertActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra("title", title)
-                putExtra("body", body)
-                for ((key, value) in data) {
-                    putExtra(key, value)
-                }
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+ (API 34+)
-                val options = android.app.ActivityOptions.makeBasic().apply {
-                    setPendingIntentBackgroundActivityStartMode(
-                        android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
-                    )
-                }
-                startActivity(alertIntent, options.toBundle())
-            } else {
-                startActivity(alertIntent)
-            }
-        } catch (e: Exception) {
-            Napier.e("Direct startActivity failed: ${e.message}", tag = "FCM")
-        }
     }
 
     private fun sendNotification(title: String, messageBody: String, data: Map<String, String>, imageUrl: String? = null) {
         val notificationId = (System.currentTimeMillis() % 100000).toInt()
 
-        val fullScreenIntent = Intent(this, NoticeAlertActivity::class.java).apply {
+        val notificationIntent = Intent(this, NoticeAlertActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("title", title)
             putExtra("body", messageBody)
@@ -174,10 +127,10 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
                 putExtra(key, value)
             }
         }
-        val fullScreenPendingIntent = PendingIntent.getActivity(
+        val contentPendingIntent = PendingIntent.getActivity(
             this,
             notificationId,
-            fullScreenIntent,
+            notificationIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -188,10 +141,9 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
                 "બોદલા પરિવાર સૂચનાઓ (Village Notices)",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "General and emergency notifications for Bodla Parivar members"
+                description = "Village notices and announcements for Bodla Parivar members"
                 enableVibration(true)
                 enableLights(true)
-                setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), null)
             }
@@ -213,13 +165,12 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(messageBody)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setDefaults(Notification.DEFAULT_ALL)
-            .setContentIntent(fullScreenPendingIntent)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setContentIntent(contentPendingIntent)
 
         if (pictureBitmap != null) {
             notificationBuilder
