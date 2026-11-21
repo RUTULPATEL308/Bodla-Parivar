@@ -128,8 +128,8 @@ android {
         applicationId = "com.bodla.parivar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 100135
-        versionName = "10.01.35"
+        versionCode = 100136
+        versionName = "10.01.36"
     }
 
     packaging {

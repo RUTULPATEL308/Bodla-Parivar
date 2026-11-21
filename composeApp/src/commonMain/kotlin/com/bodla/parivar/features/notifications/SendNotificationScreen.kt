@@ -300,11 +300,21 @@ fun SendNotificationScreen(
                     root["requires_approval"]?.jsonPrimitive?.contentOrNull.equals("true", ignoreCase = true)
                 }.getOrDefault(false)
                 val pushSent = runCatching {
-                    Json.parseToJsonElement(responseBody)
-                        .jsonObject["push_sent"]
+                    val response = Json.parseToJsonElement(responseBody).jsonObject
+                    val legacyPushSent = response["push_sent"]
                         ?.jsonPrimitive
                         ?.contentOrNull
                         .equals("true", ignoreCase = true)
+                    val fcmResult = response["fcm"]?.jsonObject
+                    val fcmAccepted = fcmResult?.get("success")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        .equals("true", ignoreCase = true)
+                    val deliveredToDevice = (fcmResult?.get("successCount")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        ?.toIntOrNull() ?: 0) > 0
+                    legacyPushSent || fcmAccepted || deliveredToDevice
                 }.getOrDefault(false)
 
                 when {
@@ -341,11 +351,11 @@ fun SendNotificationScreen(
                     }
                     else -> {
                         wasNoticePublished = true
-                        successMessage = if (isGujarati) "સૂચના સફળતાપૂર્વક સાચવાઈ." else "Notice was saved successfully."
+                        successMessage = null
                         errorMessage = if (isGujarati) {
-                            "Push alert મોકલાઈ નથી. Duplicate સૂચના ન મોકલો; Admin ને FCM ગોઠવવા કહો."
+                            "સૂચના સાચવાઈ છે, પરંતુ push alert મોકલાઈ નથી. Duplicate સૂચના ન મોકલો; Admin ને FCM ગોઠવવા કહો."
                         } else {
-                            "No push alert was sent. Do not send this notice again; ask an administrator to configure FCM."
+                            "Notice was saved, but no push alert was sent. Do not send it again; ask an administrator to configure FCM."
                         }
                     }
                 }
