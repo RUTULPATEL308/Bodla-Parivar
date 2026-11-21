@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.media.RingtoneManager
 import android.os.Build
+import android.provider.Settings
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import java.net.URL
@@ -113,6 +114,32 @@ class BodlaFirebaseMessagingService : FirebaseMessagingService() {
         val imageUrl = remoteMessage.data["image_url"] ?: remoteMessage.data["imageUrl"]
 
         sendNotification(title, body, remoteMessage.data, imageUrl)
+        showNoticePopup(title, remoteMessage.data["body_gu"] ?: body, remoteMessage.data)
+    }
+
+    private fun showNoticePopup(title: String, body: String, data: Map<String, String>) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
+
+        runCatching {
+            val alertIntent = Intent(this, NoticeAlertActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra("title", title)
+                putExtra("body", body)
+                data.forEach { (key, value) -> putExtra(key, value) }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val options = android.app.ActivityOptions.makeBasic().apply {
+                    setPendingIntentBackgroundActivityStartMode(
+                        android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    )
+                }
+                startActivity(alertIntent, options.toBundle())
+            } else {
+                startActivity(alertIntent)
+            }
+        }.onFailure { error ->
+            Napier.e("Could not show notice popup: ${error.message}", tag = "FCM")
+        }
     }
 
     private fun sendNotification(title: String, messageBody: String, data: Map<String, String>, imageUrl: String? = null) {
