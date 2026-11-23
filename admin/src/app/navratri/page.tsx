@@ -232,15 +232,40 @@ export default function NavratriAdminPage() {
     if (booking.notes) fields.push(`નોંધ: ${booking.notes}`);
     return fields.join('; ') || '—';
   };
+  const bookingColumnPrefsKey = 'bodla-admin-print-global-preferences-v2';
+  const [bookingColumnPrefs, setBookingColumnPrefs] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(bookingColumnPrefsKey) || 'null');
+      setBookingColumnPrefs(saved?.columnKeys ?? {});
+    } catch { setBookingColumnPrefs({}); }
+    let active = true;
+    void supabase.from('village_settings').select('print_share_preferences').order('created_at', { ascending: true }).limit(1).maybeSingle()
+      .then(({ data }) => { if (active && data?.print_share_preferences) setBookingColumnPrefs((data.print_share_preferences as { columnKeys?: Record<string, boolean> }).columnKeys ?? {}); });
+    return () => { active = false; };
+  }, []);
+  const serviceFormFields = (bookingListOptionId === 'ALL' ? serviceOptions : serviceOptions.filter((item) => item.id === bookingListOptionId))
+    .flatMap((item) => item.form_fields ?? [])
+    .filter((field, index, all) => !['phone', 'amount'].includes(field.key) && all.findIndex((candidate) => candidate.key === field.key) === index);
+  const bookingColumns = [
+    { key: 'name', label: 'સભ્યનું નામ', value: (booking: NavratriBooking) => booking.customer_name },
+    ...(bookingListOptionId === 'ALL' ? [{ key: 'service', label: 'બુકિંગનો પ્રકાર', value: (booking: NavratriBooking) => booking.option?.title_gu ?? '' }] : []),
+    { key: 'phone', label: 'મોબાઇલ નંબર', value: (booking: NavratriBooking) => booking.phone || '—' },
+    { key: 'amount', label: 'રકમ / જથ્થો', value: (booking: NavratriBooking) => booking.amount != null ? `₹${booking.amount.toLocaleString('en-IN')}` : String(booking.quantity) },
+    ...(serviceFormFields.map((field) => ({
+      key: `field:${field.key}`, label: field.label_gu || field.label_en,
+      value: (booking: NavratriBooking) => booking.form_data?.[field.key] ?? '',
+    }))),
+    { key: 'notes', label: 'નોંધ', value: (booking: NavratriBooking) => booking.notes || '' },
+    { key: 'payment', label: 'ચુકવણી', value: (booking: NavratriBooking) => paymentStatusGu(booking.payment_status) },
+    { key: 'status', label: 'સ્થિતિ', value: (booking: NavratriBooking) => bookingStatusGu(booking.status) },
+  ];
+  const shownBookingColumns = bookingColumns.filter((column) => bookingColumnPrefs[column.key] !== false);
   const downloadBookingList = () => {
     const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [
-      ['સભ્યનું નામ', ...(bookingListOptionId === 'ALL' ? ['બુકિંગનો પ્રકાર'] : []), 'મોબાઇલ નંબર', 'રકમ / જથ્થો', 'વધારાની વિગતો', 'ચુકવણી', 'સ્થિતિ'],
-      ...serviceBookings.map((booking) => [
-        booking.customer_name, ...(bookingListOptionId === 'ALL' ? [booking.option?.title_gu ?? ''] : []), booking.phone ?? '',
-        booking.amount != null ? `₹${booking.amount}` : booking.quantity, bookingDetailsGu(booking),
-        paymentStatusGu(booking.payment_status), bookingStatusGu(booking.status),
-      ]),
+      shownBookingColumns.map((column) => column.label),
+      ...serviceBookings.map((booking) => shownBookingColumns.map((column) => column.value(booking))),
     ];
     const blob = new Blob([`\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -335,16 +360,16 @@ export default function NavratriAdminPage() {
       {activeTab === 'BOOKING' && <section className="overflow-hidden rounded-xl border border-brand-border bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-border p-4">
           <div><h2 className="text-lg font-bold text-brand-text">બુકિંગ યાદી</h2><p className="mt-1 text-xs text-brand-muted">પ્રસાદ અથવા માંડવી બુકિંગ પસંદ કરીને યાદી પ્રિન્ટ અથવા CSV માં ડાઉનલોડ કરો.</p></div>
-          <div className="no-print flex items-center gap-2"><button type="button" onClick={() => startBookingEdit()} className="rounded-lg bg-saffron px-3 py-2 text-sm font-semibold text-white">+ બુકિંગ ઉમેરો</button><button type="button" onClick={downloadBookingList} disabled={serviceBookings.length === 0} className="rounded-lg border border-brand-border px-3 py-2 text-sm font-semibold disabled:opacity-50">CSV ડાઉનલોડ</button><PrintControls orientation="landscape" documentTitle={bookingListTitle} /></div>
+          <div className="no-print flex items-center gap-2"><button type="button" onClick={() => startBookingEdit()} className="rounded-lg bg-saffron px-3 py-2 text-sm font-semibold text-white">+ બુકિંગ ઉમેરો</button><button type="button" onClick={downloadBookingList} disabled={serviceBookings.length === 0} className="rounded-lg border border-brand-border px-3 py-2 text-sm font-semibold disabled:opacity-50">CSV ડાઉનલોડ</button><PrintControls orientation="landscape" documentTitle={bookingListTitle} sectionKey="navratri-bookings" /></div>
         </div>
         <div className="no-print flex flex-wrap gap-2 p-4">
           <button type="button" onClick={() => setBookingListOptionId('ALL')} aria-pressed={bookingListOptionId === 'ALL'} className={`rounded-full px-4 py-2 text-sm font-semibold ${bookingListOptionId === 'ALL' ? 'bg-navy-900 text-white' : 'border border-brand-border bg-white text-brand-text'}`}>બધા બુકિંગ</button>
           {serviceOptions.map((option) => <button key={option.id} type="button" onClick={() => setBookingListOptionId(option.id)} aria-pressed={bookingListOptionId === option.id} className={`rounded-full px-4 py-2 text-sm font-semibold ${bookingListOptionId === option.id ? 'bg-navy-900 text-white' : 'border border-brand-border bg-white text-brand-text'}`}>{option.title_gu}</button>)}
         </div>
-        <div data-print-area className="overflow-x-auto p-4 pt-0">
+        <div data-print-area="navratri-bookings" className="overflow-x-auto p-4 pt-0">
           {loading ? <p className="p-4 text-sm text-brand-muted">બુકિંગ યાદી લોડ થઈ રહી છે…</p> : serviceBookings.length === 0 ? <p className="p-4 text-sm text-brand-muted">આ પ્રકારનું કોઈ બુકિંગ મળ્યું નથી.</p> : <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-            <thead className="bg-slate-100 text-xs font-bold text-slate-700"><tr><th className="border border-slate-300 p-3">સભ્યનું નામ</th>{bookingListOptionId === 'ALL' && <th className="border border-slate-300 p-3">બુકિંગનો પ્રકાર</th>}<th className="border border-slate-300 p-3">મોબાઇલ નંબર</th><th className="border border-slate-300 p-3">રકમ / જથ્થો</th><th className="border border-slate-300 p-3">વધારાની વિગતો</th><th className="border border-slate-300 p-3">ચુકવણી</th><th className="border border-slate-300 p-3">સ્થિતિ</th></tr></thead>
-            <tbody>{serviceBookings.map((booking, index) => <tr key={booking.id} className={index % 2 ? 'bg-slate-50' : 'bg-white'}><td className="border border-slate-300 p-3 font-semibold">{booking.customer_name}</td>{bookingListOptionId === 'ALL' && <td className="border border-slate-300 p-3">{booking.option?.title_gu ?? ''}</td>}<td className="border border-slate-300 p-3">{booking.phone || '—'}</td><td className="border border-slate-300 p-3">{booking.amount != null ? `₹${booking.amount.toLocaleString('en-IN')}` : booking.quantity}</td><td className="border border-slate-300 p-3">{bookingDetailsGu(booking)}</td><td className="border border-slate-300 p-3">{paymentStatusGu(booking.payment_status)}</td><td className="border border-slate-300 p-3">{bookingStatusGu(booking.status)}</td><td className="no-print whitespace-nowrap border border-slate-300 p-2"><button type="button" onClick={() => startBookingEdit(booking)} className="rounded px-2 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-50">સંપાદિત</button><button type="button" onClick={() => void deleteBooking(booking)} disabled={bookingDeleteId === booking.id} className="rounded px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">ડિલીટ</button></td></tr>)}</tbody>
+            <thead className="bg-slate-100 text-xs font-bold text-slate-700"><tr>{bookingColumns.map((column) => <th key={column.key} data-print-column={column.key} className="border border-slate-300 p-3">{column.label}</th>)}<th className="no-print border border-slate-300 p-2">Actions</th></tr></thead>
+            <tbody>{serviceBookings.map((booking, index) => <tr key={booking.id} className={index % 2 ? 'bg-slate-50' : 'bg-white'}>{bookingColumns.map((column) => <td key={column.key} data-print-column={column.key} className="border border-slate-300 p-3">{column.value(booking)}</td>)}<td className="no-print whitespace-nowrap border border-slate-300 p-2"><button type="button" onClick={() => startBookingEdit(booking)} className="rounded px-2 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-50">સંપાદિત</button><button type="button" onClick={() => void deleteBooking(booking)} disabled={bookingDeleteId === booking.id} className="rounded px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">ડિલીટ</button></td></tr>)}</tbody>
           </table>}
         </div>
       </section>}

@@ -91,6 +91,13 @@ class AuthRepositoryImpl(
 
     private var cachedProfile: Profile? = null
 
+    override suspend fun getCachedCurrentUser(): Profile? = withContext(Dispatchers.IO) {
+        cachedProfile ?: tokenStorage.getUserProfile()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { Json.decodeFromString<Profile>(it) }.getOrNull() }
+            ?.also { cachedProfile = it }
+    }
+
     override suspend fun login(email: String, password: String): Result<Profile> = withContext(Dispatchers.IO) {
         try {
             val bodyPayload = buildJsonObject {
@@ -429,13 +436,13 @@ class AuthRepositoryImpl(
 
     override suspend fun getRegisteredUsers(): Result<List<Profile>> = withContext(Dispatchers.IO) {
         try {
-            val isAdmin = fetchAdminAccess()
-            val hasMemberFeature = fetchCurrentUserFeaturePermissions().contains("members")
+            val profile = getCachedCurrentUser()
+                ?: return@withContext Result.failure(Exception("Sign in before viewing registered users."))
+            val isAdmin = profile.isAdmin || profile.roles.any { it.equals("ADMIN", true) || it.equals("SUPER_ADMIN", true) }
+            val hasMemberFeature = profile.featurePermissions.any { it.equals("members", true) }
             if (!isAdmin && !hasMemberFeature) {
                 return@withContext Result.failure(Exception("Administrator access is required to view registered users."))
             }
-            val profile = getCurrentUser()
-                ?: return@withContext Result.failure(Exception("Sign in before viewing registered users."))
             val response = httpClient.get("${Endpoints.PROFILES}?select=*&order=created_at.desc")
             if (!response.status.isSuccess()) {
                 return@withContext Result.failure(Exception("Could not load registered users (${response.status.value})."))

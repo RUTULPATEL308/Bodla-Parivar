@@ -1,21 +1,83 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Printer, Share2, Loader2, Check } from 'lucide-react';
+import { Printer, Share2, Loader2, Check, Settings2, AlertCircle } from 'lucide-react';
 import { useAdminLanguage } from '@/components/AdminLanguageContext';
+import { supabase } from '@/lib/supabase';
 
 type PrintControlsProps = {
   orientation?: 'portrait' | 'landscape';
   documentTitle?: string;
+  sectionKey?: string;
 };
 
-export default function PrintControls({ orientation = 'portrait', documentTitle }: PrintControlsProps) {
+type PrintPreference = { print: boolean; share: boolean; columns: boolean[]; columnKeys?: Record<string, boolean> };
+const preferenceKey = 'bodla-admin-print-global-preferences-v2';
+
+export default function PrintControls({ orientation = 'portrait', documentTitle, sectionKey }: PrintControlsProps) {
   const { lang, printLanguage, setPrintLanguage } = useAdminLanguage();
   const gu = lang === 'gu';
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [preferenceSaveState, setPreferenceSaveState] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [preferenceSaveMessage, setPreferenceSaveMessage] = useState('');
+  const [preference, setPreference] = useState<PrintPreference>({ print: true, share: true, columns: [] });
+  const resolvedSectionKey = sectionKey || (typeof window !== 'undefined' ? window.location.pathname : 'default');
+  const printAreaSelector = sectionKey ? `[data-print-area="${sectionKey}"]` : '[data-print-area]';
+  const [columnLabels, setColumnLabels] = useState<string[]>([]);
+
+  function readColumnLabels() {
+    const area = document.querySelector<HTMLElement>(printAreaSelector);
+    const table = area?.matches('table') ? area : area?.querySelector('table');
+    const labels = table ? Array.from(table.querySelectorAll<HTMLElement>('thead th')).filter((cell) => !cell.classList.contains('no-print')).map((cell) => cell.dataset.printColumn || cell.textContent?.trim() || 'Column') : [];
+    setColumnLabels(labels);
+  }
+
+  useEffect(() => {
+    try {
+      const global = JSON.parse(window.localStorage.getItem(preferenceKey) || 'null') as (PrintPreference & { columnKeys?: Record<string, boolean> }) | null;
+      if (global) setPreference({ print: global.print !== false, share: global.share !== false, columns: Array.isArray(global.columns) ? global.columns : [], columnKeys: global.columnKeys });
+    } catch { /* Ignore invalid local preferences. */ }
+    readColumnLabels();
+    let active = true;
+    void Promise.resolve(supabase.from('village_settings').select('print_share_preferences').order('created_at', { ascending: true }).limit(1).maybeSingle())
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) { setPreferenceSaveState('error'); setPreferenceSaveMessage(error.message); return; }
+        if (!data?.print_share_preferences) return;
+        const remote = data.print_share_preferences as PrintPreference;
+        setPreference({ print: remote.print !== false, share: remote.share !== false, columns: [], columnKeys: remote.columnKeys });
+        window.localStorage.setItem(preferenceKey, JSON.stringify(remote));
+        setPreferenceSaveState('saved');
+      }).catch((error: unknown) => { if (active) { setPreferenceSaveState('error'); setPreferenceSaveMessage(error instanceof Error ? error.message : 'Could not load saved settings'); } });
+    return () => { active = false; };
+  }, [printAreaSelector, resolvedSectionKey]);
+
+  async function savePreference(next: PrintPreference) {
+    setPreference(next);
+    try {
+      window.localStorage.setItem(preferenceKey, JSON.stringify(next));
+    } catch { /* Printing remains available when storage is disabled. */ }
+    setPreferenceSaveState('saving');
+    setPreferenceSaveMessage('');
+    try {
+      const { error } = await supabase.rpc('update_print_share_preferences', {
+        p_preferences: { print: next.print, share: next.share, columnKeys: next.columnKeys ?? {} },
+      });
+      if (error) throw error;
+      setPreferenceSaveState('saved');
+    } catch (error) {
+      setPreferenceSaveState('error');
+      setPreferenceSaveMessage(error instanceof Error ? error.message : 'Could not save settings');
+    }
+  }
+
+  function isColumnSelected(index: number, label: string) {
+    return preference.columnKeys?.[label] ?? preference.columns[index] !== false;
+  }
 
   function makeDocument() {
     document.documentElement.dataset.printLanguage = printLanguage;
@@ -70,8 +132,17 @@ export default function PrintControls({ orientation = 'portrait', documentTitle 
     printRoot.append(header);
 
     // ── Append Print Areas ──────────────────────────────────────
-    document.querySelectorAll('[data-print-area]').forEach((area) => {
+    if (!preference.print && !preference.share) return printRoot;
+    document.querySelectorAll(printAreaSelector).forEach((area) => {
       const clone = area.cloneNode(true) as HTMLElement;
+      const table = clone.matches('table') ? clone : clone.querySelector('table');
+      if (table) {
+        const headers = Array.from(table.querySelectorAll<HTMLElement>('thead th'));
+        const selected = headers.map((header, index) => !header.classList.contains('no-print') && isColumnSelected(index, header.dataset.printColumn || columnLabels[index] || ''));
+        table.querySelectorAll('tr').forEach((row) => Array.from(row.children).forEach((cell, index) => {
+          if (cell.classList.contains('no-print') || selected[index] === false) cell.remove();
+        }));
+      }
       clone.querySelectorAll('.no-print, button, input, select, textarea, [data-print-exclude]')
         .forEach((control) => control.remove());
       clone.querySelectorAll('svg, [data-print-icon]')
@@ -95,6 +166,7 @@ export default function PrintControls({ orientation = 'portrait', documentTitle 
   }
 
   function printPage() {
+    if (!preference.print) return;
     const printRoot = makeDocument();
     const cleanup = () => {
       printRoot.remove();
@@ -107,13 +179,17 @@ export default function PrintControls({ orientation = 'portrait', documentTitle 
   }
 
   async function sharePage() {
+    if (!preference.share) return;
     setIsGenerating(true);
     const documentRoot = makeDocument();
     // Render document in a dedicated high-fidelity container matching exact A4 dimensions with tight spacing
     documentRoot.classList.add('pdf-export');
     const pageWidth = orientation === 'landscape' ? 297 : 210;
     const pageHeight = orientation === 'landscape' ? 210 : 297;
-    documentRoot.style.cssText = `display:block;position:fixed;left:-9999px;top:0;width:${pageWidth}mm;min-height:${pageHeight}mm;padding:8mm 8mm;background:#ffffff;color:#0F172A;z-index:-100;box-sizing:border-box;`;
+    const pageMargin = 10;
+    const contentWidth = pageWidth - pageMargin * 2;
+    const contentHeight = pageHeight - pageMargin * 2;
+    documentRoot.style.cssText = `display:block;position:fixed;left:-9999px;top:0;width:${contentWidth}mm;padding:0;background:#ffffff;color:#0F172A;z-index:-100;box-sizing:border-box;`;
 
     try {
       await document.fonts.ready;
@@ -133,12 +209,6 @@ export default function PrintControls({ orientation = 'portrait', documentTitle 
         format: 'a4',
         compress: true,
       });
-
-      const pdfWidth = pageWidth;
-      const pdfHeight = pageHeight;
-      const pageMargin = 10;
-      const contentWidth = pdfWidth - pageMargin * 2;
-      const contentHeight = pdfHeight - pageMargin * 2;
 
       const pxPerMm = canvas.width / contentWidth;
       const pageSlicePx = Math.floor(contentHeight * pxPerMm);
@@ -224,15 +294,15 @@ export default function PrintControls({ orientation = 'portrait', documentTitle 
         <option value="en">English</option>
         <option value="both">{gu ? 'બંને ભાષા' : 'Both languages'}</option>
       </select>
-      <button
+      {preference.print && <button
         type="button"
         onClick={printPage}
         className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-navy-900 px-3 text-xs font-semibold text-white shadow-sm hover:bg-navy-800 transition active:scale-95"
       >
         <Printer aria-hidden="true" className="h-3.5 w-3.5 text-amber-400" />
         {gu ? 'પ્રિન્ટ કરો' : 'Print Document'}
-      </button>
-      <button
+      </button>}
+      {preference.share && <button
         type="button"
         disabled={isGenerating}
         onClick={() => void sharePage()}
@@ -259,6 +329,22 @@ export default function PrintControls({ orientation = 'portrait', documentTitle 
             <span>{gu ? 'PDF શેર કરો' : 'Share PDF'}</span>
           </>
         )}
+      </button>}
+      {showSettings && <div className="basis-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap gap-4 text-xs font-medium text-slate-700">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={preference.print} onChange={(event) => void savePreference({ ...preference, print: event.target.checked })} /> {gu ? 'પ્રિન્ટ વિકલ્પ બતાવો' : 'Show print option'}</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={preference.share} onChange={(event) => void savePreference({ ...preference, share: event.target.checked })} /> {gu ? 'શેર વિકલ્પ બતાવો' : 'Show share option'}</label>
+        </div>
+        {columnLabels.length > 0 && <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+          <span className="basis-full font-semibold text-slate-700">{gu ? 'પ્રિન્ટ / શેરમાં કૉલમ' : 'Columns in print / share'}</span>
+          {columnLabels.map((columnKey, index) => <label key={`${columnKey}-${index}`} className="flex items-center gap-2"><input type="checkbox" checked={isColumnSelected(index, columnKey)} onChange={(event) => { const columnKeys = { ...preference.columnKeys, [columnKey]: event.target.checked }; void savePreference({ ...preference, columns: [], columnKeys }); }} /> {document.querySelector<HTMLElement>(`${printAreaSelector} thead th:nth-child(${index + 1})`)?.textContent?.trim() || document.querySelector<HTMLElement>(`${printAreaSelector} table thead th:nth-child(${index + 1})`)?.textContent?.trim() || columnKey}</label>)}
+        </div>}
+        <div role="status" aria-live="polite" className={`mt-2 flex items-center gap-1 text-xs ${preferenceSaveState === 'error' ? 'text-rose-700' : 'text-slate-500'}`}>
+          {preferenceSaveState === 'error' ? <><AlertCircle size={14} /> {preferenceSaveMessage || (gu ? 'સેટિંગ સાચવાયું નથી. database migration 062 લાગુ છે કે નહીં તપાસો.' : 'Settings did not save. Check that database migration 062 is applied.')}</> : preferenceSaveState === 'saving' ? (gu ? 'સેટિંગ સાચવી રહ્યું છે…' : 'Saving document settings…') : (gu ? 'દસ્તાવેજ સેટિંગ સાચવેલ' : 'Document settings saved')}
+        </div>
+      </div>}
+      <button type="button" onClick={() => { readColumnLabels(); setShowSettings((open) => !open); }} aria-expanded={showSettings} title={gu ? 'દસ્તાવેજ સેટિંગ્સ' : 'Document settings'} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm">
+        <Settings2 aria-hidden="true" className="h-4 w-4" />
       </button>
     </div>
   );

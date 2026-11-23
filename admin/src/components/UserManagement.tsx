@@ -102,21 +102,6 @@ export default function UserManagement() {
   const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  async function loadUsers() {
-    try {
-      const result = await callUsersApi('GET');
-      setUsers((result.users as ManagedUser[]).map((user) => ({ ...user, feature_permissions: user.feature_permissions ?? [] })));
-      setIsAdmin(result.canManageUsers === true);
-      setError(null);
-    } catch (loadError) {
-      setUsers([]);
-      setIsAdmin(false);
-      setError(loadError instanceof Error ? loadError.message : 'Could not load members.');
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   useEffect(() => {
     let active = true;
     void callUsersApi('GET').then((result) => {
@@ -204,7 +189,7 @@ export default function UserManagement() {
     setIsSaving(true);
     setError(null);
     try {
-      await callUsersApi(editingUser ? 'PATCH' : 'POST', {
+      const result = await callUsersApi(editingUser ? 'PATCH' : 'POST', {
         ...(editingUser ? { id: editingUser.id, status: form.status } : {}),
         full_name: form.full_name,
         email: form.email,
@@ -212,9 +197,12 @@ export default function UserManagement() {
         roles: form.roles,
         feature_permissions: form.feature_permissions,
       });
+      const savedUser = { ...result.user, feature_permissions: result.user.feature_permissions ?? [] } as ManagedUser;
+      setUsers((current) => editingUser
+        ? current.map((user) => user.id === savedUser.id ? savedUser : user)
+        : [savedUser, ...current]);
       setEditingUser(null);
       setIsCreating(false);
-      await loadUsers();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not save this member.');
     } finally {
@@ -228,8 +216,8 @@ export default function UserManagement() {
     setError(null);
     try {
       await callUsersApi('DELETE', { id: deletingUser.id });
+      setUsers((current) => current.filter((user) => user.id !== deletingUser.id));
       setDeletingUser(null);
-      await loadUsers();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Could not delete this member.');
     } finally {

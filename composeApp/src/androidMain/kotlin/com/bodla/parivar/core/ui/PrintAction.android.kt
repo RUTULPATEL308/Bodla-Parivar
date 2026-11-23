@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.Color
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
@@ -43,8 +46,9 @@ actual fun PlatformPrint(content: String, title: String) {
                         try {
                             val manager = activity.getSystemService(Context.PRINT_SERVICE) as? PrintManager
                                 ?: error("Android print service is unavailable")
-                            val mediaSize = if (isLandscapeDocument(content)) PrintAttributes.MediaSize.ISO_A4.asLandscape() else PrintAttributes.MediaSize.ISO_A4
-                            manager.print(title, view.createPrintDocumentAdapter(title), PrintAttributes.Builder().setMediaSize(mediaSize).build())
+                    val landscape = isLandscapeDocument(content)
+                    val mediaSize = PrintAttributes.MediaSize("BODLA_A4", "A4", 8270, 11690).let { if (landscape) it.asLandscape() else it }
+                    manager.print(title, view.createPrintDocumentAdapter(title), PrintAttributes.Builder().setMediaSize(mediaSize).setMinMargins(PrintAttributes.Margins.NO_MARGINS).build())
                         } catch (e: Exception) {
                             Napier.e("PlatformPrint error", e, tag = "Print")
                         }
@@ -113,110 +117,113 @@ private fun sharePdf(content: String, title: String) {
 }
 
 private fun renderPdf(context: Context, content: String, title: String, onReady: (File) -> Unit) {
-    val activity = AndroidPlatform.currentActivityRef?.get() ?: return
-    val root = activity.findViewById<ViewGroup>(android.R.id.content) ?: return
-    val density = context.resources.displayMetrics.density
-    val widthPx = (794 * density).toInt().coerceAtLeast(1)
-    val webView = WebView(activity).apply {
-        settings.defaultTextEncodingName = "UTF-8"
-        setBackgroundColor(android.graphics.Color.WHITE)
-        alpha = 0.01f
-        isFocusable = false
-        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-    }
-    var completed = false
-    fun cleanup() {
-        (webView.parent as? ViewGroup)?.removeView(webView)
-        webView.destroy()
-    }
-    webView.webViewClient = object : WebViewClient() {
-        override fun onPageFinished(view: WebView, url: String?) {
-            if (completed) return
-            view.evaluateJavascript("document.documentElement.scrollHeight.toString()") { raw ->
-                if (completed) return@evaluateJavascript
-                val cssHeight = raw.trim('"').toFloatOrNull()?.toInt()?.coerceAtLeast(1) ?: 1123
-                val heightPx = (cssHeight * density).toInt().coerceAtLeast(widthPx)
-                view.measure(View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY))
-                view.layout(0, 0, widthPx, heightPx)
-                val ready = Runnable {
-                    if (completed) return@Runnable
-                    completed = true
-                    try {
-                        val safeTitle = title.replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').ifBlank { "Bodla-Parivar-Document" }
-                        val file = File(context.cacheDir, "$safeTitle.pdf")
-                        val landscape = isLandscapeDocument(content)
-                        val pageWidth = if (landscape) 842 else 595
-                        val pageHeight = if (landscape) 595 else 842
-                        val scale = pageWidth.toFloat() / widthPx
-                        val pageHeightPx = (pageHeight / scale).toInt().coerceAtLeast(1)
-                        val pageCount = ((heightPx + pageHeightPx - 1) / pageHeightPx).coerceAtLeast(1)
-                        val pdf = PdfDocument()
-                        for (pageNumber in 0 until pageCount) {
-                            val page = pdf.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber + 1).create())
-                            page.canvas.save()
-                            page.canvas.clipRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat())
-                            page.canvas.scale(scale, scale)
-                            page.canvas.translate(0f, -(pageNumber * pageHeightPx).toFloat())
-                            view.draw(page.canvas)
-                            page.canvas.restore()
-                            pdf.finishPage(page)
-                        }
-                        FileOutputStream(file).use { pdf.writeTo(it) }
-                        pdf.close()
-                        cleanup()
-                        if (file.length() > 0L) onReady(file) else Napier.e("Generated PDF is empty", tag = "Share")
-                    } catch (e: Exception) {
-                        cleanup()
-                        Napier.e("PDF generation failed", e, tag = "Share")
+    try {
+        val safeTitle = title.replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').ifBlank { "Bodla-Parivar-Document" }
+        val file = File(context.cacheDir, "$safeTitle.pdf")
+        val landscape = isLandscapeDocument(content)
+        val pageWidth = if (landscape) 842 else 595
+        val pageHeight = if (landscape) 595 else 842
+        val margin = 28f
+        val pdf = PdfDocument()
+        val lines = content.lines().filterNot { it.trim() == "#LANDSCAPE_A4#" }.filter(String::isNotBlank)
+        val titleLine = lines.firstOrNull().orEmpty()
+        val tableLines = lines.drop(1).filter { it.contains('\t') }
+        val plainLines = lines.drop(1).filterNot { it.contains('\t') }
+        val columns = tableLines.firstOrNull()?.split('\t').orEmpty()
+        val dataRows = tableLines.drop(1).map { it.split('\t') }
+        val rowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(23, 32, 51); textSize = 9f }
+        val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 39, 68); textSize = 9f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+        val headingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 39, 68); textSize = 14f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+        val smallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(100, 116, 139); textSize = 7f }
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(203, 213, 225); strokeWidth = .6f; style = Paint.Style.STROKE }
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 249); style = Paint.Style.FILL }
+        val rowsPerPage = maxOf(1, ((pageHeight - 150f) / 26f).toInt())
+        val pageCount = maxOf(1, if (columns.isNotEmpty()) (dataRows.size + rowsPerPage - 1) / rowsPerPage else (plainLines.size + rowsPerPage - 1) / rowsPerPage)
+        repeat(pageCount) { pageNumber ->
+            val page = pdf.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber + 1).create())
+            val canvas = page.canvas
+            canvas.drawColor(Color.WHITE)
+            var y = margin + 12f
+            canvas.drawText("બોદલા પરિવાર • BODLA PARIVAR", margin, y, headingPaint)
+            y += 13f
+            canvas.drawText("બોદલા ગ્રામિણ સમુદાય ટ્રસ્ટ • Mehsana, Gujarat", margin, y, smallPaint)
+            val rightText = java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.ENGLISH).format(java.util.Date())
+            canvas.drawText(rightText, pageWidth - margin - smallPaint.measureText(rightText), margin + 12f, smallPaint)
+            y += 14f
+            val titlePaint = Paint(headingPaint).apply { color = Color.rgb(217, 119, 6); textSize = 11f }
+            canvas.drawText(titleLine.take(70), margin, y, titlePaint)
+            y += 8f
+            canvas.drawLine(margin, y, pageWidth - margin, y, borderPaint)
+            y += 14f
+            if (columns.isNotEmpty()) {
+                val usableWidth = pageWidth - margin * 2
+                val columnCount = columns.size
+                val cellWidth = usableWidth / columnCount
+                val chunk = dataRows.drop(pageNumber * rowsPerPage).take(rowsPerPage)
+                val pageRows = listOf(columns) + chunk
+                pageRows.forEachIndexed { rowIndex, row ->
+                    val rowHeight = 24f
+                    row.forEachIndexed { columnIndex, text ->
+                        val left = margin + columnIndex * cellWidth
+                        if (rowIndex == 0) canvas.drawRect(left, y, left + cellWidth, y + rowHeight, fillPaint)
+                        canvas.drawRect(left, y, left + cellWidth, y + rowHeight, borderPaint)
+                        val paint = if (rowIndex == 0) headerPaint else rowPaint
+                        canvas.drawText(text.replace(Regex("\\s+"), " ").take(28), left + 4f, y + 15f, paint)
                     }
+                    y += rowHeight
                 }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    view.postVisualStateCallback(System.nanoTime(), object : WebView.VisualStateCallback() {
-                        override fun onComplete(requestId: Long) { view.post(ready) }
-                    })
-                } else {
-                    view.postDelayed(ready, 250)
-                }
+            } else {
+                plainLines.drop(pageNumber * rowsPerPage).take(rowsPerPage).forEach { line -> canvas.drawText(line.take(100), margin, y, rowPaint); y += 16f }
             }
+            canvas.drawLine(margin, pageHeight - margin - 12f, pageWidth - margin, pageHeight - margin - 12f, borderPaint)
+            canvas.drawText("Official confidential community record • Bodla Parivar Portal", margin, pageHeight - margin, smallPaint)
+            canvas.drawText("${pageNumber + 1}/$pageCount", pageWidth - margin - 30f, pageHeight - margin, smallPaint)
+            pdf.finishPage(page)
         }
+        FileOutputStream(file).use { pdf.writeTo(it) }
+        pdf.close()
+        if (file.length() > 0L) onReady(file) else Napier.e("Generated PDF is empty", tag = "Share")
+    } catch (e: Exception) {
+        Napier.e("PDF generation failed", e, tag = "Share")
     }
-    root.addView(webView, 0, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
-    webView.loadDataWithBaseURL(null, documentHtml(content, title), "text/html", "UTF-8", null)
 }
 private fun documentHtml(content: String, title: String): String {
     val escapedTitle = title.escapeHtml()
-    val lines = content.lines()
-    val tableLines = lines.filter { line -> line.contains(" | ") && !line.split("|").all { cell -> cell.trim().isNotEmpty() && cell.trim().all { it.code == 0x2500 || it == '-' } } }
-    val detailLines = lines.filter { line -> !line.contains(" | ") && line.isNotBlank() && !line.trim().all { it.code == 0x2500 || it == '-' } }
+    val landscape = isLandscapeDocument(content)
+    val reportLines = content.lines().filterNot { it.trim() == "#LANDSCAPE_A4#" }
+    val lines = reportLines.dropWhile { it.isBlank() }.drop(1).map { it.trim() }.filter(String::isNotEmpty)
+    val pageSize = if (landscape) "A4 landscape" else "A4 portrait"
+    val tableLines = lines.filter { it.contains('\t') }
+    val detailLines = lines.filterNot { it.contains('\t') }
     val bodyContent = if (tableLines.isNotEmpty()) {
         buildString {
             append("<table><thead><tr>")
-            tableLines.first().split(" | ").forEach { append("<th>").append(it.escapeHtml()).append("</th>") }
+            tableLines.first().split('\t').forEach { append("<th>").append(it.escapeHtml()).append("</th>") }
             append("</tr></thead><tbody>")
             tableLines.drop(1).forEach { line ->
                 append("<tr>")
-                line.split(" | ").forEach { cell -> append("<td>").append(cell.trim().escapeHtml()).append("</td>") }
+                line.split('\t').forEach { cell -> append("<td>").append(cell.trim().escapeHtml()).append("</td>") }
                 append("</tr>")
             }
             append("</tbody></table>")
-            if (detailLines.size > 1) {
+            if (detailLines.isNotEmpty()) {
                 append("<section class=\"details\">")
-                detailLines.drop(1).forEach { append("<p>").append(it.trim().escapeHtml()).append("</p>") }
+                detailLines.forEach { line -> append("<p>").append(line.escapeHtml()).append("</p>") }
                 append("</section>")
             }
         }
-    } else "<main class=\"content\">${content.escapeHtml()}</main>"
+    } else "<main class=\"content\">${lines.joinToString("<br>") { it.escapeHtml() }}</main>"
     val now = java.util.Date()
     val date = java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.ENGLISH).format(now)
     val reference = java.text.SimpleDateFormat("yyyyMM", java.util.Locale.ENGLISH).format(now) + "-" + (1000..9999).random()
     return """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
-        *{box-sizing:border-box}html,body{margin:0;background:#fff;color:#172033;font-family:Arial,'Noto Sans Gujarati',sans-serif}
-        body{padding:30px;font-size:14px;line-height:1.5}.heading{border-bottom:2px solid #0F2744;padding-bottom:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-end}
+        @page{size:$pageSize;margin:5mm 6mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#172033;font-family:Arial,'Noto Sans Gujarati',sans-serif}
+        body{font-size:14px;line-height:1.5}.heading{border-bottom:2px solid #0F2744;padding-bottom:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-end}
         .brand{font-size:15px;font-weight:800;color:#0F2744;line-height:1.1}.subtitle{font-size:10px;color:#64748b;margin-top:2px}.title{font-size:13px;font-weight:700;color:#D97706;margin-top:4px;text-transform:uppercase;letter-spacing:.02em}
         .date{font-size:10px;color:#64748b;text-align:right;line-height:1.3}.reference{font-family:monospace;font-size:9px;color:#94a3b8}.content{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6}
-        table{width:100%;border-collapse:collapse;font-size:10px;margin:12px 0}th{background:#0F2744;color:#fff;text-align:left}
+        table{width:100%;border-collapse:collapse;font-size:10px;margin:12px 0}th{background:#f1f5f9;color:#0f2744;text-align:left;font-weight:700}
         th,td{border:1px solid #cbd5e1;padding:6px;vertical-align:top}tbody tr:nth-child(even){background:#f8fafc}
         .details{font-size:10px;color:#475569}.details p{margin:4px 0}
         .footer{margin-top:10px;padding-top:7px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:9px;display:flex;justify-content:space-between}
@@ -226,7 +233,7 @@ private fun documentHtml(content: String, title: String): String {
 }
 
 private fun isLandscapeDocument(content: String): Boolean =
-    content.lines().firstOrNull { it.contains(" | ") }?.split(" | ")?.size?.let { it > 6 } == true
+    "#LANDSCAPE_A4#" in content || content.lines().firstOrNull { it.contains('\t') }?.split('\t')?.size?.let { it > 6 } == true
 
 actual fun PlatformSetSystemBarStyle(darkTheme: Boolean) {
     val activity = AndroidPlatform.currentActivityRef?.get() ?: return

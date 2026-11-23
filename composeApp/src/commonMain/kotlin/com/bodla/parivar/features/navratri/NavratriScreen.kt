@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.bodla.parivar.core.di.AppContainer
+import com.bodla.parivar.core.network.Endpoints
 import com.bodla.parivar.core.localization.AppLanguage
 import com.bodla.parivar.core.localization.LocalAppLanguage
 import com.bodla.parivar.core.theme.*
@@ -29,6 +30,7 @@ import com.bodla.parivar.features.notices.NoticeAttachmentPreview
 import com.bodla.parivar.features.design.ResultDocument
 import com.bodla.parivar.features.design.ResultDocumentPicker
 import io.ktor.client.request.*
+import io.ktor.client.call.body
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -39,9 +41,12 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Serializable
 private data class NavratriBookingField(
@@ -144,6 +149,11 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
     var adminView by remember(canManage) { mutableStateOf(canManage) }
     var adminTab by remember(canManage) { mutableStateOf("SERVICES") }
     var bookingListOptionId by remember { mutableStateOf("ALL") }
+    var printShareColumns by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var printShareEnabled by remember { mutableStateOf(true) }
+    var shareEnabled by remember { mutableStateOf(true) }
+    var documentPreferencesLoaded by remember { mutableStateOf(false) }
+    var documentPreferencesError by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<NavratriOption?>(null) }
     var customerName by remember { mutableStateOf("") }
     var formValues by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -177,8 +187,46 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
     var optionFields by remember { mutableStateOf<List<NavratriBookingField>>(emptyList()) }
     var optionReportFile by remember { mutableStateOf<ResultDocument?>(null) }
     var savingOption by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            runCatching {
+                val response = AppContainer.httpClient.get(Endpoints.VILLAGE_SETTINGS.replace("?limit=1", "?select=print_share_preferences&order=created_at.asc&limit=1"))
+                if (response.status.isSuccess()) {
+                    val settings = response.body<List<JsonObject>>().firstOrNull()?.get("print_share_preferences") as? JsonObject
+                        ?: error("Document preferences are missing from village_settings")
+                    printShareEnabled = (settings["print"] as? JsonPrimitive)?.booleanOrNull != false
+                    shareEnabled = (settings["share"] as? JsonPrimitive)?.booleanOrNull != false
+                    val keys = settings["columnKeys"] as? JsonObject ?: error("Document column settings are missing")
+                    printShareColumns = keys.mapValues { (_, value) -> (value as? JsonPrimitive)?.booleanOrNull != false }
+                    documentPreferencesLoaded = true
+                    documentPreferencesError = null
+                } else {
+                    error("Settings request failed: ${response.status.value}")
+                }
+            }.onFailure { exception ->
+                documentPreferencesLoaded = false
+                documentPreferencesError = exception.message ?: "Could not load document preferences"
+            }
+            delay(15_000)
+        }
+    }
     val selectedService = options.firstOrNull { it.id == bookingListOptionId }
     val serviceBookings = bookings.filter { bookingListOptionId == "ALL" || it.optionId == bookingListOptionId }
+    val exportServices = if (bookingListOptionId == "ALL") options.filter { it.optionType == "BOOKING" } else listOfNotNull(selectedService)
+    val exportFieldMap = linkedMapOf<String, NavratriBookingField>()
+    exportServices.flatMap { it.formFields }.filter { it.key !in listOf("phone", "amount") }.forEach { exportFieldMap.putIfAbsent(it.key, it) }
+    val exportColumns = buildList<Triple<String, String, (NavratriBookingAdmin) -> String>> {
+        add(Triple("name", "સભ્યનું નામ", { it.customerName }))
+        if (bookingListOptionId == "ALL") add(Triple("service", "બુકિંગનો પ્રકાર", { booking -> options.firstOrNull { it.id == booking.optionId }?.titleGu.orEmpty() }))
+        add(Triple("phone", "મોબાઇલ", { it.phone.orEmpty() }))
+        add(Triple("amount", "રકમ / જથ્થો", { booking -> booking.amount?.toString() ?: booking.quantity.toString() }))
+        exportFieldMap.values.forEach { field -> add(Triple("field:${field.key}", field.labelGu, { booking -> booking.formData[field.key].orEmpty() })) }
+        add(Triple("notes", "નોંધ", { it.notes.orEmpty() }))
+        add(Triple("payment", "ચુકવણી", { if (it.paymentStatus == "PAID") "ચૂકવેલ" else "બાકી" }))
+        add(Triple("status", "સ્થિતિ", { booking -> when (booking.status) { "CONFIRMED" -> "મંજૂર"; "COMPLETED" -> "પૂર્ણ"; "CANCELLED" -> "રદ"; else -> "બાકી" } }))
+    }
+    // Only an explicit false hides a column; absent keys keep newly added/default columns enabled.
+    val visibleExportColumns = exportColumns.filter { printShareColumns[it.first] != false }
 
     val startBookingEditor: (NavratriBookingAdmin?) -> Unit = { booking ->
         editingBooking = booking
@@ -449,38 +497,23 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                     }
                 },
                 actions = {
-                    if (canManage && adminView && selected == null && adminTab == "BOOKINGS") {
+                    if (canManage && adminView && selected == null && adminTab == "BOOKINGS" && documentPreferencesLoaded && (printShareEnabled || shareEnabled)) {
                         val bookingListTitle = selectedService?.titleGu ?: "બધા નવરાત્રી બુકિંગ"
                         val bookingReport = buildString {
                             appendLine(bookingListTitle)
-                            appendLine("─".repeat(56))
-                            appendLine(if (bookingListOptionId == "ALL") "ક્રમ | સભ્યનું નામ | બુકિંગનો પ્રકાર | મોબાઇલ | રકમ / જથ્થો | ચુકવણી | સ્થિતિ" else "ક્રમ | સભ્યનું નામ | મોબાઇલ | રકમ / જથ્થો | ચુકવણી | સ્થિતિ")
-                            appendLine("─".repeat(56))
+                            appendLine("#LANDSCAPE_A4#")
+                            appendLine(visibleExportColumns.joinToString("\t") { it.second })
                             serviceBookings.forEachIndexed { index, booking ->
-                                val payment = if (booking.paymentStatus == "PAID") "ચૂકવેલ" else "બાકી"
-                                val status = when (booking.status) {
-                                    "CONFIRMED" -> "મંજૂર"
-                                    "COMPLETED" -> "પૂર્ણ"
-                                    "CANCELLED" -> "રદ"
-                                    else -> "બાકી"
-                                }
-                                val amount = booking.amount?.toString() ?: booking.quantity.toString()
-                                val bookingService = options.firstOrNull { it.id == booking.optionId }
-                                val serviceColumn = if (bookingListOptionId == "ALL") " | ${bookingService?.titleGu.orEmpty()}" else ""
-                                appendLine("${index + 1} | ${booking.customerName}$serviceColumn | ${booking.phone.orEmpty()} | $amount | $payment | $status")
-                                val details = booking.formData.entries.joinToString("; ") { (key, value) ->
-                                    val label = bookingService?.formFields?.firstOrNull { it.key == key }?.labelGu ?: key
-                                    "$label: $value"
-                                }
-                                if (details.isNotBlank()) appendLine("   વિગતો: $details")
-                                if (!booking.notes.isNullOrBlank()) appendLine("   નોંધ: ${booking.notes}")
+                                appendLine(visibleExportColumns.joinToString("\t") { (_, _, value) -> value(booking).replace("\t", " ").replace("\n", " ") })
                             }
                         }
                         PrintAction(
                             title = bookingListTitle,
-                            content = bookingReport,
+                            content = if (printShareEnabled) bookingReport else "",
                             englishContent = bookingReport,
-                            bothContent = bookingReport
+                            bothContent = bookingReport,
+                            enabledPrint = printShareEnabled,
+                            enabledShare = shareEnabled
                         )
                     }
                 },
@@ -499,6 +532,14 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                 Text(if (lang == AppLanguage.GUJARATI) "નવરાત્રી સેવાઓ" else "Navratri services", style = BodlaPageTitle, color = TextPrimary)
                 Spacer(Modifier.height(3.dp))
                 Text(if (lang == AppLanguage.GUJARATI) "બુકિંગની ચુકવણી રોકડમાં જ સ્વીકારવામાં આવશે." else "Booking payments are handled in cash only.", style = BodlaCaption, color = TextSecondary)
+                if (canManage && adminView && documentPreferencesError != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (lang == AppLanguage.GUJARATI) "દસ્તાવેજ સેટિંગ લોડ ન થઈ: ${documentPreferencesError}. શેર માટે નેટવર્ક અને app version તપાસો." else "Document settings failed to load: ${documentPreferencesError}. Check network and app version before sharing.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = BodlaCaption
+                    )
+                }
                 if (canManage) {
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -568,33 +609,9 @@ fun NavratriScreen(onBack: () -> Unit, canManage: Boolean = false, modifier: Mod
                         OutlinedButton(
                             onClick = {
                                 val csv = "\uFEFF" + buildString {
-                                    val headers = buildList {
-                                        add("સભ્યનું નામ")
-                                        if (bookingListOptionId == "ALL") add("બુકિંગનો પ્રકાર")
-                                        addAll(listOf("મોબાઇલ નંબર", "રકમ / જથ્થો", "વધારાની વિગતો", "નોંધ", "ચુકવણી", "સ્થિતિ"))
-                                    }
-                                    appendLine(headers.joinToString(",") { it.asCsvCell() })
+                                    appendLine(visibleExportColumns.joinToString(",") { it.second.asCsvCell() })
                                     serviceBookings.forEach { booking ->
-                                        val values = buildList {
-                                            add(booking.customerName)
-                                            val bookingService = options.firstOrNull { it.id == booking.optionId }
-                                            if (bookingListOptionId == "ALL") add(bookingService?.titleGu.orEmpty())
-                                            add(booking.phone.orEmpty())
-                                            add(booking.amount?.toString() ?: booking.quantity.toString())
-                                            add(booking.formData.entries.joinToString("; ") { (key, value) ->
-                                                val label = bookingService?.formFields?.firstOrNull { it.key == key }?.labelGu ?: key
-                                                "$label: $value"
-                                            })
-                                            add(booking.notes.orEmpty())
-                                            add(if (booking.paymentStatus == "PAID") "ચૂકવેલ" else "બાકી")
-                                            add(when (booking.status) {
-                                                "CONFIRMED" -> "મંજૂર"
-                                                "COMPLETED" -> "પૂર્ણ"
-                                                "CANCELLED" -> "રદ"
-                                                else -> "બાકી"
-                                            })
-                                        }
-                                        appendLine(values.joinToString(",") { it.asCsvCell() })
+                                        appendLine(visibleExportColumns.joinToString(",") { (_, _, value) -> value(booking).asCsvCell() })
                                     }
                                 }
                                 val filename = selectedService?.titleGu?.replace(' ', '-') ?: "નવરાત્રી-બુકિંગ-યાદી"

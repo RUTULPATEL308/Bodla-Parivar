@@ -62,6 +62,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -118,24 +120,35 @@ fun RegisteredUsersScreen(
 
     suspend fun reload() {
         loading = true
-        authRepository.getRegisteredUsers()
-            .onSuccess { profiles = it }
-            .onFailure { message = it.message ?: if (gu) "સભ્યો લોડ થયા નથી." else "Could not load members." }
-        val current = authRepository.getCurrentUser()
+        message = null
+        val current = authRepository.getCachedCurrentUser()
         isAdmin = current?.isAdmin == true || current?.roles.orEmpty().any { it.equals("ADMIN", true) || it.equals("SUPER_ADMIN", true) }
         isSuperAdmin = current?.roles.orEmpty().any { it.equals("SUPER_ADMIN", true) }
-        if (isAdmin) {
-            runCatching {
-                val apiResponse = AppContainer.httpClient.get("$adminApiBase/api/admin/users")
-                if (!apiResponse.status.isSuccess()) error(apiResponse.bodyAsText().ifBlank { "User management API (${apiResponse.status.description})" })
-                val payload = apiJson.decodeFromString<AdminUsersResponse>(apiResponse.bodyAsText())
-                canManageUsers = payload.canManageUsers
-                grants = payload.users.associateBy { it.id }
-            }.onFailure { message = it.message ?: if (gu) "વપરાશકર્તાની વિગતો લોડ થઈ નથી." else "Could not load user details." }
+        // Render admin actions from the locally cached role immediately; the API
+        // response below will confirm whether management is configured.
+        canManageUsers = isAdmin
+        coroutineScope {
+            val membersRequest = async { authRepository.getRegisteredUsers() }
+            val adminDetailsRequest = async {
+                if (!isAdmin) return@async
+                runCatching {
+                    val apiResponse = AppContainer.httpClient.get("$adminApiBase/api/admin/users")
+                    if (!apiResponse.status.isSuccess()) error(apiResponse.bodyAsText().ifBlank { "User management API (${apiResponse.status.description})" })
+                    val payload = apiJson.decodeFromString<AdminUsersResponse>(apiResponse.bodyAsText())
+                    canManageUsers = payload.canManageUsers
+                    grants = payload.users.associateBy { it.id }
+                }.onFailure {
+                    canManageUsers = false
+                    message = it.message ?: "Could not load user details."
+                }
+            }
+            membersRequest.await()
+                .onSuccess { profiles = it }
+                .onFailure { message = it.message ?: "Could not load members." }
+            adminDetailsRequest.await()
         }
         loading = false
     }
-
     LaunchedEffect(authRepository) { reload() }
 
     fun openEditor(profile: Profile) {

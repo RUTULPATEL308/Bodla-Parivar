@@ -118,7 +118,8 @@ data class VillageSettingsDto(
     @SerialName("contact_email") val contactEmail: String? = null,
     val latitude: Double? = 23.5880,
     val longitude: Double? = 72.3693,
-    @SerialName("updated_at") val updatedAt: String? = null
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("print_share_preferences") val printSharePreferences: Map<String, kotlinx.serialization.json.JsonElement>? = null
 )
 
 @Serializable

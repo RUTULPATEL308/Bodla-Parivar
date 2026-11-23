@@ -107,14 +107,16 @@ fun PrintAction(
     title: String,
     englishContent: String = content,
     bothContent: String = content,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabledPrint: Boolean = true,
+    enabledShare: Boolean = true
 ) {
     val lang = LocalAppLanguage.current
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { PlatformPrint(content, title) }, modifier = Modifier.size(48.dp).semantics {
+        if (enabledPrint) IconButton(onClick = { PlatformPrint(content, title) }, modifier = Modifier.size(48.dp).semantics {
             contentDescription = if (lang == AppLanguage.GUJARATI) "\u0AAA\u0ACD\u0AB0\u0ABF\u0AA8\u0ACD\u0A9F \u0A95\u0AB0\u0ACB" else "Print"
         }) { Icon(IconPrint, contentDescription = null) }
-        IconButton(onClick = { PlatformShare(content, title) }, modifier = Modifier.size(48.dp).semantics {
+        if (enabledShare) IconButton(onClick = { PlatformShare(content, title) }, modifier = Modifier.size(48.dp).semantics {
             contentDescription = if (lang == AppLanguage.GUJARATI) "\u0AB6\u0AC7\u0AB0 \u0A95\u0AB0\u0ACB" else "Share"
         }) { Icon(IconShare, contentDescription = null) }
     }

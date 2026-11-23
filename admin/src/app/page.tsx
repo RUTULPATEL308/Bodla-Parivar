@@ -14,8 +14,6 @@ import {
   Sparkles,
   Users,
   WalletCards,
-  TrendingUp,
-  Activity,
   ArrowUpRight,
   Search,
   CheckCircle2,
@@ -27,7 +25,6 @@ import {
 import { useAdminLanguage, useAdminFeatures } from '@/components/AdminLanguageContext';
 import { supabase } from '@/lib/supabase';
 import StatCard from '@/components/StatCard';
-import { MetricBar, MiniActivityFeed } from '@/components/VisualCharts';
 import StatusBadge from '@/components/StatusBadge';
 
 const adminActions = [
@@ -55,8 +52,6 @@ export default function AdminDashboard() {
     activeNotices: 0,
     pendingOfferings: 0,
     openComplaints: 0,
-    activeEmergency: 0,
-    recentAudits: 0,
   });
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
@@ -71,14 +66,14 @@ export default function AdminDashboard() {
         const [
           usersCount,
           noticesCount,
-          offeringsCount,
+          pendingOfferingsCount,
           complaintsCount,
           auditRes,
           appLinksRes,
         ] = await Promise.all([
           supabase.from('profiles').select('id', { count: 'exact', head: true }),
           supabase.from('notices').select('id', { count: 'exact', head: true }).eq('status', 'PUBLISHED'),
-          supabase.from('offerings').select('id', { count: 'exact', head: true }),
+          supabase.from('offerings').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
           supabase.from('complaints').select('id', { count: 'exact', head: true }).neq('status', 'RESOLVED'),
           supabase.from('audit_logs').select('id, action, entity_type, created_at').order('created_at', { ascending: false }).limit(5),
           supabase.from('village_settings').select('android_app_download_url, ios_app_download_url').order('created_at', { ascending: true }).limit(1).maybeSingle(),
@@ -86,12 +81,10 @@ export default function AdminDashboard() {
 
         if (active) {
           setStats({
-            totalUsers: usersCount.count ?? 42,
-            activeNotices: noticesCount.count ?? 8,
-            pendingOfferings: offeringsCount.count ?? 15,
-            openComplaints: complaintsCount.count ?? 3,
-            activeEmergency: 6,
-            recentAudits: 120,
+            totalUsers: usersCount.count ?? 0,
+            activeNotices: noticesCount.count ?? 0,
+            pendingOfferings: pendingOfferingsCount.count ?? 0,
+            openComplaints: complaintsCount.count ?? 0,
           });
           setRecentLogs(auditRes.data ?? []);
           setAndroidAppDownloadUrl(appLinksRes.data?.android_app_download_url?.trim() ?? '');
@@ -307,53 +300,7 @@ export default function AdminDashboard() {
       </section>
 
       {/* Analytics & System Health Visual Breakdown */}
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Module Health & Utilization Bar */}
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                {isGujarati ? 'મોડ્યુલ વપરાશ અને વિતરણ' : 'Service & Department Distribution'}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Relative allocation of village activities</p>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              <Activity className="h-4 w-4" /> Healthy
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-4">
-            <MetricBar
-              label="Citizen Membership & Profiles"
-              labelGu="સભ્ય પ્રોફાઇલ"
-              count={stats.totalUsers}
-              total={stats.totalUsers + 20}
-              colorClass="bg-indigo-600 dark:bg-indigo-500"
-            />
-            <MetricBar
-              label="Notices & Bulletins Issued"
-              labelGu="સૂચનાઓ"
-              count={stats.activeNotices}
-              total={20}
-              colorClass="bg-sky-600 dark:bg-sky-500"
-            />
-            <MetricBar
-              label="Devotional Offerings (ચઢાવો)"
-              labelGu="ચઢાવો વિતરણ"
-              count={stats.pendingOfferings}
-              total={30}
-              colorClass="bg-amber-500 dark:bg-amber-400"
-            />
-            <MetricBar
-              label="Citizen Grievances Handled"
-              labelGu="ફરિયાદ નિવારણ"
-              count={stats.openComplaints}
-              total={10}
-              colorClass="bg-rose-500 dark:bg-rose-400"
-            />
-          </div>
-        </div>
-
+      <section className="grid grid-cols-1 gap-6">
         {/* Recent Audit Timeline */}
         <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
@@ -380,16 +327,7 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <MiniActivityFeed
-                items={[
-                  { id: '1', user: 'Admin', action: 'Approved member profile', time: '10m ago' },
-                  { id: '2', user: 'Staff', action: 'Published Navratri notice', time: '1h ago' },
-                  { id: '3', user: 'Moderator', action: 'Resolved street light complaint', time: '3h ago' },
-                  { id: '4', user: 'Admin', action: 'Updated village settings', time: '1d ago' },
-                ]}
-              />
-            )}
+            ) : <p className="py-4 text-xs text-slate-500">No recent staff activity.</p>}
           </div>
         </div>
       </section>

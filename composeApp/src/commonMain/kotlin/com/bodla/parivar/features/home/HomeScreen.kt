@@ -206,7 +206,6 @@ fun HomeScreen(
                         Triple(if (lang == AppLanguage.GUJARATI) "નવરાત્રી" else "Navratri", "✨", Screen.Navratri),
                         Triple(Strings.serviceNotices(lang), "📢", Screen.Notices),
                         Triple(Strings.serviceOfferings(lang), "🙏", Screen.Offerings), // ચઢાવો
-                        Triple(Strings.serviceGallery(lang), "🖼", Screen.Gallery),
                         Triple(if (lang == AppLanguage.GUJARATI) "પરિણામ" else "Results", "🎓", Screen.ResultUpload),
                         Triple(Strings.antimYatraPost(lang), "🕯️", Screen.NoticeDesign),
                         Triple(Strings.besanuPost(lang), "🕊️", Screen.BesanuDesign)

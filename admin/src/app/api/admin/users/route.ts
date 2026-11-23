@@ -246,16 +246,6 @@ export async function GET(request: NextRequest) {
   const error = usersError ?? assignmentsError ?? rolesError;
   if (error) return errorResponse(error.message, 500);
 
-  const authUserIds = new Set<string>();
-  if (isAdministrator) {
-    for (let page = 1; ; page += 1) {
-      const { data: authPage, error: authListError } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-      if (authListError) return errorResponse(authListError.message, 500);
-      for (const authUser of authPage.users) authUserIds.add(authUser.id);
-      if (authPage.users.length < 1000) break;
-    }
-  }
-
   const roleById = new Map((roles ?? []).map((role) => [role.id, role.name as RoleName]));
   const roleByUser = new Map<string, RoleName[]>();
   for (const assignment of assignments ?? []) {
@@ -272,7 +262,7 @@ export async function GET(request: NextRequest) {
 
   const allUsers = (users ?? []).map((user) => ({
       ...user,
-      auth_exists: isAdministrator ? authUserIds.has(user.auth_user_id) : true,
+      auth_exists: true,
       roles: roleByUser.get(user.id) ?? [],
       feature_permissions: featuresByUser.get(user.id) ?? [],
     }));
